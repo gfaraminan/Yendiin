@@ -134,13 +134,13 @@ const linkifyPlainText = (value) => {
 const SafeMailIcon = ({ size = 16 }) => <span style={{ fontSize: size }}>✉</span>;
 const SafeSocialIcon = ({ size = 16 }) => <span style={{ fontSize: size }}>🐦</span>;
 
-const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
+const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId, featureFlags }) => {
   const [ready, setReady] = useState(false);
   const googleButtonRef = useRef(null);
 
   // Method: "google" | "email"
-  const allowGoogleLogin = featureFlags.googleLogin;
-  const allowMagicLinkLogin = featureFlags.magicLinkLogin;
+  const allowGoogleLogin = Boolean(featureFlags?.googleLogin);
+  const allowMagicLinkLogin = Boolean(featureFlags?.magicLinkLogin);
   const [loginMethod, setLoginMethod] = useState(allowGoogleLogin ? "google" : "email");
 
   // Email magic link state
@@ -7264,6 +7264,7 @@ if (closeOnSuccess) {
         open={loginRequired}
         onClose={closeLoginModal}
         googleClientId={googleClientId}
+        featureFlags={featureFlags}
         onLoggedIn={async (u) => {
           setMe(u);
           await refreshMe();

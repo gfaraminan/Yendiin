@@ -624,8 +624,13 @@ import pathlib
 
 def _uploads_dir() -> str:
     d = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-    os.makedirs(d, exist_ok=True)
-    return d
+    try:
+        os.makedirs(d, exist_ok=True)
+        return d
+    except PermissionError:
+        fallback = "/tmp/uploads"
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
 
 
 def _ensure_dir(path: str) -> str:

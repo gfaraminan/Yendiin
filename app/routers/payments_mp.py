@@ -686,7 +686,11 @@ def _mark_order_paid(cur, *, ocols: set[str], order_id: str, payment_id: str | N
 def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
     """Marca la orden como paid y emite tickets si faltan (idempotente)."""
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-    os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
+    try:
+        os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
+    except PermissionError:
+        UPLOAD_DIR = "/tmp/uploads"
+        os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
 
     try:
         with get_conn() as conn:
@@ -1304,7 +1308,11 @@ async def mp_webhook(request: Request):
         return {"ok": True, "received": True, "payment_status": status}
 
     UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-    os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
+    try:
+        os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
+    except PermissionError:
+        UPLOAD_DIR = "/tmp/uploads"
+        os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
 
     try:
         with get_conn() as conn:

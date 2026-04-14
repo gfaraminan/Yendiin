@@ -16,6 +16,9 @@ const envFeatureFlags = {
   whatsappShare: parseBool(env.VITE_FEATURE_WHATSAPP_SHARE, true),
   supportLinks: parseBool(env.VITE_FEATURE_SUPPORT_LINKS, true),
   brandedAdminLabels: parseBool(env.VITE_FEATURE_BRANDED_ADMIN_LABELS, true),
+  altCheckoutUx: parseBool(env.VITE_FEATURE_ALT_CHECKOUT_UX, false),
+  altProducerUi: parseBool(env.VITE_FEATURE_ALT_PRODUCER_UI, false),
+  altStaffUi: parseBool(env.VITE_FEATURE_ALT_STAFF_UI, false),
 };
 
 const readWindowConfig = () => {

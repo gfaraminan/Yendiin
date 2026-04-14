@@ -24,3 +24,4 @@
 
 ## Smoke checks ejecutables
 - `scripts/smoke_readiness.sh`
+- `node frontend/scripts/smoke_flag_views.mjs`

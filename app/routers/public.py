@@ -30,6 +30,18 @@ def _tenant_id_from_query(tenant_id: str) -> str:
     return t
 
 
+def _env_bool(name: str, default: bool = True) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = str(value).strip().lower()
+    if normalized in ("1", "true", "yes", "on"):
+        return True
+    if normalized in ("0", "false", "no", "off"):
+        return False
+    return default
+
+
 # -------------------------
 # auth (public)
 # -------------------------
@@ -128,16 +140,40 @@ def public_logout(request: Request):
 def public_config():
     default_public_tenant = (os.getenv("DEFAULT_PUBLIC_TENANT") or os.getenv("VITE_DEFAULT_PUBLIC_TENANT") or "default").strip() or "default"
     brand = get_brand_config()
+    branding = {
+        "name": brand.name,
+        "support_email": brand.support_email,
+        "legal_name": brand.legal_name,
+    }
+    legal = {
+        "termsUrl": (os.getenv("VITE_LEGAL_TERMS_URL") or "/static/legal/terminos-y-condiciones.pdf").strip() or "/static/legal/terminos-y-condiciones.pdf",
+        "privacyUrl": (os.getenv("VITE_LEGAL_PRIVACY_URL") or "/static/legal/politica-de-privacidad.pdf").strip() or "/static/legal/politica-de-privacidad.pdf",
+        "refundsUrl": (os.getenv("VITE_LEGAL_REFUNDS_URL") or "/static/legal/politica-reembolsos.pdf").strip() or "/static/legal/politica-reembolsos.pdf",
+        "faqUrl": (os.getenv("VITE_FAQ_URL") or "/legal/faqs-ticketpro.html").strip() or "/legal/faqs-ticketpro.html",
+        "producerFaqUrl": (os.getenv("VITE_FAQ_PRODUCER_URL") or "/legal/faqs-productor-ticketpro.html").strip() or "/legal/faqs-productor-ticketpro.html",
+        "producerTermsUrl": (os.getenv("VITE_LEGAL_PRODUCER_TERMS_URL") or "/static/legal/terminos-y-condiciones-productor.pdf").strip() or "/static/legal/terminos-y-condiciones-productor.pdf",
+    }
+    feature_flags = {
+        "producerPanel": _env_bool("VITE_FEATURE_PRODUCER_PANEL", True),
+        "googleLogin": _env_bool("VITE_FEATURE_GOOGLE_LOGIN", True),
+        "magicLinkLogin": _env_bool("VITE_FEATURE_MAGIC_LINK_LOGIN", True),
+        "featuredCarousel": _env_bool("VITE_FEATURE_FEATURED_CAROUSEL", True),
+        "whatsappShare": _env_bool("VITE_FEATURE_WHATSAPP_SHARE", True),
+        "supportLinks": _env_bool("VITE_FEATURE_SUPPORT_LINKS", True),
+        "brandedAdminLabels": _env_bool("VITE_FEATURE_BRANDED_ADMIN_LABELS", True),
+    }
     return {
         "google_client_id": (os.getenv("VITE_GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID") or "").strip(),
         "default_public_tenant": default_public_tenant,
         "public_tenant": default_public_tenant,
-        "brand_name": (os.getenv("VITE_BRAND_NAME") or os.getenv("BRAND_NAME") or "").strip(),
-        "brand": {
-            "name": brand.name,
-            "support_email": brand.support_email,
-            "legal_name": brand.legal_name,
-        },
+        "brand_name": (os.getenv("VITE_BRAND_NAME") or os.getenv("BRAND_NAME") or brand.name).strip(),
+        # runtime payload nuevo
+        "branding": branding,
+        "legal": legal,
+        "features": feature_flags,
+        "feature_flags": feature_flags,
+        # compatibilidad legacy
+        "brand": branding,
     }
 
 

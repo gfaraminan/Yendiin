@@ -82,6 +82,15 @@ Responsabilidades:
 - Listado de ítems de venta (`/sale-items`).
 - Endpoints de sesión pública heredados (`/me`, `/logout`, `/login/google`).
 
+Contrato runtime recomendado de `GET /api/public/config` (mantiene compatibilidad legacy):
+
+- `google_client_id`: client id para Google Identity.
+- `default_public_tenant` y `public_tenant`: tenant público default.
+- `branding`: objeto de marca runtime (por ejemplo `name`, `support_email`, `legal_name`).
+- `legal`: links legales runtime (`termsUrl`, `privacyUrl`, `refundsUrl`, etc.).
+- `features` y `feature_flags`: flags de frontend (mismo contenido para compatibilidad).
+- Campos legacy conservados: `brand_name` y `brand`.
+
 ### 3.3 Backoffice de productor
 
 Router: `app/routers/producer.py` (prefijo `/api/producer`).

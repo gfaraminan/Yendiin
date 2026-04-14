@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TicketPro | Preguntas frecuentes</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #06060a;
+        --panel: #0f1016;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #818cf8;
+        --border: rgba(255, 255, 255, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: radial-gradient(circle at top, #16182a 0%, var(--bg) 55%);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(30px, 5vw, 44px);
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      .brand { color: var(--accent); }
+      .intro { color: var(--muted); margin: 0 0 28px; }
+      .faq-item {
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--panel) 90%, black 10%);
+        margin-bottom: 12px;
+      }
+      .faq-item h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 800;
+      }
+      .faq-item p {
+        margin: 0;
+        color: #d1d5db;
+      }
+      .cta {
+        margin-top: 26px;
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: rgba(129, 140, 248, 0.08);
+      }
+      .cta a { color: #c7d2fe; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Ticket<span class="brand">Pro</span> — FAQ para clientes</h1>
+      <p class="intro">Respuestas rápidas para compras, acceso, tickets y postventa.</p>
+
+      <section class="faq-item">
+        <h2>1) ¿Necesito una cuenta para comprar?</h2>
+        <p>Sí. Te pedimos iniciar sesión para asociar la compra a tu perfil y que luego puedas verla en “Mis tickets”.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>2) ¿Puedo comprar varias entradas en una sola operación?</h2>
+        <p>Sí, siempre que haya stock disponible para el tipo de entrada seleccionado.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>3) ¿Dónde encuentro mis entradas después de pagar?</h2>
+        <p>En “Mis tickets”. Desde ahí podés abrir tu QR y descargar el PDF cuando esté disponible.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>4) No me llega el correo de acceso, ¿qué hago?</h2>
+        <p>Revisá spam/promociones, esperá unos minutos y solicitá un nuevo enlace. Recomendamos usar siempre el último email recibido.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>5) Pagué pero no veo mis tickets</h2>
+        <p>En algunos casos hay demoras de sincronización. Si persiste, escribinos con tu número de orden para validarlo con soporte.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>6) ¿Puedo transferir una compra?</h2>
+        <p>TicketPro permite transferencias de orden, sujeto a la política del evento y a las reglas definidas por el productor.</p>
+      </section>
+
+      <section class="faq-item">
+        <h2>7) ¿Qué medios de ayuda tienen?</h2>
+        <p>Podés escribir a soporte@ticketpro.com.ar o por WhatsApp oficial para casos urgentes.</p>
+      </section>
+
+      <aside class="cta">
+        ¿Necesitás ayuda con una compra? Contactanos por email a
+        <a href="mailto:soporte@ticketpro.com.ar">soporte@ticketpro.com.ar</a>
+        o por WhatsApp al
+        <a href="https://wa.me/5492614167597" target="_blank" rel="noopener noreferrer">+54 9 261 416-7597</a>.
+      </aside>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,658 @@
+{% extends "base.html" %}
+{% block content %}
+<script>
+  window.__AUTH = { event: {{ event_slug|tojson }}, type: "admin", slug: {{ actor_slug|tojson }} };
+</script>
+
+<style>
+  /* =========================
+     ADMIN UI (scoped)
+     - Mobile: sin paneo lateral (FIX alineación)
+     - KPIs compactos
+     - Tabla -> cards en mobile
+     - Glow + acento unificado
+     ========================= */
+
+  html, body { max-width: 100%; overflow-x: hidden; }
+
+  /* FIX: ancho real + padding consistente (evita corrimiento/corte en mobile) */
+  .grid{
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 14px;
+    box-sizing: border-box;
+    gap: 12px;
+  }
+  .grid, .grid *{ box-sizing: border-box; }
+  .grid, .card{ min-width: 0; }
+
+  @media (max-width: 920px){
+    .grid{ padding: 10px; display: block; }
+    .grid > .card{ margin-bottom: 12px; }
+  }
+
+  /* === Glow + línea superior (estilo unificado) === */
+  .card{ position: relative; overflow: hidden; }
+  .card::before{
+    content:"";
+    position:absolute;
+    inset:-2px;
+    background:
+      radial-gradient(800px 220px at 10% 0%, rgba(255,255,255,.10), transparent 55%),
+      radial-gradient(650px 260px at 80% 0%, color-mix(in srgb, var(--accent) 55%, transparent), transparent 60%);
+    opacity:.55;
+    pointer-events:none;
+  }
+  @supports not (color-mix(in srgb, white 50%, transparent)) {
+    .card::before{
+      background:
+        radial-gradient(800px 220px at 10% 0%, rgba(255,255,255,.10), transparent 55%),
+        radial-gradient(650px 260px at 80% 0%, rgba(255,26,166,.18), transparent 60%);
+    }
+  }
+  .card::after{
+    content:"";
+    position:absolute;
+    left:12px; right:12px; top:12px;
+    height:2px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+    opacity:.6;
+    pointer-events:none;
+  }
+  .card > *{ position:relative; z-index:1; }
+
+  /* Header card: compacto */
+  .admin-head{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .admin-title{
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  /* KPI: grid compacto */
+  .kpi-wrap{ margin-top: 12px; }
+  .kpi-grid{
+    display:grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+  }
+  .kpi-card{
+    padding: 9px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.04);
+    min-width: 0;
+    box-shadow: 0 14px 40px rgba(0,0,0,.22);
+  }
+  .kpi-label{
+    font-size: 11px;
+    letter-spacing: .12em;
+    opacity: .80;
+    text-transform: uppercase;
+  }
+  .kpi-value{
+    font-size: 20px;
+    line-height: 1.05;
+    font-weight: 900;
+    margin-top: 2px;
+  }
+  .kpi-sub{
+    font-size: 12px;
+    opacity: .80;
+    margin-top: 2px;
+  }
+  @media (max-width: 920px){
+    .kpi-grid{ gap: 8px; }
+    .kpi-card{ padding: 8px 9px; }
+    .kpi-label{ font-size: 10px; }
+    .kpi-value{ font-size: 18px; }
+    .kpi-sub{ font-size: 11px; }
+  }
+
+  /* Total $ vendido */
+  .kpi-revenue{
+    grid-column: 1 / -1;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.18);
+    box-shadow: 0 14px 40px rgba(0,0,0,.22);
+  }
+  .kpi-revenue .left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .kpi-revenue .right{ font-weight: 900; font-size: 18px; white-space: nowrap; }
+
+  .queue-head{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom: 10px;
+  }
+
+  td.col-items{ display:none; }
+
+  /* Tabla: evitar overflow horizontal */
+  .queue-table-wrap{
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 14px;
+  }
+  table{ width:100%; max-width: 100%; table-layout: fixed; }
+  th, td{ overflow:hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Columnas clave: NO recortar */
+  th:nth-child(1), td:nth-child(1),
+  th:nth-child(3), td:nth-child(3),
+  th:nth-child(4), td:nth-child(4){
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  th:nth-child(1), td:nth-child(1){ width: 78px; }
+  th:nth-child(2), td:nth-child(2){ width: 110px; }
+  th:nth-child(3), td:nth-child(3){ width: 120px; }
+  th:nth-child(4), td:nth-child(4){ width: 110px; }
+  th:nth-child(5), td:nth-child(5){ width: 110px; }
+
+  .btn.small{
+    min-height: 38px;
+    border-radius: 12px;
+    padding: 9px 10px;
+  }
+
+  /* MOBILE: tabla -> cards */
+  @media (max-width: 920px){
+    .queue-table-wrap table thead{ display:none; }
+    .queue-table-wrap table, .queue-table-wrap tbody, .queue-table-wrap tr, .queue-table-wrap td{
+      display:block; width:100%;
+    }
+
+    .queue-table-wrap tr.order-row{
+      border-radius: 18px;
+      margin: 10px 0;
+      overflow:hidden;
+      border: 1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+      position: relative;
+      padding: 10px 10px 12px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.25);
+    }
+
+    .queue-table-wrap tr.order-row::before{
+      content:"";
+      position:absolute;
+      left:0; top:10px; bottom:10px;
+      width:4px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.18);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset;
+    }
+    .queue-table-wrap tr.order-row.s-ready::before{ background: rgba(255, 26, 166, .85); }
+    .queue-table-wrap tr.order-row.s-paid::before{ background: rgba(0, 220, 170, .75); }
+    .queue-table-wrap tr.order-row.s-delivered::before{ background: rgba(120, 200, 255, .70); }
+    .queue-table-wrap tr.order-row.s-pending::before{ background: rgba(255, 200, 80, .75); }
+
+    .queue-table-wrap tr.order-row{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      grid-template-areas:
+        "code state"
+        "time time"
+        "items items"
+        "total action";
+      gap: 8px 10px;
+    }
+
+    .queue-table-wrap td{ padding:0; margin:0; border:0; }
+    .queue-table-wrap td::before{ content:"" !important; display:none !important; }
+
+    .queue-table-wrap td.col-id{ grid-area: code; }
+    .queue-table-wrap td.col-state{ grid-area: state; justify-self: end; }
+    .queue-table-wrap td.col-hour{ grid-area: time; opacity:.9; }
+    .queue-table-wrap td.col-items{ grid-area: items; }
+    .queue-table-wrap td.col-total{ grid-area: total; }
+    .queue-table-wrap td.col-action{ grid-area: action; justify-self: end; }
+
+    .queue-table-wrap td.col-hour .time-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      font-size: 12px;
+    }
+
+    .queue-table-wrap td.col-id .code-pill{
+      display:inline-flex;
+      align-items:center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      font-weight: 950;
+      letter-spacing: .14em;
+      font-size: 14px;
+      text-transform: uppercase;
+    }
+
+    .queue-table-wrap .items-preview{
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.16);
+      font-size: 13px;
+      line-height: 1.25;
+      color: rgba(255,255,255,.86);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .queue-table-wrap .items-preview .more{ opacity: .75; margin-left: 6px; font-weight: 800; }
+
+    .queue-table-wrap td.col-total .money{ font-weight: 950; font-size: 18px; white-space: nowrap; }
+
+    .queue-table-wrap td.col-action .btn{
+      min-height: 40px;
+      border-radius: 14px;
+      padding: 9px 12px;
+      font-weight: 900;
+    }
+  }
+
+  .mono{
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: .02em;
+  }
+
+  .chip{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    font-size: 12px;
+    line-height: 1;
+  }
+  .chip.chip-ready{ border-color: rgba(255, 26, 166, .35); background: rgba(255, 26, 166, .12); }
+  .chip.chip-paid{ border-color: rgba(0, 220, 170, .35); background: rgba(0, 220, 170, .10); }
+  .chip.chip-delivered{ border-color: rgba(120, 200, 255, .35); background: rgba(120, 200, 255, .10); }
+  .chip.chip-pending{ border-color: rgba(255, 200, 80, .35); background: rgba(255, 200, 80, .10); }
+
+  #pinBox input{ min-height: 44px; border-radius: 14px; }
+  #pinBox .btn.primary{ min-height: 44px; border-radius: 14px; font-weight: 900; }
+</style>
+
+<div class="grid">
+  <div class="card">
+    <div class="admin-head">
+      <div>
+        <div class="admin-title">Admin</div>
+        <div class="mut">Evento: <span class="kbd">{{ event_slug }}</span></div>
+      </div>
+      <button class="btn small" id="btnLogout">Limpiar</button>
+    </div>
+
+    <div class="kpi-wrap">
+      <div style="font-weight:900;margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase;opacity:.9;">KPIs</div>
+
+      <div class="kpi-grid" aria-label="KPIs Admin">
+        <div class="kpi-revenue" title="Suma de totales visibles en la cola (estimado)">
+          <div class="left">
+            <div class="kpi-label">TOTAL VENDIDO</div>
+            <div class="kpi-sub">Suma de pedidos (visible)</div>
+          </div>
+          <div class="right" id="kpiRevenue">$ —</div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">TOTAL</div>
+          <div class="kpi-value" id="kpi_total">—</div>
+          <div class="kpi-sub">Pedidos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">PAID</div>
+          <div class="kpi-value" id="kpi_paid">—</div>
+          <div class="kpi-sub">Pagados</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">READY</div>
+          <div class="kpi-value" id="kpi_ready">—</div>
+          <div class="kpi-sub">Listos</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">DELIVERED</div>
+          <div class="kpi-value" id="kpi_delivered">—</div>
+          <div class="kpi-sub">Entregados</div>
+        </div>
+
+        <div class="mut" id="kpiBox" style="display:none;">—</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-weight:900;margin-bottom:8px;letter-spacing:.08em;text-transform:uppercase;opacity:.9;">PIN</div>
+      <div class="mut" id="authState">Verificando…</div>
+
+      <div id="pinBox" style="margin-top:10px" class="hidden">
+        <form method="post" action="/staff/login?event={{ event_slug }}">
+          <input type="hidden" name="next" value="{{ request.url.path }}?event={{ event_slug }}&admin={{ actor_slug }}">
+          <input type="hidden" name="hint" value="admin">
+          <div style="display:flex;gap:10px;align-items:center">
+            <input name="pin" placeholder="PIN"
+                   style="flex:1;padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.25);color:#fff"/>
+            <button class="btn primary" type="submit">Entrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="queue-head">
+      <div style="font-weight:900;font-size:18px;letter-spacing:.08em;text-transform:uppercase;">Cola</div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn small" id="btnRefresh">Actualizar</button>
+        <span class="mut" id="autoState">Auto: ON</span>
+      </div>
+    </div>
+
+    <div class="queue-table-wrap">
+      <table aria-label="cola admin">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>ID</th>
+            <th>Estado</th>
+            <th>Total</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="queueBody">
+          <tr><td colspan="5" class="mut">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    'use strict';
+
+    const $ = (id) => document.getElementById(id);
+
+    function moneyARS(n){
+      const v = Number(n);
+      if (!isFinite(v)) return String(n ?? '—');
+      return v.toLocaleString('es-AR', { style:'currency', currency:'ARS', maximumFractionDigits: 0 });
+    }
+
+    function safeJSONParse(text){
+      try { return JSON.parse(text); } catch { return null; }
+    }
+
+    function hydrateKpisFromLegacyBox(){
+      const box = $('kpiBox');
+      if (!box) return;
+
+      const raw = (box.textContent || '').trim();
+      if (!raw || raw === '—') return;
+
+      const normalized = raw
+        .replace(/'/g, '"')
+        .replace(/\bTrue\b/g, 'true')
+        .replace(/\bFalse\b/g, 'false')
+        .replace(/\bNone\b/g, 'null');
+
+      const data = safeJSONParse(normalized);
+      if (!data || typeof data !== 'object') return;
+
+      if ($('kpi_total') && data.total != null) $('kpi_total').textContent = String(data.total);
+      if ($('kpi_paid') && data.paid != null) $('kpi_paid').textContent = String(data.paid);
+      if ($('kpi_ready') && data.ready != null) $('kpi_ready').textContent = String(data.ready);
+      if ($('kpi_delivered') && data.delivered != null) $('kpi_delivered').textContent = String(data.delivered);
+
+      const rev = (data.total_sold ?? data.revenue_total ?? data.total_revenue);
+      if ($('kpiRevenue') && rev != null) $('kpiRevenue').textContent = moneyARS(rev);
+    }
+
+    function recomputeRevenueFromQueue(){
+      const tb = $('queueBody');
+      const out = $('kpiRevenue');
+      if (!tb || !out) return;
+
+      let sum = 0;
+      let found = 0;
+
+      const rows = Array.from(tb.querySelectorAll('tr'));
+      for (const tr of rows){
+        const tds = Array.from(tr.querySelectorAll('td'));
+        if (!tds.length) continue;
+        if (tds.length === 1 && (tds[0].textContent || '').includes('—')) continue;
+
+        let txt = '';
+        if (tds.length >= 4) txt = (tds[3].textContent || '').trim();
+
+        if (!txt || txt === '—'){
+          const all = (tr.textContent || '');
+          const m = all.match(/\$\s*([0-9.,]+)/);
+          if (m) txt = m[1];
+        }
+
+        if (!txt) continue;
+
+        const clean = txt
+          .replace(/[^\d,.\-]/g, '')
+          .replace(/\.(?=\d{3}\b)/g, '')
+          .replace(',', '.');
+
+        const val = Number(clean);
+        if (isFinite(val)){
+          sum += val;
+          found += 1;
+        }
+      }
+
+      out.textContent = found ? moneyARS(sum) : '$ —';
+    }
+
+    const __itemsCache = new Map();
+    const __itemsSeen = new Set();
+    let __itemsIO = null;
+
+    function formatTopItems(items){
+      const safe = Array.isArray(items) ? items : [];
+      const parts = [];
+      for (const it of safe){
+        const name = (it?.name || '').trim();
+        const qty = Number(it?.qty ?? 1);
+        if (!name) continue;
+        const q = isFinite(qty) && qty > 1 ? `${qty}x ` : (isFinite(qty) && qty == 1 ? '1x ' : '');
+        parts.push(q + name);
+      }
+      if (!parts.length) return 'Sin items';
+      const top = parts.slice(0, 2).join(', ');
+      const rest = parts.length - 2;
+      return rest > 0 ? `${top} <span class="more">+${rest} más</span>` : top;
+    }
+
+    async function fetchAndCacheItems(eventSlug, orderId){
+      if (!eventSlug || !orderId) return null;
+      if (__itemsCache.has(orderId)) return __itemsCache.get(orderId);
+      const url = `/api/order/detail?event=${encodeURIComponent(eventSlug)}&order_id=${encodeURIComponent(orderId)}`;
+      const res = await fetch(url, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('detail_failed');
+      const data = await res.json();
+      const htmlText = formatTopItems(data?.items);
+      const payload = { html: htmlText };
+      __itemsCache.set(orderId, payload);
+      return payload;
+    }
+
+    function ensureItemsPreviewEl(tdCell){
+      if (!tdCell) return null;
+      let el = tdCell.querySelector('.items-preview');
+      if (!el){
+        el = document.createElement('div');
+        el.className = 'items-preview';
+        el.innerHTML = 'Items: <span style="opacity:.75">cargando…</span>';
+        tdCell.appendChild(el);
+      }
+      return el;
+    }
+
+    function ensureItemsIO(){
+      if (__itemsIO) return __itemsIO;
+      __itemsIO = new IntersectionObserver((entries) => {
+        for (const e of entries){
+          if (!e.isIntersecting) continue;
+          const tr = e.target;
+          const orderId = tr?.dataset?.orderId;
+          const tdItems = tr?.querySelector('td.col-items');
+          const preview = tdItems ? ensureItemsPreviewEl(tdItems) : null;
+          if (!orderId || !preview) continue;
+
+          const eventSlug = (window.__AUTH && window.__AUTH.event) ? window.__AUTH.event : null;
+
+          fetchAndCacheItems(eventSlug, orderId)
+            .then((payload) => { if (payload) preview.innerHTML = payload.html; })
+            .catch(() => { preview.innerHTML = 'Items: <span style="opacity:.75">—</span>'; })
+            .finally(() => { try { __itemsIO.unobserve(tr); } catch {} });
+        }
+      }, { root: null, rootMargin: '120px', threshold: 0.01 });
+      return __itemsIO;
+    }
+
+    function observeRowForItems(tr, orderId){
+      if (!tr || !orderId) return;
+      if (__itemsSeen.has(orderId)) return;
+      __itemsSeen.add(orderId);
+      tr.dataset.orderId = orderId;
+      const io = ensureItemsIO();
+      io.observe(tr);
+    }
+
+    function addDataLabelsIfMissing(){
+      const tb = $('queueBody');
+      if (!tb) return;
+
+      const labels = ['HORA', 'ID', 'ESTADO', 'TOTAL', 'ACCIÓN'];
+
+      const rows = Array.from(tb.querySelectorAll('tr'));
+      for (const tr of rows){
+        const tds = Array.from(tr.querySelectorAll('td'));
+        if (!tds.length) continue;
+        if (tds.length === 1 && (tds[0].getAttribute('colspan') || '') === '5') continue;
+
+        tr.classList.add('order-row');
+
+        const colClasses = ['col-hour','col-id','col-state','col-total','col-action'];
+        for (let i = 0; i < tds.length && i < labels.length; i++){
+          if (!tds[i].getAttribute('data-label')) tds[i].setAttribute('data-label', labels[i]);
+          tds[i].classList.add(colClasses[i]);
+        }
+
+        if (tds[1]){
+          const raw = (tds[1].textContent || '').trim();
+          const short = raw.length > 10 ? raw.slice(0, 8) : raw;
+          tds[1].innerHTML = `<span class="code-pill mono" title="${raw}">${short}</span>`;
+
+          let tdItems = tr.querySelector('td.col-items');
+          if (!tdItems){
+            tdItems = document.createElement('td');
+            tdItems.className = 'col-items';
+            tdItems.setAttribute('data-label','ITEMS');
+            tr.appendChild(tdItems);
+          }
+          ensureItemsPreviewEl(tdItems);
+          observeRowForItems(tr, raw);
+        }
+
+        if (tds[0]){
+          const c = (tds[0].textContent || '').trim();
+          const m = c.match(/(\d{2}:\d{2})/);
+          const hhmm = m ? m[1] : c;
+          tds[0].innerHTML = `<span class="time-pill mono">${hhmm}</span>`;
+        }
+
+        if (tds[2]){
+          const s = (tds[2].textContent || '').trim();
+          const up = s.toUpperCase();
+          let cls = 'chip-pending';
+          if (up === 'READY') cls = 'chip-ready';
+          else if (up === 'PAID') cls = 'chip-paid';
+          else if (up === 'DELIVERED') cls = 'chip-delivered';
+
+          tr.classList.remove('s-ready','s-paid','s-delivered','s-pending');
+          if (cls === 'chip-ready') tr.classList.add('s-ready');
+          else if (cls === 'chip-paid') tr.classList.add('s-paid');
+          else if (cls === 'chip-delivered') tr.classList.add('s-delivered');
+          else tr.classList.add('s-pending');
+
+          if (s) tds[2].innerHTML = `<span class="chip ${cls}">${s}</span>`;
+        }
+
+        if (tds[3]){
+          const t = (tds[3].textContent || '').trim();
+          if (t && !tds[3].querySelector('.money')){
+            tds[3].innerHTML = `<span class="money">${t}</span>`;
+          }
+        }
+      }
+    }
+
+    function bootObservers(){
+      const kpiBox = $('kpiBox');
+      if (kpiBox){
+        const mo = new MutationObserver(() => hydrateKpisFromLegacyBox());
+        mo.observe(kpiBox, { childList:true, characterData:true, subtree:true });
+        hydrateKpisFromLegacyBox();
+      }
+
+      const tb = $('queueBody');
+      if (tb){
+        let scheduled = false;
+        const run = () => {
+          if (scheduled) return;
+          scheduled = true;
+          requestAnimationFrame(() => {
+            try{
+              addDataLabelsIfMissing();
+              const out = $('kpiRevenue');
+              if (out && (out.textContent || '').includes('—')) recomputeRevenueFromQueue();
+            } finally {
+              scheduled = false;
+            }
+          });
+        };
+
+        const mo2 = new MutationObserver(run);
+        mo2.observe(tb, { childList:true, subtree:true, characterData:true });
+        run();
+      }
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootObservers);
+    } else {
+      bootObservers();
+    }
+  })();
+</script>
+{% endblock %}

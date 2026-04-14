@@ -1,0 +1,121 @@
+
+────────────────────────────
+
+1. VISIÓN DEL PROYECTO
+   ────────────────────────────
+   Sistema de venta de entradas y consumo sin fila para eventos.
+   No es solo “barra”: es una plataforma escalable para eventos, locales saturados y experiencias tipo McDonald's App / Totem.
+
+Estado actual:
+
+* Funcional
+* En producción (Render)
+* Con usuarios reales
+* Con pagos reales (Mercado Pago y Rapipago / Pagofacil)
+
+Objetivo:
+Iterar rápido SIN romper funcionalidades ya validadas.
+
+────────────────────────────
+2) STACK TECNOLÓGICO
+────────────────────────────
+
+* Backend: FastAPI (monolítico)
+* Frontend: Jinja2 + HTML + CSS + JS vanilla
+* DB: SQLite (por ahora)
+* Hosting: Render
+* Pagos: Mercado Pago (Checkout Pro)
+* Auth: login propio (cliente / productor / staff)
+
+────────────────────────────
+3) ARCHIVOS CORE (NO TOCAR SIN ORDEN EXPLÍCITA)
+────────────────────────────
+Estos archivos son ESTABLES.
+
+* app.py
+  → Contiene rutas, lógica principal, pagos, login.
+  → NO borrar rutas
+  → NO renombrar endpoints
+  → NO reestructurar sin pedirlo
+
+* login / selección cliente-productor
+  → UX validada
+  → No cambiar flujo ni estética
+
+* CSS aprobado
+  → No cambiar colores, tipografías ni estilos globales
+  → Cambios visuales solo si se piden
+
+────────────────────────────
+4) REGLAS DE ORO
+────────────────────────────
+
+* NO modificar nada que no haya sido pedido explícitamente
+* NO eliminar código existente “porque parece no usarse”
+* NO refactorizar por iniciativa propia
+* NO cambiar nombres de variables públicas / rutas
+* Si algo no está claro → PREGUNTAR antes de tocar
+
+Si el pedido implica riesgo:
+→ Proponer alternativa
+→ Esperar confirmación
+
+────────────────────────────
+5) METODOLOGÍA DE TRABAJO
+────────────────────────────
+
+* Preferir cambios quirúrgicos
+* Indicar:
+  • qué función se toca
+  • qué bloque se agrega
+  • dónde se inserta
+
+Si se pide archivo completo:
+→ Mantener TODO lo existente
+→ Cambiar solo lo solicitado
+
+Si hay dos caminos:
+→ Explicar pros / contras
+→ Recomendar uno
+→ NO decidir unilateralmente
+
+────────────────────────────
+6) LO QUE YA FUNCIONA (NO ROMPER)
+────────────────────────────
+
+* Login cliente / productor / staff
+* Compra de entradas
+* Checkout Mercado Pago
+* Render deploy
+* Navegación principal
+* UX mobile first
+* listado de eventos
+* legales y redes sociales en footter
+
+
+────────────────────────────
+7) OBJETIVO DE ESTE PEDIDO PUNTUAL
+────────────────────────────
+es un cambio grande el que quiero hacer. en el menú de productor. la lógica de las entradas quiero que sea distinta. no quiero preventas, no quiero consumiciones.
+quiero poder cargar como venta cualquier cosa (parking, preventa1, entrada, general, vip, consumición, etc), que el productor pueda determinar q vender, con stock y fecha
+por ejemplo : entrada general preventa 1  100 unidades de x fecha a x fecha precio x
+entrada vip preventa 1 100 unidades de x fecha a x fecha precio x
+también quiero que se puedan cargar vendedores (que compartan su link del evento y esa venta les cuente a ellos, ósea un evento puede tener distintos links de venta de distintos vendedores) llevar un registro de esto también.
+que el productor pueda emitir ticket de cortesia. qr que pueda enviar por whatsapp desde el mismo panel.
+informes de entradas vendidas, simple pero claro
+informe de ventas por vendedor, simple pero claro
+todo accesible desde la pc o desde el celular
+
+ 
+
+────────────────────────────
+8) TONO Y ESTILO
+────────────────────────────
+
+* Mantené vibe coding, pero con responsabilidad
+* Pensar como arquitecto senior
+* Priorizar estabilidad + escalabilidad
+* Humor inteligente permitido 😄
+* Visión a futuro (esto escala, cobra y crece)
+
+FIN DEL CONTEXTO

@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Elegí forma de pago</title>
+  <style>
+    :root{
+      --bg:#0b0710;
+      --card: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.70);
+      --muted2: rgba(255,255,255,.55);
+      --btn: rgba(255,255,255,.10);
+      --btnh: rgba(255,255,255,.16);
+      --accent1:#ff3bd4;
+      --accent2:#7c5cff;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color:var(--text);
+      min-height:100vh;
+      background:
+        radial-gradient(1200px 800px at 15% 20%, rgba(124,92,255,.32), transparent 60%),
+        radial-gradient(900px 700px at 80% 10%, rgba(255,75,214,.22), transparent 55%),
+        radial-gradient(800px 600px at 70% 90%, rgba(124,92,255,.18), transparent 60%),
+        var(--bg);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      padding:22px;
+    }
+    .panel{
+      width:min(980px, 100%);
+      background: linear-gradient(120deg, rgba(255,59,212,.10), rgba(124,92,255,.10));
+      border:1px solid var(--stroke);
+      border-radius:22px;
+      box-shadow: 0 18px 60px rgba(0,0,0,.55);
+      padding:22px;
+      backdrop-filter: blur(10px);
+    }
+    .title{font-size:44px; font-weight:850; letter-spacing:-.02em; margin:6px 0 8px 0}
+    .sub{color:var(--muted); margin:0 0 16px 0}
+    .card{
+      margin-top:14px;
+      background: rgba(0,0,0,.20);
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      padding:16px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    .kv{display:grid; gap:10px}
+    .k{color:var(--muted2)}
+    .v{font-weight:700}
+    .line{display:flex; align-items:center; justify-content:space-between}
+    .total{font-size:18px}
+    .actions{display:flex; gap:12px; margin-top:16px; flex-wrap:wrap}
+    .btn{
+      flex:1;
+      min-width: 220px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      padding:14px 16px;
+      border-radius:14px;
+      border:1px solid var(--stroke);
+      background: var(--btn);
+      color:var(--text);
+      font-weight:800;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{background:var(--btnh)}
+    .btn.primary{background: linear-gradient(90deg, var(--accent1), var(--accent2)); border-color: rgba(255,255,255,.18)}
+    .btn.primary:hover{filter: brightness(1.05)}
+    .hint{margin-top:10px; color:var(--muted2); font-size:13px}
+    .err{margin-top:10px; color:#ff9aa8; font-size:13px; white-space:pre-wrap}
+    @media (max-width: 780px){
+      .title{font-size:34px}
+      .card{grid-template-columns: 1fr}
+      .btn{min-width: 0}
+    }
+  
+
+    /* Footer (legal + redes) */
+    .site-footer{ width: min(980px, 100%); margin-top: 18px; }
+    .footer-top{
+      background: linear-gradient(90deg, rgba(124,92,255,.85), rgba(255,59,212,.70));
+      padding: 14px 10px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px 18px 0 0;
+    }
+    .footer-socials{display:flex; gap:12px}
+    .footer-socials a{
+      width:38px;height:38px;border-radius:999px;
+      display:inline-flex;align-items:center;justify-content:center;
+      font-weight:900;text-decoration:none;
+      color: rgba(255,255,255,.92);
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(0,0,0,.18);
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .footer-socials a:hover{transform: translateY(-1px); background: rgba(0,0,0,.24); border-color: rgba(255,255,255,.26)}
+
+    .footer-bottom{
+      background: rgba(10,6,14,.92);
+      border: 1px solid rgba(255,255,255,.08);
+      border-top: 0;
+      padding: 14px 10px 18px;
+      text-align:center;
+      border-radius: 0 0 18px 18px;
+    }
+    .footer-links{display:flex;justify-content:center;gap:10px;flex-wrap:wrap; font-size:12px}
+    .footer-links a{color: rgba(246,242,255,.86); text-decoration:none; font-weight:750}
+    .footer-links a:hover{text-decoration:underline}
+    .footer-links span{color: rgba(246,242,255,.35)}
+    .footer-legal{margin-top:8px; color: rgba(183,169,200,.82); font-size:11px}
+
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="title">Elegí forma de pago</div>
+    <p class="sub">Si elegís Mercado Pago, te redirigimos al checkout.</p>
+
+    <div class="card" aria-live="polite">
+      <div class="kv">
+        <div class="line"><div class="k">Evento</div><div class="v" id="ev_title">—</div></div>
+        <div class="line"><div class="k">Entrada</div><div class="v" id="tk_name">—</div></div>
+        <div class="line"><div class="k">Cantidad</div><div class="v" id="qty">—</div></div>
+      </div>
+      <div class="kv">
+        <div class="line"><div class="k">Subtotal</div><div class="v" id="subtotal">—</div></div>
+        <div class="line"><div class="k">Service charge</div><div class="v" id="fee">—</div></div>
+        <div class="line total"><div class="k"><b>Total</b></div><div class="v" id="total">—</div></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn primary" id="btn_mp">💳 Mercado Pago</button>
+      <button class="btn primary" id="btn_ticket">🏪 Rapipago / Pago Fácil</button>
+      <button class="btn" id="btn_transfer">🏦 Transferencia (demo)</button>
+    </div>
+
+    <div class="hint" id="hint">Cargando pedido…</div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <script>
+    const ORDER_ID = {{ order_id|tojson }};
+
+    function fmtARSFromCents(cents){
+      const n = Number(cents||0)/100;
+      return '$ ' + n.toLocaleString('es-AR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+    }
+
+    async function getJSON(url){
+      const r = await fetch(url, {credentials:'include'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.json();
+    }
+
+    async function postJSON(url, data){
+      const r = await fetch(url, {
+        method:'POST',
+        credentials:'include',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(data)
+      });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok || j.ok === false){
+        throw new Error(j.detail || j.error || j.reason || ('Error ('+r.status+')'));
+      }
+      return j;
+    }
+
+    let ORDER = null;
+
+    async function load(){
+      try{
+        ORDER = await getJSON('/api/orders/'+encodeURIComponent(ORDER_ID));
+        document.getElementById('ev_title').textContent = ORDER.event_title || ORDER.event_slug || '—';
+        document.getElementById('tk_name').textContent = ORDER.ticket_name || '—';
+        document.getElementById('qty').textContent = String(ORDER.qty||1);
+        document.getElementById('subtotal').textContent = fmtARSFromCents(ORDER.base_total_cents);
+        document.getElementById('fee').textContent = fmtARSFromCents(ORDER.service_fee_cents);
+        document.getElementById('total').textContent = fmtARSFromCents(ORDER.total_cents);
+        document.getElementById('hint').textContent = 'Listo. Elegí cómo querés pagar.';
+      }catch(e){
+        document.getElementById('hint').textContent = 'No pude cargar el pedido.';
+        document.getElementById('err').textContent = (e && e.message) ? e.message : String(e);
+      }
+    }
+
+    async function goCheckout(kind){
+      if(!ORDER) throw new Error('Pedido no cargado');
+      const amount = Number(ORDER.total_cents||0)/100;
+      const payload = {
+        event: ORDER.event_slug,
+        bar: 'principal',
+        kind: kind,
+        order_id: ORDER.order_id,
+        amount: amount,
+        fee_pct: Number(ORDER.service_fee_pct||0.10)
+      };
+      const out = await postJSON('/api/tickets/mp/preference', payload);
+      if(!out.init_point) throw new Error('Mercado Pago no devolvió init_point');
+      location.href = out.init_point;
+    }
+
+    async function simulate(method){
+      const out = await postJSON('/api/payments/simulate', {order_id: ORDER_ID, method});
+      location.href = out.confirmation_url || ('/entradas/confirmacion?order_id='+encodeURIComponent(ORDER_ID));
+    }
+
+    document.getElementById('btn_mp').addEventListener('click', async () => {
+      try{
+        document.getElementById('err').textContent='';
+        document.getElementById('hint').textContent='Redirigiendo a Mercado Pago…';
+        await goCheckout('online');
+      }catch(e){
+        document.getElementById('err').textContent = e.message || String(e);
+        document.getElementById('hint').textContent='';
+      }
+    });
+
+    document.getElementById('btn_ticket').addEventListener('click', async () => {
+      try{
+        document.getElementById('err').textContent='';
+        document.getElementById('hint').textContent='Generando cupón Rapipago/Pago Fácil…';
+        await goCheckout('ticket');
+      }catch(e){
+        document.getElementById('err').textContent = e.message || String(e);
+        document.getElementById('hint').textContent='';
+      }
+    });
+
+    document.getElementById('btn_transfer').addEventListener('click', async () => {
+      try{
+        document.getElementById('err').textContent='';
+        document.getElementById('hint').textContent='Demo: marcando como pagado…';
+        await simulate('transferencia');
+      }catch(e){
+        document.getElementById('err').textContent = e.message || String(e);
+        document.getElementById('hint').textContent='';
+      }
+    });
+
+    load();
+  </script>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="footer-top">
+      <div class="footer-socials" aria-label="Compartir">
+        <a id="shareFb" href="#" target="_blank" rel="noopener" aria-label="Compartir en Facebook">f</a>
+        <a id="shareX" href="#" target="_blank" rel="noopener" aria-label="Compartir en X">x</a>
+        <a id="shareIg" href="https://www.instagram.com/" target="_blank" rel="noopener" aria-label="Instagram">ig</a>
+        <a id="shareWa" href="#" target="_blank" rel="noopener" aria-label="Compartir por WhatsApp">wa</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-links">
+        <a href="/legal/privacidad">Política de Privacidad</a>
+        <span>|</span>
+        <a href="/legal/terminos">Términos y Condiciones</a>
+        <span>|</span>
+        <a href="/legal/defensa">Defensa del Consumidor</a>
+      </div>
+      <div class="footer-legal">TicketFlow · Entradas — Todos los derechos reservados</div>
+    </div>
+  </footer>
+
+  <script>
+    (function(){
+      const url = encodeURIComponent(location.href);
+      const txt = encodeURIComponent('TicketFlow · Entradas');
+      const fb = document.getElementById('shareFb');
+      const xx = document.getElementById('shareX');
+      const ig = document.getElementById('shareIg');
+      const wa = document.getElementById('shareWa');
+      if(fb) fb.href = 'https://www.facebook.com/sharer/sharer.php?u=' + url;
+      if(xx) xx.href = 'https://twitter.com/intent/tweet?url=' + url + '&text=' + txt;
+      if(ig) ig.href = ig.getAttribute('href') || 'https://www.instagram.com/';
+      if(wa) wa.href = 'https://api.whatsapp.com/send?text=' + (txt + '%20' + url);
+    })();
+  </script>
+
+</body>
+</html>

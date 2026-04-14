@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TicketPro | FAQ Productor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #06060a;
+        --panel: #0f1016;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #818cf8;
+        --border: rgba(255, 255, 255, 0.12);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: radial-gradient(circle at top, #16182a 0%, var(--bg) 55%);
+        color: var(--text);
+        line-height: 1.55;
+      }
+      .wrap {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(30px, 5vw, 44px);
+        font-weight: 900;
+        letter-spacing: -0.02em;
+      }
+      .brand { color: var(--accent); }
+      .intro { color: var(--muted); margin: 0 0 28px; }
+      .section-title {
+        margin: 26px 0 12px;
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .card {
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: color-mix(in srgb, var(--panel) 90%, black 10%);
+        margin-bottom: 12px;
+      }
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 800;
+      }
+      .card p,
+      .card li {
+        margin: 0;
+        color: #d1d5db;
+      }
+      .card ul {
+        margin: 10px 0 0;
+        padding-left: 18px;
+        display: grid;
+        gap: 8px;
+      }
+      .cta {
+        margin-top: 26px;
+        padding: 18px 20px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: rgba(129, 140, 248, 0.08);
+      }
+      .cta a { color: #c7d2fe; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>Ticket<span class="brand">Pro</span> — FAQ para productores</h1>
+      <p class="intro">Guía rápida para cargar eventos, publicar entradas y entender la información del panel de productor.</p>
+
+      <h2 class="section-title">Carga de eventos</h2>
+
+      <section class="card">
+        <h2>1) ¿Qué datos mínimos tengo que completar al crear un evento?</h2>
+        <ul>
+          <li>Título del evento.</li>
+          <li>Fecha y hora.</li>
+          <li>Venue / ubicación.</li>
+          <li>Descripción comercial.</li>
+          <li>Flyer o imagen principal.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>2) ¿Cómo cargo entradas y stock?</h2>
+        <p>Desde Panel Productor → Ítems de venta. Ahí podés crear cada tipo de entrada, definir precio, cupo y orden de publicación.</p>
+      </section>
+
+      <section class="card">
+        <h2>3) ¿Cómo publico u oculto un evento?</h2>
+        <p>Podés activar/desactivar el evento o cambiar su visibilidad. Esto te permite pausarlo sin borrarlo y retomarlo cuando quieras.</p>
+      </section>
+
+      <h2 class="section-title">Información disponible en el panel</h2>
+
+      <section class="card">
+        <h2>4) ¿Qué puedo ver desde el panel de productor?</h2>
+        <ul>
+          <li>Listado de eventos propios.</li>
+          <li>Estado de cada evento (activo/inactivo y visibilidad).</li>
+          <li>Catálogo de entradas y stock por ítem.</li>
+          <li>Órdenes/tickets y seguimiento operativo.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>5) ¿Cómo actualizo precio o disponibilidad luego de publicar?</h2>
+        <p>Podés editar ítems de venta en cualquier momento desde el panel. Los cambios impactan sobre futuras compras.</p>
+      </section>
+
+      <section class="card">
+        <h2>6) ¿Puedo gestionar vendedores y códigos?</h2>
+        <p>Sí. El módulo sellers/vendors permite administrar códigos y hacer seguimiento comercial por vendedor.</p>
+      </section>
+
+      <aside class="cta">
+        ¿Necesitás acompañamiento para configurar un evento? Escribinos a
+        <a href="mailto:ventas@ticketpro.com.ar">ventas@ticketpro.com.ar</a>
+        o por WhatsApp al
+        <a href="https://wa.me/5492614167597" target="_blank" rel="noopener noreferrer">+54 9 261 416-7597</a>.
+      </aside>
+    </main>
+  </body>
+</html>

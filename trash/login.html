@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TicketFlow · Acceso</title>
+  <style>
+    :root{
+      --bg0:#0b0710; --bg1:#140a1c;
+      --txt:#f6f2ff; --mut:#b7a9c8;
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --stroke: rgba(255,255,255,.12);
+      --card: rgba(255,255,255,.06);
+      --glass: rgba(0,0,0,.22);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--txt);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.78), rgba(20,10,28,.88)),
+        url('/static/img/login_bg.jpg') center/cover fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+
+    /* Layout: header arriba, login centrado, legales abajo */
+    .page{min-height:100vh; display:flex; flex-direction:column;}
+    .topbar{
+      padding: 16px 18px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.20);
+      backdrop-filter: blur(10px);
+    }
+    .topbar .inner{max-width:1180px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center; gap:8px;
+      padding:10px 14px; border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:var(--txt); text-decoration:none; font-weight:800;
+      box-shadow: 0 10px 28px rgba(0,0,0,.22);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      cursor:pointer; user-select:none; white-space:nowrap;
+    }
+    .btn:hover{transform:translateY(-1px); background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.22)}
+
+    .main{flex:1; display:grid; place-items:center; padding: 28px 16px;}
+    .card{
+      width: min(920px, 100%);
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .head{
+      padding: 22px 22px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      display:flex; align-items:center; gap:12px;
+    }
+    .logo{
+      width:44px; height:44px; border-radius:16px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      box-shadow: 0 14px 40px rgba(124,92,255,.28);
+      flex:0 0 auto;
+    }
+    .head h1{margin:0; font-size:18px; font-weight:950; letter-spacing:.2px}
+    .head p{margin:2px 0 0; color:var(--mut); font-weight:800; font-size:12px}
+
+    .grid{padding: 18px 18px 10px; display:grid; grid-template-columns: 1fr 1fr; gap: 14px;}
+    @media (max-width: 860px){ .grid{grid-template-columns:1fr} }
+
+    .choice{
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      padding: 16px;
+    }
+    .choice h2{margin:0 0 6px; font-size:15px; font-weight:950}
+    .choice p{margin:0 0 12px; color:var(--mut); font-weight:800; font-size:12px; line-height:1.35}
+
+    .cta{
+      width:100%;
+      border-radius: 16px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.08);
+      color:var(--txt);
+      font-weight:950;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .cta:hover{transform:translateY(-1px); background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.22)}
+
+    .legal-note{padding: 0 18px 18px; color: rgba(255,255,255,.70); font-weight:850; font-size:12px}
+
+    /* Footer bien abajo */
+    footer{padding: 18px 12px 22px; border-top: 1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.20); backdrop-filter: blur(10px);}
+    .foot-inner{max-width:1180px; margin:0 auto; text-align:center;}
+    .socials{display:flex; justify-content:center; gap:10px; margin-bottom:10px;}
+    .socials a{
+      width:38px; height:38px; border-radius:999px;
+      display:inline-flex; align-items:center; justify-content:center;
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.90);
+      text-decoration:none; font-weight:950;
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .socials a:hover{transform:translateY(-1px); background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.24)}
+    .links{display:flex; justify-content:center; flex-wrap:wrap; gap:10px; align-items:center;}
+    .links a{color:#cfc6ff; text-decoration:none; font-weight:850; font-size:12px}
+    .links a:hover{text-decoration:underline}
+    .links span{color: rgba(255,255,255,.35)}
+    .copy{margin-top:8px; color:#9b8cff; font-size:11px; font-weight:850}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="topbar">
+      <div class="inner">
+        <a class="btn" href="/entradas/eventos">VER CARTELERA</a>
+        <a class="btn" href="/ayuda">AYUDA</a>
+      </div>
+    </div>
+
+    <main class="main">
+      <div class="card">
+        <div class="head">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>Acceso · TicketFlow</h1>
+            <p>Elegí cómo querés entrar. Después, Google se encarga del login.</p>
+          </div>
+        </div>
+
+        <div class="grid">
+          <section class="choice">
+            <h2>🎟️ Soy cliente</h2>
+            <p>Comprá entradas, completá tus datos y obtené tu QR de validación.</p>
+            <a class="cta" href="/login/cliente">Entrar como cliente</a>
+          </section>
+
+          <section class="choice">
+            <h2>🎤 Soy productor</h2>
+            <p>Creá y administrá eventos. Tipos de entrada, precios y activación.</p>
+            <a class="cta" href="/login/productor">Entrar como productor</a>
+          </section>
+        </div>
+
+        <div class="legal-note">Al entrar aceptás los Términos y la Política de Privacidad.</div>
+      </div>
+    </main>
+
+    <footer>
+      <div class="foot-inner">
+        <div class="socials" aria-label="Redes">
+          <a href="#" aria-label="Facebook" title="Facebook">f</a>
+          <a href="#" aria-label="X" title="X">x</a>
+          <a href="#" aria-label="Instagram" title="Instagram">ig</a>
+        </div>
+        <div class="links">
+          <a href="/legal/privacidad">Política de Privacidad</a>
+          <span>|</span>
+          <a href="/legal/terminos">Términos y Condiciones</a>
+          <span>|</span>
+          <a href="/legal/defensa">Defensa del Consumidor</a>
+        </div>
+        <div class="copy">TicketFlow · Entradas — Todos los derechos reservados</div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

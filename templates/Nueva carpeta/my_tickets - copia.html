@@ -1,0 +1,182 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TicketFlow · Mis tickets</title>
+  <style>
+    :root {
+      --bg0:#0b0710; --bg1:#140a1c;
+      --card: rgba(255,255,255,.06);
+      --stroke: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.70);
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --radius: 22px;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.78), rgba(20,10,28,.88)),
+        url("/static/img/login_bg.jpg") center/cover fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 24px 16px 44px;
+    }
+    .wrap{max-width:1100px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+    h1{margin:0;font-size:22px}
+    .btn{border:1px solid var(--stroke); background:rgba(255,255,255,.06);
+      color:var(--text); padding:10px 12px;border-radius:14px; cursor:pointer; text-decoration:none;
+      display:inline-flex;gap:8px;align-items:center; transition:.15s transform,.15s background;
+    }
+    .btn:hover{background:rgba(255,255,255,.10); transform: translateY(-1px);}
+    .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .panel{border:1px solid var(--stroke); background:var(--card); border-radius: var(--radius); box-shadow: var(--shadow); overflow:hidden}
+    .ph{padding:14px 14px 10px; border-bottom:1px solid rgba(255,255,255,.10); display:flex; justify-content:space-between; align-items:center}
+    .ph b{font-size:14px}
+    .list{padding:12px; display:flex; flex-direction:column; gap:10px}
+    .item{border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.22); border-radius:18px; padding:12px; display:flex; gap:12px; align-items:center}
+    .thumb{width:64px;height:64px;border-radius:16px;overflow:hidden;flex:0 0 auto; border:1px solid rgba(255,255,255,.12); background:#111}
+    .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+    .info{flex:1}
+    .t{font-weight:900}
+    .m{color:var(--muted);font-size:12px;display:flex;gap:10px;flex-wrap:wrap;margin-top:4px}
+    .tag{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05)}
+    .qrbtn{white-space:nowrap}
+    .empty{color:var(--muted); padding:14px}
+    .modal{position:fixed; inset:0; background:rgba(0,0,0,.65); display:none; align-items:center; justify-content:center; padding:16px}
+    .modal .box{max-width:360px;width:100%; background:rgba(20,10,28,.92); border:1px solid rgba(255,255,255,.14); border-radius:22px; padding:14px; box-shadow: var(--shadow)}
+    .modal h2{margin:4px 0 10px 0; font-size:16px}
+    .qrimg{width:100%; border-radius:18px; border:1px solid rgba(255,255,255,.12); background:#fff}
+    @media (max-width: 900px){ .cols{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Mis tickets</h1>
+        <div style="color:var(--muted);font-size:13px">Vigentes arriba, historial abajo. Presentá el QR y pasás como si fueras VIP (aunque no lo seas 😄).</div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="/entradas/eventos">🎉 Eventos</a>
+        <a class="btn" href="/logout">Salir</a>
+      </div>
+    </header>
+
+    <div class="cols">
+      <div class="panel">
+        <div class="ph"><b>Vigentes</b><span class="tag" id="vcount">0</span></div>
+        <div class="list" id="vig"></div>
+      </div>
+      <div class="panel">
+        <div class="ph"><b>Historial</b><span class="tag" id="hcount">0</span></div>
+        <div class="list" id="his"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="box">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <h2 id="mtitle">QR</h2>
+        <button class="btn" id="mclose" style="padding:8px 10px">Cerrar</button>
+      </div>
+      <img id="mimg" class="qrimg" alt="QR ticket" />
+      <div id="mmeta" style="margin-top:10px;color:var(--muted);font-size:12px"></div>
+    </div>
+  </div>
+
+<script>
+const money = (cents) => {
+  const v = (cents||0)/100;
+	  try {
+	    return '$ ' + Number(v).toLocaleString('es-AR');
+	  } catch (e) {
+	    return '$ ' + v;
+	  }
+};
+const esc = (s) => (s ?? '').toString().replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+
+function isPast(o) {
+  // Intento simple: si hay date_iso YYYY-MM-DD...
+  const iso = o.event_date_iso || '';
+  if (/^\\d{4}-\\d{2}-\\d{2}/.test(iso)) {
+    const d = new Date(iso.substring(0,10) + 'T00:00:00');
+    const now = new Date();
+    // Si terminó ayer o antes => pasado
+    return d.getTime() < new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  }
+  return false;
+}
+
+function itemHtml(o) {
+  const when = o.event_date_text || o.event_date_iso || '';
+  const where = [o.event_venue, o.event_city].filter(Boolean).join(' · ');
+  const paid = (o.status||'').toUpperCase() === 'PAID';
+  const hero = o.event_hero ? `<img src="${esc(o.event_hero)}" alt="flyer">` : '';
+  const qrBtn = paid ? `<button class="btn qrbtn" data-oid="${o.order_id}" data-title="${esc(o.event_title||o.event_slug)}" style="padding:8px 10px">📲 Ver QR</button>` : `<span class="tag">⏳ Pendiente</span>`;
+  return `
+    <div class="item">
+      <div class="thumb">${hero}</div>
+      <div class="info">
+        <div class="t">${esc(o.event_title || o.event_slug)} <span class="tag" style="margin-left:8px">${paid ? '✅ Pagado' : '⏳ Pendiente'}</span></div>
+        <div class="m">
+          <span>📅 ${esc(when)}</span>
+          <span>📍 ${esc(where)}</span>
+          <span>🎟 x${o.qty} · ${money(o.total_cents)}</span>
+        </div>
+      </div>
+      <div>${qrBtn}</div>
+    </div>
+  `;
+}
+
+(async () => {
+  const r = await fetch('/api/orders/mine');
+  const d = await r.json();
+  const all = (d.orders || []);
+  const vig = all.filter(o => !isPast(o));
+  const his = all.filter(o => isPast(o));
+
+  document.getElementById('vcount').textContent = vig.length;
+  document.getElementById('hcount').textContent = his.length;
+
+  const vigEl = document.getElementById('vig');
+  const hisEl = document.getElementById('his');
+
+  vigEl.innerHTML = vig.length ? vig.map(itemHtml).join('') : `<div class="empty">Todavía no tenés tickets vigentes. Elegí un evento y rompé el algoritmo 😄</div>`;
+  hisEl.innerHTML = his.length ? his.map(itemHtml).join('') : `<div class="empty">Aún no hay historial. (Eso se arregla este finde.)</div>`;
+
+  const modal = document.getElementById('modal');
+  const mimg = document.getElementById('mimg');
+  const mtitle = document.getElementById('mtitle');
+  const mmeta = document.getElementById('mmeta');
+
+  document.body.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('button[data-oid]');
+    if (!btn) return;
+    const oid = btn.getAttribute('data-oid');
+    const title = btn.getAttribute('data-title') || 'QR';
+    mtitle.textContent = title;
+    mimg.src = `/api/qr/${encodeURIComponent(oid)}.png`;
+    const obj = all.find(x => x.order_id === oid) || {};
+    mmeta.textContent = `Orden: ${oid} · ${(obj.status||'').toUpperCase()}`;
+    modal.style.display='flex';
+  });
+
+  document.getElementById('mclose').addEventListener('click', () => modal.style.display='none');
+  modal.addEventListener('click', (ev) => {
+    if (ev.target === modal) modal.style.display='none';
+  });
+})();
+</script>
+</body>
+</html>

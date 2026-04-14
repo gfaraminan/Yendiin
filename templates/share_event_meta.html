@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  {% set _title = (event.title if event and event.title else slug) %}
+  {% set _desc_raw = (event.description if event and event.description else '') | trim %}
+  {% if _desc_raw %}
+    {% set _desc = (_desc_raw[:180] ~ ('…' if _desc_raw|length > 180 else '')) %}
+  {% else %}
+    {% set _desc = ((event.date_text if event and event.date_text else '') ~ (' · ' if event and event.date_text and (event.venue or event.city) else '') ~ (event.venue if event and event.venue else '') ~ ((' · ' ~ event.city) if event and event.city else '')) | trim %}
+  {% endif %}
+  {% if not _desc %}{% set _desc = 'Comprá tu entrada en segundos.' %}{% endif %}
+
+  <title>{{ app_name }} · {{ _title }}</title>
+
+  <meta property="og:type" content="event" />
+  <meta property="og:title" content="{{ app_name }} · {{ _title }}" />
+  <meta property="og:description" content="{{ _desc }}" />
+  <meta property="og:url" content="{{ request.url }}" />
+  <meta property="og:site_name" content="{{ app_name }}" />
+  <meta property="og:image" content="{{ og_image }}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ app_name }} · {{ _title }}" />
+  <meta name="twitter:description" content="{{ _desc }}" />
+  <meta name="twitter:image" content="{{ og_image }}" />
+</head>
+<body></body>
+</html>

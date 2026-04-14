@@ -1,0 +1,10 @@
+
+services:
+  - type: web
+    name: ticketera-entradas
+    env: python
+    buildCommand: |
+      npm install --prefix frontend
+      npm run build --prefix frontend
+      pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT

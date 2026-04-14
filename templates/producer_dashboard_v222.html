@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_name }} · Productor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: rgba(15, 20, 35, .72);
+      --stroke: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.70);
+      --btn: rgba(255,255,255,.10);
+      --btnh: rgba(255,255,255,.16);
+      --ok: rgba(56, 239, 125, .18);
+      --warn: rgba(255, 200, 0, .18);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 800px at 70% 15%, rgba(124,92,255,.28), transparent 60%),
+        radial-gradient(900px 700px at 20% 60%, rgba(255,75,214,.18), transparent 55%),
+        var(--bg);
+    }
+    .wrap { padding: 18px; max-width: 980px; margin: 0 auto; }
+    .top {
+      display:flex; align-items:flex-start; justify-content:space-between; gap: 14px;
+      padding: 14px 0 10px 0;
+    }
+    h1 { margin:0; font-size: 18px; }
+    .sub { margin: 4px 0 0 0; color: var(--muted); font-size: 13px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 20px 80px rgba(0,0,0,.35);
+      margin-top: 12px;
+    }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; }
+    input, select {
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      min-width: 220px;
+    }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: var(--btn);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--btnh); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom: 1px solid var(--stroke); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; }
+    .tag {
+      display:inline-block; padding: 4px 8px; border-radius: 999px;
+      border: 1px solid var(--stroke); background: rgba(255,255,255,.06);
+      font-size: 12px;
+    }
+    .on { background: var(--ok); }
+    .off { background: rgba(255,255,255,.06); }
+    .small { font-size: 12px; color: var(--muted); }
+  
+
+    /* Footer estilo EntradaWeb (redes + legales) */
+    .site-footer{ margin-top: 28px; background: linear-gradient(180deg, #3a14b4, #2b0c8a); color:#fff; text-align:center; }
+    .footer-top{ padding: 14px 0; }
+    .socials{ display:flex; justify-content:center; gap:14px; }
+    .socials a{ width:36px; height:36px; border-radius:999px; display:flex; align-items:center; justify-content:center;
+      background:#ff7a00; color:#fff; font-weight:900; text-decoration:none;
+      transition: transform .15s ease, opacity .15s ease; }
+    .socials a:hover{ transform: translateY(-2px); opacity:.92; }
+    .footer-bottom{ background:#140428; padding: 12px 10px 16px; font-size: 12px; }
+    .footer-bottom .links{ display:flex; justify-content:center; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
+    .footer-bottom .links a{ color:#cfc6ff; text-decoration:none; font-weight:650; }
+    .footer-bottom .links a:hover{ text-decoration:underline; }
+    .footer-bottom .legal{ color:#9b8cff; font-size:11px; }
+
+
+    /* Footer unificado (estilo EntradaWeb) */
+    .site-footer{margin-top:40px;background:linear-gradient(180deg,#3a14b4,#2b0c8a);color:#fff;text-align:center}
+    .footer-top{padding:16px 0}
+    .socials{display:flex;justify-content:center;gap:14px}
+    .socials a{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#ff7a00;color:#fff;font-weight:900;text-decoration:none;transition:transform .15s ease,opacity .15s ease}
+    .socials a:hover{transform:translateY(-2px);opacity:.9}
+    .footer-bottom{background:#140428;padding:14px 10px 18px;font-size:12px}
+    .footer-bottom .links{display:flex;justify-content:center;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+    .footer-bottom .links a{color:#cfc6ff;text-decoration:none;font-weight:600}
+    .footer-bottom .links a:hover{text-decoration:underline}
+    .footer-bottom .legal{color:#9b8cff;font-size:11px}
+
+  
+    /* Eventos cards (v2) */
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    @media(max-width:980px){.cards{grid-template-columns:1fr}}
+    .evcard{
+      border:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.18));
+      border-radius:16px;
+      overflow:hidden;
+    }
+    .evhero{height:110px; background: rgba(255,255,255,.05); position:relative}
+    .evhero::before{
+      content:""; position:absolute; inset:0;
+      background: var(--bgimg, radial-gradient(800px 220px at 20% 0%, rgba(124,92,255,.30), transparent 60%));
+      filter: blur(14px) brightness(.8);
+      transform: scale(1.15);
+    }
+    .evhero .tagstate{
+      position:absolute; right:10px; top:10px;
+      padding:4px 10px; border-radius:999px;
+      font-weight:900; font-size:11px;
+      border:1px solid rgba(255,255,255,.20);
+      background: rgba(0,0,0,.25);
+      color: rgba(255,255,255,.92);
+    }
+    .evbody{padding:10px}
+    .evtitle{font-weight:950; margin:0 0 4px 0; font-size:14px}
+    .evmeta{color:var(--muted); font-weight:800; font-size:12px; display:flex; gap:8px; flex-wrap:wrap}
+    .kpirow{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; align-items:center}
+    .kpi{font-size:12px; color:var(--muted); font-weight:900}
+    .bar{height:8px; background: rgba(255,255,255,.08); border-radius:999px; overflow:hidden; flex:1; min-width:140px}
+    .bar > i{display:block; height:100%; background: rgba(124,92,255,.85); width:0%}
+    .evactions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px}
+    .btn.sm{padding:8px 10px; border-radius:12px; font-size:12px; font-weight:950}
+    details.evdetails > summary{list-style:none; cursor:pointer}
+    details.evdetails > summary::-webkit-details-marker{display:none}
+
+  </style>
+</head>
+<body>
+  {% set p = prod if prod is defined else producer %}
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>🎤 Panel Productor</h1>
+        <p class="sub">Hola, {{ p.get("name") or prod.get("email") or "productor" }} · Tenant: <span class="tag">{{ p.get("tenant") }}</span></p>
+      </div>
+      <form method="post" action="/api/auth/logout">
+        <button class="btn" type="submit">Salir</button>
+      </form>
+    </div>
+
+    
+    <div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px;">Crear evento</h2>
+      <form method="post" action="/api/producer/events/create" enctype="multipart/form-data">
+          <div class="row">
+            <input name="slug" placeholder="slug (ej: fiesta-in-piazza)" required />
+            <input name="title" placeholder="Título del evento" required />
+            <input name="category" placeholder="Categoría (Conciertos, Teatro.)" value="Conciertos" />
+            <input type="datetime-local" name="date_text" step="60" />
+            <input name="venue" placeholder="Lugar (Venue)" />
+            <input name="city" placeholder="Ciudad" />
+
+            <div style="width:100%; display:grid; gap:10px; grid-template-columns: 1fr 1fr; align-items:start;">
+              <div>
+                <div class="small" style="margin:0 0 6px 2px; font-weight:700;">Imagen promocional (subir archivo)</div>
+                <input id="flyerFile" type="file" name="flyer_file" accept="image/*" />
+                <img id="flyerPreview" alt="preview" style="display:none; margin-top:10px; width:100%; max-height:140px; object-fit:cover; border-radius:12px; border:1px solid rgba(255,255,255,.10);" />
+                <div class="small" style="margin-top:6px; opacity:.85;">
+                  Tip: JPG/PNG/WEBP · máx 5MB. Si no subís, podés pegar una URL:
+                </div>
+                <input name="hero_bg" placeholder="Flyer / imagen promo (URL opcional)" style="margin-top:8px" />
+              </div>
+
+              <div>
+                <div class="small" style="margin:0 0 6px 2px; font-weight:700;">Ubicación (clic en el mapa)</div>
+                <input id="address" name="address" placeholder="Dirección (opcional)" />
+                <input type="hidden" id="lat" name="lat" />
+                <input type="hidden" id="lng" name="lng" />
+                <div id="mapPicker" style="margin-top:8px; height:170px; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,.10);"></div>
+                <div class="small" style="margin-top:6px; opacity:.85;">
+                  Consejo: si estás desde el celu, tocá el mapa para fijar el pin.
+                </div>
+              </div>
+            </div>
+
+            <button class="btn" type="submit">Crear</button>
+          </div>
+          <p class="small" style="margin:10px 0 0 0;">El <b>slug</b> es la clave del link (sin espacios).</p>
+        </form>
+    </div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px 0; font-size:15px;">🧾 Catálogo de venta (todo en uno)</h2>
+
+  <div class="row">
+    <select id="si_event" style="min-width:260px"></select>
+    <input id="si_name" placeholder="Qué vendés (Entrada Gral, VIP, Parking, Consumición...)" />
+    <select id="si_kind" style="min-width:220px">
+      <option value="ticket">Entrada</option>
+      <option value="parking">Parking</option>
+      <option value="consumption">Consumición</option>
+      <option value="product">Producto</option>
+      <option value="other" selected>Otro</option>
+    </select>
+    <input id="si_price" placeholder="Precio (ARS)" type="number" min="0" />
+    <input id="si_stock" placeholder="Stock (0 = ilimitado)" type="number" min="0" />
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <input id="si_start" type="date" placeholder="Desde" />
+    <input id="si_end" type="date" placeholder="Hasta" />
+    <input id="si_sort" placeholder="Orden (0..)" type="number" />
+    <button class="btn" type="button" onclick="createSaleItem()">Agregar</button>
+    <a class="btn" href="/entradas/eventos" style="margin-left:auto">Ver como cliente</a>
+  </div>
+
+  <div class="small" id="si_msg" style="margin-top:10px;"></div>
+
+  <table class="table" style="margin-top:12px" id="si_table">
+    <thead>
+      <tr>
+        <th>Item</th><th>Tipo</th><th>Precio</th><th>Stock</th><th>Ventana</th><th>Estado</th><th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="small" style="margin:10px 0 0 0;">
+    Tip: si elegís <b>Entrada</b>, se crea también el <b>tipo de entrada</b> para el checkout. Este catálogo es el “motor”: cualquier venta (entrada, parking, consumición, etc.) vive acá, con stock + fechas.
+  </p>
+</div>
+
+
+<div class="card">
+  <h2 style="margin:0 0 10px 0; font-size:15px;">🧑‍💼 Vendedores (links con tracking)</h2>
+
+  <div class="row">
+    <select id="seller_event" style="min-width:260px"></select>
+    <input id="seller_name" placeholder="Nombre (Ej: Juan Perez)" />
+    <input id="seller_code" placeholder="Código / alias (opcional, ej: juan)" />
+    <button class="btn" type="button" onclick="createSeller()">Agregar vendedor</button>
+  </div>
+
+  <div class="small" id="seller_msg" style="margin-top:10px;"></div>
+
+  <table class="table" style="margin-top:12px" id="seller_table">
+    <thead>
+      <tr>
+        <th>Nombre</th><th>Código</th><th>Link</th><th>Estado</th><th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <p class="small" style="margin:10px 0 0 0;">
+    El tracking ya está cableado: al comprar se envía <span class="tag">seller_code</span> en la orden. 
+  </p>
+</div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px 0; font-size:15px;">📊 Reportes (simple, claro)</h2>
+
+  <div class="row">
+    <select id="rep_event" style="min-width:260px"></select>
+    <button class="btn" type="button" onclick="loadReports()">Actualizar</button>
+  </div>
+
+  <div class="row" style="margin-top:10px">
+    <div class="tag" id="rep_orders">Pagadas: -</div>
+    <div class="tag" id="rep_rev">Recaudación: -</div>
+  </div>
+
+  <div style="margin-top:12px; display:grid; gap:12px; grid-template-columns: 1fr 1fr;">
+    <div>
+      <div class="small" style="font-weight:800;margin-bottom:6px;">Por item</div>
+      <table class="table" id="rep_by_item">
+        <thead><tr><th>Item</th><th>Cant.</th><th>$</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div>
+      <div class="small" style="font-weight:800;margin-bottom:6px;">Por vendedor</div>
+      <table class="table" id="rep_by_seller">
+        <thead><tr><th>Vendedor</th><th>Órdenes</th><th>$</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="small" style="margin:10px 0 0 0;">
+    Endpoints listos: resumen + por item + por vendedor.
+  </p>
+</div>
+
+<div class="card">
+  <h2 style="margin:0 0 10px 0; font-size:15px;">🎫 Cortesías (QR por WhatsApp)</h2>
+  <div class="small">
+    Esto todavía está <b>pendiente</b> de UI + endpoint dedicado de productor.
+    Ya existe la tabla <span class="tag">issued_tickets</span> con flag <span class="tag">courtesy</span>, así que el camino está marcado.
+  </div>
+</div><div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span>Mis eventos</span>
+        <a class="btn" href="/productor/eventos/nuevo" style="padding:8px 10px;">＋ Nuevo evento</a>
+      </h2>
+
+      <div id="eventsBox" class="small" style="display:none;">Cargando…</div>
+      <div id="eventsCards" class="cards"></div>
+
+    </div>
+
+</div>
+
+  </div>
+
+<script>
+
+async function postJSON(url, data){
+  const res = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data)});
+  if(!res.ok){
+    let t = await res.text();
+    try{ const j = JSON.parse(t); throw new Error(j.detail||t); }catch(e){ throw new Error(t); }
+  }
+  return res.json();
+}
+function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function arsToCents(v){
+  const n = Number(v||0);
+  return Math.round(n*100);
+}
+function fmtARS(cents){
+  const n = Number(cents||0)/100;
+  return "$ " + n.toLocaleString("es-AR", {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+// -----------------------------
+// Nuevo modelo: catálogo unificado (sale_items) + vendedores + reportes
+// -----------------------------
+async function refreshSaleItems(){
+  const ev = document.getElementById("si_event")?.value || "";
+  const tbody = document.querySelector("#si_table tbody");
+  if(tbody) tbody.innerHTML = "";
+  if(!ev) return;
+
+  const res = await fetch("/api/producer/sale-items?event="+encodeURIComponent(ev));
+  const items = res.ok ? await res.json() : [];
+  for(const it of items){
+    const stock = (Number(it.stock_total||0) > 0)
+      ? `${it.stock_sold||0}/${it.stock_total} (restan ${Math.max(0, (it.stock_total||0)-(it.stock_sold||0))})`
+      : `∞ (vendidas ${it.stock_sold||0})`;
+    const win = `${it.start_date||"—"} → ${it.end_date||"—"}`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${it.name}</td>
+      <td><span class="tag">${it.kind||"otro"}</span></td>
+      <td>${fmtARS(it.price_cents)}</td>
+      <td>${stock}</td>
+      <td>${win}</td>
+      <td><span class="tag ${it.active? "on":"off"}">${it.active? "Activo":"Pausado"}</span></td>
+      <td>
+        <button class="btn" type="button" onclick="toggleSaleItem(${it.id}, ${it.active?0:1})">${it.active? "Pausar":"Activar"}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function createSaleItem(){
+  try{
+    const event_slug = document.getElementById("si_event").value;
+    const name = (document.getElementById("si_name").value||"").trim();
+    const kind = (document.getElementById("si_kind").value||"other").trim();
+    const price_cents = arsToCents(document.getElementById("si_price").value);
+    const stock_total = Number(document.getElementById("si_stock").value||0);
+    const start_date = (document.getElementById("si_start").value||"").trim();
+    const end_date = (document.getElementById("si_end").value||"").trim();
+    const sort_order = Number(document.getElementById("si_sort").value||0);
+
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    if(price_cents < 0) throw new Error("Precio inválido");
+
+    // 🎟️ Si es "Entrada", además de vivir en el catálogo (sale_items),
+    // hay que crear el tipo de entrada (ticket_types) porque el checkout consume ticket_types.
+    if(kind === "ticket"){
+      await postJSON("/api/producer/ticket-types/create", {
+        event_slug,
+        name,
+        price_cents,
+        capacity: stock_total || 0,
+        active: 1
+      });
+      // opcional: también lo metemos en el catálogo para reporting unificado
+      await postJSON("/api/producer/sale-items/create", {
+        event_slug,
+        name,
+        kind,
+        price_cents,
+        stock_total,
+        start_date,
+        end_date,
+        sort_order
+      });
+      document.getElementById("si_msg").textContent = "✅ Entrada creada (tipo + catálogo).";
+    } else {
+      await postJSON("/api/producer/sale-items/create", {
+        event_slug,
+        name,
+        kind,
+        price_cents,
+        stock_total,
+        start_date,
+        end_date,
+        sort_order
+      });
+      document.getElementById("si_msg").textContent = "✅ Item agregado.";
+    }
+
+    document.getElementById("si_name").value="";
+    document.getElementById("si_price").value="";
+    document.getElementById("si_stock").value="";
+    document.getElementById("si_start").value="";
+    document.getElementById("si_end").value="";
+    document.getElementById("si_sort").value="0";
+    await refreshSaleItems();
+  }catch(e){
+    // Mostrá respuesta completa (sirve para debug cuando el backend devuelve 4xx)
+    document.getElementById("si_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function toggleSaleItem(id, active){
+  try{
+    await postJSON("/api/producer/sale-items/toggle", {id, active});
+    await refreshSaleItems();
+  }catch(e){
+    alert("Error: " + (e.message||String(e)));
+  }
+}
+
+async function refreshSellers(){
+  const ev = document.getElementById("seller_event")?.value || "";
+  const tbody = document.querySelector("#seller_table tbody");
+  if(tbody) tbody.innerHTML = "";
+  if(!ev) return;
+
+  const res = await fetch("/api/producer/sellers?event="+encodeURIComponent(ev));
+  const items = res.ok ? await res.json() : [];
+
+  const base = (location.origin || "");
+  for(const s of items){
+    const link = `${base}/entradas/eventos/${encodeURIComponent(ev)}?seller=${encodeURIComponent(s.code)}`;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${s.name}</td>
+      <td><span class="tag">${s.code}</span></td>
+      <td style="max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+        <a class="tag" href="${link}" target="_blank" rel="noopener">Abrir link</a>
+      </td>
+      <td><span class="tag ${s.active? "on":"off"}">${s.active? "Activo":"Pausado"}</span></td>
+      <td>
+        <button class="btn" type="button" onclick="toggleSeller(${s.id}, ${s.active?0:1})">${s.active? "Pausar":"Activar"}</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function createSeller(){
+  try{
+    const event_slug = document.getElementById("seller_event").value;
+    const name = (document.getElementById("seller_name").value||"").trim();
+    const code = (document.getElementById("seller_code").value||"").trim();
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/sellers/create", {event_slug, name, code});
+    document.getElementById("seller_msg").textContent = "✅ Vendedor agregado.";
+    document.getElementById("seller_name").value="";
+    document.getElementById("seller_code").value="";
+    await refreshSellers();
+  }catch(e){
+    document.getElementById("seller_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function toggleSeller(id, active){
+  try{
+    await postJSON("/api/producer/sellers/toggle", {id, active});
+    await refreshSellers();
+  }catch(e){
+    alert("Error: " + (e.message||String(e)));
+  }
+}
+
+async function loadReports(){
+  const ev = document.getElementById("rep_event")?.value || "";
+  if(!ev) return;
+
+  try{
+    const sum = await (await fetch("/api/producer/reports/summary?event="+encodeURIComponent(ev))).json();
+    document.getElementById("rep_orders").textContent = "Pagadas: " + (sum.orders_paid ?? 0);
+    document.getElementById("rep_rev").textContent = "Recaudación: " + fmtARS(sum.revenue_cents ?? 0);
+
+    const byItem = await (await fetch("/api/producer/reports/by-item?event="+encodeURIComponent(ev))).json();
+    const tbi = document.querySelector("#rep_by_item tbody");
+    tbi.innerHTML = "";
+    for(const r of byItem){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${r.item_name}</td><td>${r.qty||0}</td><td>${fmtARS(r.revenue_cents||0)}</td>`;
+      tbi.appendChild(tr);
+    }
+
+    const bySeller = await (await fetch("/api/producer/reports/by-seller?event="+encodeURIComponent(ev))).json();
+    const tbs = document.querySelector("#rep_by_seller tbody");
+    tbs.innerHTML = "";
+    for(const r of bySeller){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${r.seller_code}</td><td>${r.orders||0}</td><td>${fmtARS(r.revenue_cents||0)}</td>`;
+      tbs.appendChild(tr);
+    }
+  }catch(e){
+    alert("Error cargando reportes: " + (e?.message || e));
+  }
+}
+
+async function refreshTicketTypes(){
+  const ev = document.getElementById("tt_event").value;
+  const tbody = document.querySelector("#tt_table tbody");
+  tbody.innerHTML = "";
+  const ttsel = document.getElementById("tier_tt");
+  ttsel.innerHTML = "";
+  if(!ev) return;
+  const res = await fetch("/api/producer/ticket-types?event="+encodeURIComponent(ev));
+  const items = res.ok ? await res.json() : [];
+  for(const tt of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${tt.name}</td><td>${fmtARS(tt.price_cents)}</td><td>${tt.capacity||0}</td><td>${tt.sold||0}</td><td><span class="tag ${tt.active? "on":"off"}">${tt.active? "Activo":"Pausado"}</span></td>`;
+    tbody.appendChild(tr);
+    const opt = document.createElement("option");
+    opt.value = tt.id;
+    opt.textContent = tt.name + " · " + fmtARS(tt.price_cents);
+    ttsel.appendChild(opt);
+  }
+}
+async function createTicketType(){
+  try{
+    const event_slug = document.getElementById("tt_event").value;
+    const name = (document.getElementById("tt_name").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("tt_price").value);
+    const capacity = Number(document.getElementById("tt_cap").value||0);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/ticket-types/create", {event_slug, name, price_cents, capacity});
+    document.getElementById("tt_msg").textContent = "✅ Tipo agregado.";
+    document.getElementById("tt_name").value="";
+    document.getElementById("tt_price").value="";
+    document.getElementById("tt_cap").value="";
+    await refreshTicketTypes();
+  }catch(e){
+    document.getElementById("tt_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+async function createTier(){
+  try{
+    const event_slug = document.getElementById("tt_event").value;
+    const ticket_type_id = Number(document.getElementById("tier_tt").value||0);
+    const name = (document.getElementById("tier_name").value||"").trim();
+    const start_date = (document.getElementById("tier_start").value||"").trim();
+    const end_date = (document.getElementById("tier_end").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("tier_price").value);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!ticket_type_id) throw new Error("Elegí un tipo");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/ticket-tiers/create", {event_slug, ticket_type_id, name, start_date, end_date, price_cents});
+    document.getElementById("tt_msg").textContent = "✅ Preventa agregada.";
+    document.getElementById("tier_name").value="";
+    document.getElementById("tier_start").value="";
+    document.getElementById("tier_end").value="";
+    document.getElementById("tier_price").value="";
+  }catch(e){
+    document.getElementById("tt_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function loadPointsTo(selectId, eventSlug){
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = `<option value="">Cualquier punto</option>`;
+  const res = await fetch("/api/producer/consumptions/points?event="+encodeURIComponent(eventSlug));
+  const items = res.ok ? await res.json() : [];
+  for(const p of items){
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name + " ("+p.kind+")";
+    sel.appendChild(opt);
+  }
+}
+async function createPoint(){
+  try{
+    const event_slug = document.getElementById("c_event").value;
+    const name = (document.getElementById("p_name").value||"").trim();
+    let point_slug = (document.getElementById("p_slug").value||"").trim();
+    const kind = (document.getElementById("p_kind").value||"barra").trim();
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/consumptions/points/create", {event_slug, name, point_slug, kind});
+    document.getElementById("c_msg").textContent = "✅ Punto creado.";
+    await loadPointsTo("i_point", document.getElementById("i_event").value);
+  }catch(e){
+    document.getElementById("c_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+async function createItem(){
+  try{
+    const event_slug = document.getElementById("i_event").value;
+    const point_id = document.getElementById("i_point").value || null;
+    const name = (document.getElementById("i_name").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("i_price").value);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/consumptions/items/create", {event_slug, point_id, name, price_cents});
+    document.getElementById("c_msg").textContent = "✅ Item agregado.";
+    document.getElementById("i_name").value="";
+    document.getElementById("i_price").value="";
+  }catch(e){
+    document.getElementById("c_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function loadEvents(){
+  const box = document.getElementById("eventsBox");
+  const cards = document.getElementById("eventsCards");
+  box.style.display = "";
+  cards.innerHTML = "";
+
+  try{
+    const res = await fetch("/api/producer/events/cards");
+    if(!res.ok) throw new Error(await res.text());
+    const items = await res.json();
+    box.style.display = "none";
+
+    if(!items.length){
+      cards.innerHTML = '<div class="small">Todavía no tenés eventos. Tocá “Nuevo evento” y armamos el primero.</div>';
+      return;
+    }
+
+    cards.innerHTML = items.map(e => {
+      const title = esc(e.title || e.slug || "");
+      const city = esc(e.city || "");
+      const venue = esc(e.venue || "");
+      const date = esc(e.date_text || "");
+      const active = (e.active ? true : false);
+      const badge = active ? "Activo" : "Pausado";
+      const sold = Number(e.tickets_sold || 0);
+      const cap = Number(e.tickets_capacity || 0);
+      const pct = (cap ? Math.min(100, Math.round((sold/cap)*100)) : 0);
+
+      const bg = (e.flyer_url ? `url('${esc(e.flyer_url)}')` : (e.hero_bg ? e.hero_bg : ""));
+      const bgStyle = bg ? `--bgimg:${bg};` : "";
+
+      return `
+        <details class="evdetails evcard">
+          <summary>
+            <div class="evhero" style="${bgStyle}">
+              <span class="tagstate">${badge}</span>
+            </div>
+            <div class="evbody">
+              <div class="evtitle">${title}</div>
+              <div class="evmeta">
+                ${date ? `<span>🗓 ${date}</span>` : ""}
+                ${(venue || city) ? `<span>📍 ${esc([venue, city].filter(Boolean).join(" · "))}</span>` : ""}
+                <span>🔗 ${esc(e.slug)}</span>
+              </div>
+              <div class="kpirow">
+                <div class="kpi"><span style="color:rgba(255,255,255,.92)">🎟 ${sold}</span>${cap ? ` / ${cap}` : ""} vendidas</div>
+                <div class="bar" title="${pct}% vendido"><i style="width:${pct}%"></i></div>
+                <div class="kpi">${cap ? `${pct}%` : "—"}</div>
+              </div>
+            </div>
+          </summary>
+
+          <div class="evbody" style="padding-top:0">
+            <div class="evactions">
+              <a class="btn sm" href="/productor/eventos/${encodeURIComponent(e.slug)}">✏️ Editar</a>
+              <a class="btn sm" href="/entradas/eventos/${encodeURIComponent(e.slug)}" target="_blank" rel="noopener">👤 Ver cliente</a>
+              <button class="btn sm" onclick="toggleEvent('${esc(e.slug)}', ${active ? 'false':'true'})">${active ? '⏸ Pausar' : '▶️ Activar'}</button>
+            </div>
+          </div>
+        </details>
+      `;
+    }).join("");
+  }catch(err){
+    box.textContent = "Error cargando eventos: " + (err?.message || err);
+  }
+}
+
+
+
+async function toggleEvent(slug, active){
+  try {
+    const res = await fetch("/api/producer/events/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({slug, active})
+    });
+    if(!res.ok) throw new Error(await res.text());
+    await loadEvents();
+  } catch(e) {
+    alert("Error: " + (e?.message || e));
+  }
+}
+
+loadEvents();
+
+// ----- UX: preview de imagen y mapa -----
+(function(){
+  const f = document.getElementById('flyerFile');
+  const img = document.getElementById('flyerPreview');
+  if(f && img){
+    f.addEventListener('change', ()=>{
+      const file = f.files && f.files[0];
+      if(!file){ img.style.display='none'; img.src=''; return; }
+      const url = URL.createObjectURL(file);
+      img.src = url;
+      img.style.display = 'block';
+    });
+  }
+  window.addEventListener('load', ()=>{
+    try{ if(typeof initMapPicker === 'function') initMapPicker(); }catch(e){}
+  });
+})();
+
+</script>
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="socials">
+      <a href="#" aria-label="Facebook">f</a>
+      <a href="#" aria-label="X">x</a>
+      <a href="#" aria-label="Instagram">◉</a>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <div class="links">
+      <a href="/legal/privacidad">Política de Privacidad</a>
+      <span>·</span>
+      <a href="/legal/terminos">Términos y Condiciones</a>
+      <span>·</span>
+      <a href="/legal/defensa">Defensa del Consumidor</a>
+    </div>
+    <div class="legal">
+      TicketFlow · Entradas — Todos los derechos reservados
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

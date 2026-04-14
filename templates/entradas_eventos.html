@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TicketFlow · Eventos</title>
+
+  <!-- Open Graph / Social Sharing (listado) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="TicketFlow · Eventos" />
+  <meta property="og:description" content="Elegí tu plan: entrás, pagás y listo. Sin fila (ni excusas)." />
+  <meta property="og:image" content="/static/img/login_bg.jpg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="TicketFlow · Eventos" />
+  <meta name="twitter:description" content="Elegí tu plan: entrás, pagás y listo. Sin fila (ni excusas)." />
+  <meta name="twitter:image" content="/static/img/login_bg.jpg" />
+  <style>
+    :root{
+      --bg0:#0b0710; --bg1:#140a1c;
+      --txt:#f6f2ff; --mut:#b7a9c8; --mut2:#8d7da3;
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--txt); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.78), rgba(20,10,28,.88)),
+        url("/static/img/login_bg.jpg") center/cover fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 28px 16px 40px;
+    }
+    .wrap{max-width:1180px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:38px;height:38px;border-radius:14px;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+      box-shadow: 0 12px 30px rgba(124,92,255,.25);
+    }
+    .brand h1{margin:0;font-size:16px;font-weight:800;letter-spacing:.2px}
+    .brand small{display:block;color:var(--mut);font-weight:600;margin-top:2px}
+    .actions{display:flex;align-items:center;gap:10px}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:var(--txt); text-decoration:none; font-weight:700;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      cursor:pointer;
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+    .btn.primary{
+      border:0;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+    }
+    .toolbar{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items:center;
+    }
+    .input, .select{
+      width:100%;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(12,8,18,.55);
+      color: var(--txt);
+      outline:none;
+      box-shadow: 0 14px 34px rgba(0,0,0,.35);
+    }
+    .input::placeholder{color: rgba(183,169,200,.75); font-weight:600}
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns: repeat(2, minmax(0,1fr))}
+      .toolbar{grid-template-columns: 1fr}
+    }
+    @media (max-width: 620px){
+      .grid{grid-template-columns: 1fr}
+      header{flex-direction:column;align-items:flex-start}
+      .actions{width:100%}
+    }
+    .card{
+      position:relative;
+      border-radius: 22px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height: 250px;
+    }
+    .hero{
+      height: 150px;
+      background: linear-gradient(135deg, rgba(124,92,255,.75), rgba(255,26,166,.55));
+      opacity:.9;
+    }
+    .content{padding: 12px 14px 14px}
+    .title{font-weight:900;margin:0 0 6px;font-size:16px}
+    .meta{color:var(--mut);font-weight:650;font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .price{margin-top:10px;font-weight:900}
+    .pill{
+      position:absolute; top:10px; right:10px;
+      font-size:11px;font-weight:900;
+      padding:6px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.25);
+      color: var(--txt);
+      backdrop-filter: blur(10px);
+    }
+    .cta{
+      position:absolute; right:12px; bottom:12px;
+    }
+    .fab{
+      position:fixed; right:16px; bottom:16px;
+      display:none;
+      z-index:50;
+    }
+    @media (max-width: 620px){
+      .fab{display:flex;}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>TicketFlow · Entradas</h1>
+          <small>Elegí tu plan: entrás, pagás y listo. Sin fila (ni excusas).</small>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/entradas/mis-tickets">🎟️ Mis tickets</a>
+        <button class="btn" id="logoutBtn">Salir</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <input class="input" id="q" placeholder="Buscar eventos, ciudad, lugar..." />
+      <select class="select" id="city">
+        <option value="">Todas las ciudades</option>
+      </select>
+    </div>
+
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <a class="btn primary fab" href="/entradas/mis-tickets">🎟️</a>
+
+<script>
+function fillGPS(){
+  if(!navigator.geolocation){
+    alert('Geolocalización no disponible en este navegador');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    const lat = pos.coords.latitude.toFixed(6);
+    const lng = pos.coords.longitude.toFixed(6);
+    const inp = document.querySelector('input[name="gps"]');
+    if(inp) inp.value = `${lat},${lng}`;
+  }, (err)=>{
+    alert('No se pudo obtener ubicación: ' + (err?.message || err));
+  }, {enableHighAccuracy:true, timeout:8000});
+}
+
+  function money(cents){
+    try{ return (cents/100).toLocaleString('es-AR',{style:'currency',currency:'ARS'}); }catch(e){ return '$ ' + (cents/100); }
+  }
+
+  async function load(){
+    const r = await fetch('/api/events');
+    const data = await r.json();
+    const events = data.events || data || [];
+    const grid = document.getElementById('grid');
+
+    const citySel = document.getElementById('city');
+    const cities = Array.from(new Set(events.map(e => (e.city||'').trim()).filter(Boolean))).sort();
+    cities.forEach(c=>{
+      const o=document.createElement('option'); o.value=c; o.textContent=c; citySel.appendChild(o);
+     });
+
+    function render(){
+      const q = (document.getElementById('q').value||'').toLowerCase();
+      const city = citySel.value;
+      grid.innerHTML='';
+      const filtered = events.filter(e=>{
+        const hay = (e.title||'').toLowerCase() + ' ' + (e.venue||'').toLowerCase() + ' ' + (e.city||'').toLowerCase();
+        if(q && !hay.includes(q)) return false;
+        if(city && (e.city||'')!==city) return false;
+        return true;
+       });
+      filtered.forEach(e=>{
+        const card = document.createElement('div');
+        card.className = 'card';
+        const min = (e.min_price_cents ?? null);
+        const priceText = (min==null) ? 'Sin precios' : ('Desde ' + money(min));
+        const img = (e.flyer_url || e.hero_bg || '');
+        const safeImg = img ? encodeURI(img).replace(/'/g, '%27') : '';
+        // Flyer / imagen del evento (con fallback automático)
+        const fallback = '/static/img/login_bg.jpg';
+        const imgStyle = safeImg
+          ? `background-image:url('${safeImg}');background-size:cover;background-position:center;`
+          : `background-image:url('${fallback}');background-size:cover;background-position:center;`;
+        card.innerHTML = `
+          <div class="hero" style="${imgStyle}"></div>
+          <div class="pill">${e.badge || 'Nuevo'}</div>
+          <div class="content">
+            <p class="title">${e.title || e.slug}</p>
+            <div class="meta">
+              <span>📍 ${e.venue || ''}${e.city ? ' · ' + e.city : ''}</span>
+              <span>🗓 ${e.date_text || ''}</span>
+            </div>
+            <div class="price">${priceText}</div>
+          </div>
+          <div class="cta">
+            <a class="btn primary" href="/entradas/eventos/${encodeURIComponent(e.slug)}">Elegir</a>
+          </div>
+        `;
+        grid.appendChild(card);
+       });
+    }
+
+    document.getElementById('q').addEventListener('input', render);
+    citySel.addEventListener('change', render);
+    render();
+
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+      await fetch('/api/auth/logout', {method:'POST'});
+      location.href='/login';
+     });
+  }
+
+  load();
+</script>
+</body>
+</html>

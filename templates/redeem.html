@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Canje · Consumiciones</title>
+  <style>
+    :root{--bg:#0b0e1a;--card:rgba(255,255,255,.06);--b:rgba(255,255,255,.10);--txt:#e9ecff;--muted:#a7aed8}
+    *{box-sizing:border-box} body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;color:var(--txt);
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(124,92,255,.35), transparent 60%),
+                  radial-gradient(900px 500px at 80% 10%, rgba(255,75,214,.25), transparent 60%), var(--bg);}
+    .wrap{max-width:1050px;margin:0 auto;padding:24px}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .btn{border:1px solid var(--b);background:rgba(255,255,255,.08);color:var(--txt);padding:10px 14px;border-radius:12px;cursor:pointer}
+    .btn:hover{background:rgba(255,255,255,.12)}
+    input{background:rgba(0,0,0,.25);border:1px solid var(--b);color:var(--txt);padding:10px;border-radius:12px}
+    .card{background:var(--card);border:1px solid var(--b);border-radius:16px;padding:14px}
+    .muted{color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+    th{color:var(--muted);font-weight:700;text-align:left}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .ok{color:#7dffb3}.bad{color:#ff9aa8}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <div style="font-weight:800">Canje · Consumiciones</div>
+        <div class="muted">Pegá token o escaneá QR. La DB manda.</div>
+      </div>
+      <div class="row">
+        <a class="btn" href="/producer/dashboard">Panel productor</a>
+        <button class="btn" onclick="logout()">Salir</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <input id="token" style="flex:1;min-width:280px" placeholder="token / texto del QR"/>
+        <button class="btn" onclick="verify()">Verificar</button>
+        <button class="btn" onclick="redeemFull()">Canjear completo</button>
+      </div>
+      <div id="msg" class="muted" style="margin-top:10px"></div>
+      <div style="margin-top:12px;overflow:auto">
+        <table>
+          <thead><tr><th>Item</th><th>Comprado</th><th>Canjeado</th><th>Resta</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+let last = null;
+async function api(url, opts={{}}){{
+  const r = await fetch(url, Object.assign({{headers:{{'Content-Type':'application/json'}}, opts));
+  if(!r.ok){{
+    let msg = 'HTTP '+r.status;
+    try{{ const j = await r.json(); msg = j.detail || msg; }}catch(e){{}}
+    throw new Error(msg);
+  }}
+  return r.json();
+}}
+function esc(s){{ return (s||'').replace(/[&<>"]/g, c=>({{ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}}[c])); }}
+async function verify(){{
+  try{{
+    const token = (document.getElementById('token').value||'').trim();
+    if(!token) throw new Error('Pegá un token');
+    const data = await api('/api/redeem/cons/verify', {{method:'POST', body: JSON.stringify({{token}})}});
+    last = data;
+    document.getElementById('msg').innerHTML = `<span class="ok">OK</span> Orden <b>${{esc(data.cons_order_id)}}</b> · ${{esc(data.event_title||data.event_slug)}} · ${{esc(data.buyer_email||'')}}`;
+    const tb = document.getElementById('rows');
+    tb.innerHTML='';
+    for(const it of data.items){{
+      tb.insertAdjacentHTML('beforeend', `<tr>
+        <td><b>${{esc(it.name)}}</b></td>
+        <td>${{it.qty}}</td>
+        <td>${{it.redeemed_qty}}</td>
+        <td><b>${{it.remaining}}</b></td>
+      </tr>`);
+    }}
+  }}catch(e){{
+    document.getElementById('msg').innerHTML = `<span class="bad">${{esc(e.message||String(e))}}</span>`;
+    document.getElementById('rows').innerHTML='';
+    last=null;
+  }}
+}}
+async function redeemFull(){{
+  try{{
+    if(!last) throw new Error('Primero verificá el token');
+    const r = await api('/api/redeem/cons/redeem_full', {{method:'POST', body: JSON.stringify({{cons_order_id:last.cons_order_id}})}});
+    document.getElementById('msg').innerHTML = `<span class="ok">Canje realizado.</span> ${{esc(r.status)}}`;
+    await verify();
+  }}catch(e){{
+    document.getElementById('msg').innerHTML = `<span class="bad">${{esc(e.message||String(e))}}</span>`;
+  }}
+}}
+async function logout(){{
+  await fetch('/api/auth/logout', {{method:'POST'}});
+  location.href='/login';
+}}
+</script>
+</body></html>

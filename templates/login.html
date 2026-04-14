@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TicketFlow · Eventos</title>
+  <style>
+:root{
+      --bg0:#0b0710; --bg1:#140a1c;
+      --txt:#f6f2ff; --mut:#b7a9c8;
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --purple:#3a14b4;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--txt);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.70), rgba(20,10,28,.86)),
+        url("/static/img/login_bg.jpg") center/cover no-repeat fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.32), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.16), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+    }
+
+    /* Top bar estilo "EntradaWeb" */
+    .topbar{
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: linear-gradient(180deg, rgba(58,20,180,.98), rgba(58,20,180,.96));
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+    }
+    .topbar .inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.06);
+      color:var(--txt); text-decoration:none; font-weight:900;
+      box-shadow: 0 10px 28px rgba(0,0,0,.20);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.26)}
+    .btn.ghost{background:transparent}
+
+    .wrap{max-width:1180px;margin:0 auto;padding: 34px 14px 26px}
+
+    /* Card principal */
+    .card{
+      width: min(980px, 100%);
+      margin: 0 auto;
+      border-radius: 22px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      backdrop-filter: blur(10px);
+    }
+    .head{
+      padding: 22px 22px 16px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      display:flex;align-items:center;justify-content:space-between;gap:12px;
+    }
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{
+      width:44px;height:44px;border-radius:16px;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      box-shadow: 0 14px 40px rgba(124,92,255,.35);
+      flex:0 0 auto;
+    }
+    .head h1{margin:0;font-size:18px;font-weight:950}
+    .head p{margin:2px 0 0;color:var(--mut);font-weight:850;font-size:12px}
+
+    .grid{
+      padding: 18px 18px 6px;
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 840px){
+      .grid{grid-template-columns:1fr}
+    }
+
+    .choice{
+      border-radius: 18px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.20);
+      padding: 16px;
+    }
+    .choice h2{margin:0 0 6px;font-size:15px}
+    .choice p{margin:0 0 12px;color:var(--mut);font-weight:800;font-size:12px;line-height:1.35}
+
+    .cta{
+      width:100%;
+      border-radius: 16px;
+      padding: 12px 14px;
+      border:0;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color:var(--txt);
+      font-weight:950;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.28);
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .cta:hover{transform:translateY(-1px);filter:brightness(1.03)}
+
+    .subbar{
+      padding: 10px 18px 18px;
+      color: rgba(255,255,255,.72);
+      font-weight:850;
+      font-size:12px;
+    }
+
+    /* Footer unificado (sin "Productores y salas") */
+    .site-footer{margin-top: 36px;}
+    .footer-top{
+      background: linear-gradient(180deg, rgba(58,20,180,.98), rgba(58,20,180,.96));
+      padding: 14px 0;
+      border-top: 1px solid rgba(255,255,255,.10);
+      display:flex;
+      justify-content:center;
+    }
+    .socials{display:flex;gap:14px;align-items:center;justify-content:center}
+    .socials a{
+      width:36px;height:36px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      background:#ff7a00;color:#fff;
+      font-weight:950;text-decoration:none;
+      transition: transform .15s ease, opacity .15s ease;
+    }
+    .socials a:hover{transform:translateY(-2px);opacity:.92}
+
+    .footer-bottom{
+      background:#140428;
+      padding: 14px 10px 18px;
+      text-align:center;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .footer-bottom .links{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:6px}
+    .footer-bottom .links a{color:#cfc6ff;text-decoration:none;font-weight:800;font-size:12px}
+    .footer-bottom .links a:hover{text-decoration:underline}
+    .footer-bottom .links span{color: rgba(255,255,255,.35)}
+    .footer-bottom .legal{color:#9b8cff;font-size:11px;font-weight:850}
+    /* Extras para listado de eventos */
+    .events-grid{padding:18px; display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+    @media (max-width: 980px){ .events-grid{grid-template-columns:1fr 1fr} }
+    @media (max-width: 640px){ .events-grid{grid-template-columns:1fr} }
+    .ev-card{border-radius:18px; border:1px solid rgba(255,255,255,.10); background:rgba(0,0,0,.20); overflow:hidden}
+    .ev-hero{height:140px; background:rgba(255,255,255,.06); border-bottom:1px solid rgba(255,255,255,.10)}
+    .ev-hero img{width:100%;height:100%;object-fit:cover;display:block}
+    .ev-body{padding:12px 12px 14px}
+    .ev-title{font-weight:950; margin:0 0 6px; font-size:14px}
+    .ev-meta{color:var(--mut); font-weight:800; font-size:12px; display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px}
+    .ev-actions{display:flex; gap:10px; align-items:center; justify-content:space-between}
+    .mini-link{color:rgba(255,255,255,.65); text-decoration:none; font-weight:850; font-size:12px}
+    .mini-link:hover{text-decoration:underline; color:rgba(255,255,255,.85)}
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="inner">
+      <a class="btn ghost" href="/events">VER CARTELERA</a>
+      <a class="btn ghost" href="/my-tickets">MIS TICKETS</a>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="head">
+        <div class="brand">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <h1>Eventos</h1>
+            <p>Elegí tu plan: ir temprano, o llegar y decir “estaba en la lista”.</p>
+          </div>
+        </div>
+        <a class="mini-link" href="/producer">Dashboard productor →</a>
+      </div>
+
+      {% if events and events|length %}
+        <div class="events-grid">
+          {% for e in events %}
+            <div class="ev-card">
+              <div class="ev-hero">
+                {% if e.flyer_url %}
+                  <img src="{{ e.flyer_url }}" alt="flyer">
+                {% endif %}
+              </div>
+              <div class="ev-body">
+                <div class="ev-title">{{ e.title }}</div>
+                <div class="ev-meta">
+                  {% if e.date_text %}<span>📅 {{ e.date_text }}</span>{% endif %}
+                  {% if e.venue %}<span>📍 {{ e.venue }}</span>{% endif %}
+                  {% if e.city %}<span>🌆 {{ e.city }}</span>{% endif %}
+                </div>
+                <div class="ev-actions">
+                  <a class="cta" style="flex:1" href="/events/{{ e.slug }}">Ver detalle & comprar</a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div style="padding:18px;color:var(--mut);font-weight:850">No hay eventos publicados todavía.</div>
+      {% endif %}
+
+      <div class="subbar">Al continuar aceptás los Términos y la Política de Privacidad.</div>
+    </div>
+
+    <footer class="site-footer">
+      <div class="footer-top">
+        <div class="socials" aria-label="Redes">
+          <a href="#" aria-label="Facebook" title="Facebook">f</a>
+          <a href="#" aria-label="X" title="X">x</a>
+          <a href="#" aria-label="Instagram" title="Instagram">ig</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="links">
+          <a href="/legal/privacidad">Política de Privacidad</a>
+          <span>|</span>
+          <a href="/legal/terminos">Términos y Condiciones</a>
+          <span>|</span>
+          <a href="/legal/defensa">Defensa del Consumidor</a>
+        </div>
+        <div class="legal">TicketFlow · Entradas — Todos los derechos reservados</div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

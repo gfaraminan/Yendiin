@@ -1,0 +1,17 @@
+el home es el listado de todos los eventos activos.
+en el home vemos, la opción para ingresar a "mi cuenta" y el ingreso para productor.
+alguna imagen promocional o un carrousel con eventos destacados, luego el listado, filtrable por lugar, fecha, búsqueda.
+el listado de eventos muestra cada evento con info básica, lugar, fecha, categoría.
+al final del listado, footer con términos y condiciones, políticas de privacidad y cualquier nota lega q haga falta. además de datos de contacto y redes, botón de arrepentimiento.
+al ingresar desde el botón "mi cuenta" , se abre un modal para loguearse con Google. se cierra modal y seguimos en el listado de eventos, pero ahora logueado. arriba tengo la opción de "mis tickets", ahí puedo ver el historial de tickets comprados y los vigentes, ya sea parking, barra, entrada, etc
+(puntos, esto es para agregar aun en el back)
+si desde el listado de eventos inngresa el cliente a comprar, tiene que poder ver la info del evento (es la q cargo el productor) cotizar el viaje en uber, elegir el sale item q quiere comprar y sus cantidades, Login de Google si no esta logueado, y poder pagar con mercadopago, tarjeta (lo dejamos como demo para que se emita el qr) completar datos básicos, nombre (podríamos traerlo de la cuenta de Google , con la posibilidad de poder editarlo, fecha de nacimiento (importante para fidelizar, también podríamos traerla de Google si esta) dirección
+cliente paga y pasamos a la pantalla de confirmación de compra, comprobante .aca tiene que brindar un qr por cada sale item comprado. posibilidad de descargar a pdf yreenviar por mail.
+el ingreso como productor muestra un Login de Google aouth , una vez logueado ve un listado de eventos propios (cargados por el) con una barra de porcentaje indicando la venta del evento. también EDITAR O PAUSAR.
+ARRIBA UN BOTON PARA AGREGAR EVENTO.
+e alguna información rápida onda dashboard. poder filtrar por slug
+(el atico 1/2, el atico 8/2 , el atico 15/2) para ver información por evento o acumulado. horario pico de venta, producto mas vendido, cliente que mas gasto, en entradas o productos del modulo de barra. 
+AL AGREGAR EVENTO, SE ABRE MODAL PARA CARGAR INFO DEL EVENTO
+nombre, fecha (se abre calendario), descripción, ubicación (para luego cotizar con uber)
+sales ítems : entrada general, vip, parquing, consumición, lo que quiera. con su respectivo precio y stock,, también fecha , habilitado entre x fecha y x fecha (con calendario), subir flyer : upload de foto. cargar vendedores (estos tienen su propio link del evento para q les sume las ventas)
+

@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_name }} · Productor</title>
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: rgba(15, 20, 35, .72);
+      --stroke: rgba(255,255,255,.10);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.70);
+      --btn: rgba(255,255,255,.10);
+      --btnh: rgba(255,255,255,.16);
+      --ok: rgba(56, 239, 125, .18);
+      --warn: rgba(255, 200, 0, .18);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background:
+        radial-gradient(1200px 800px at 70% 15%, rgba(124,92,255,.28), transparent 60%),
+        radial-gradient(900px 700px at 20% 60%, rgba(255,75,214,.18), transparent 55%),
+        var(--bg);
+    }
+    .wrap { padding: 18px; max-width: 980px; margin: 0 auto; }
+    .top {
+      display:flex; align-items:flex-start; justify-content:space-between; gap: 14px;
+      padding: 14px 0 10px 0;
+    }
+    h1 { margin:0; font-size: 18px; }
+    .sub { margin: 4px 0 0 0; color: var(--muted); font-size: 13px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 16px;
+      padding: 14px;
+      box-shadow: 0 20px 80px rgba(0,0,0,.35);
+      margin-top: 12px;
+    }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; }
+    input, select {
+      background: rgba(0,0,0,.22);
+      color: var(--text);
+      border: 1px solid var(--stroke);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline: none;
+      min-width: 220px;
+    }
+    .btn {
+      display:inline-flex; align-items:center; justify-content:center; gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: var(--btn);
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--btnh); }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align:left; padding: 10px 8px; border-bottom: 1px solid var(--stroke); font-size: 13px; }
+    th { color: var(--muted); font-weight: 600; }
+    .tag {
+      display:inline-block; padding: 4px 8px; border-radius: 999px;
+      border: 1px solid var(--stroke); background: rgba(255,255,255,.06);
+      font-size: 12px;
+    }
+    .on { background: var(--ok); }
+    .off { background: rgba(255,255,255,.06); }
+    .small { font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1>🎤 Panel Productor</h1>
+        <p class="sub">Hola, {prod.get("name") or prod.get("email") or "productor"} · Tenant: <span class="tag">{prod.get("tenant")}</span></p>
+      </div>
+      <form method="get" action="/api/auth/logout">
+        <button class="btn" type="submit">Salir</button>
+      </form>
+    </div>
+
+    
+    <div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px;">Crear evento</h2>
+      <form method="post" action="/api/producer/events/create">
+        <div class="row">
+          <input name="slug" placeholder="slug (ej: fiesta-in-piazza)" required />
+          <input name="title" placeholder="Título del evento" required />
+          <input name="category" placeholder="Categoría (Conciertos, Teatro...)" value="Conciertos" />
+          <input type="datetime-local" name="date_text" step="60" />
+          <input name="venue" placeholder="Lugar (Venue)" />
+          <input name="city" placeholder="Ciudad" />
+          <input name="hero_bg" placeholder="Imagen / flyer (URL)" />
+          <button class="btn" type="submit">Crear</button>
+        </div>
+        <p class="small" style="margin:10px 0 0 0;">
+          El <b>slug</b> es la clave del link (no espacios). Si querés, después le damos editor full.
+        </p>
+      </form>
+    </div>
+
+<div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px;">🎟️ Entradas · Tipos, cupos y precios</h2>
+      <div class="row">
+        <select id="tt_event" style="min-width:260px"></select>
+        <input id="tt_name" placeholder="Tipo (General, VIP...)" />
+        <input id="tt_price" placeholder="Precio base (ARS)" type="number" min="0" />
+        <input id="tt_cap" placeholder="Cupo (0 = ilimitado)" type="number" min="0" />
+        <button class="btn" type="button" onclick="createTicketType()">Agregar</button>
+      </div>
+      <p class="small" style="margin:10px 0 0 0;">
+        Precio por <b>tipo</b>. Abajo podés cargar <b>preventa por fechas</b> (override del precio base).
+      </p>
+
+      <div class="row" style="margin-top:12px">
+        <select id="tier_tt" style="min-width:260px"></select>
+        <input id="tier_name" placeholder="Nombre (Preventa 1)" />
+        <input id="tier_start" type="date" placeholder="Desde" />
+        <input id="tier_end" type="date" placeholder="Hasta" />
+        <input id="tier_price" placeholder="Precio (ARS)" type="number" min="0" />
+        <button class="btn" type="button" onclick="createTier()">Agregar preventa</button>
+        <a class="btn" href="/entradas/eventos" style="margin-left:auto">Ver como cliente</a>
+        <a class="btn" href="/canje">Canje consumiciones</a>
+      </div>
+
+      <div class="small" id="tt_msg" style="margin-top:10px;"></div>
+      <table class="table" style="margin-top:12px" id="tt_table">
+        <thead><tr>
+          <th>Tipo</th><th>Precio base</th><th>Cupo</th><th>Vendidas</th><th>Estado</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+<div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px;">🍻 Consumiciones · Catálogo</h2>
+      <div class="row">
+        <select id="c_event" style="min-width:260px"></select>
+        <input id="p_name" placeholder="Punto (Barra principal)" />
+        <input id="p_slug" placeholder="Slug punto (barra-principal)" />
+        <input id="p_kind" placeholder="Tipo (barra, food...)" value="barra" />
+        <button class="btn" type="button" onclick="createPoint()">Crear punto</button>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <select id="i_event" style="min-width:260px"></select>
+        <select id="i_point" style="min-width:220px"></select>
+        <input id="i_name" placeholder="Item (Cerveza, Pizza...)" />
+        <input id="i_price" placeholder="Precio (ARS)" type="number" min="0" />
+        <button class="btn" type="button" onclick="createItem()">Agregar item</button>
+      </div>
+      <div class="small" id="c_msg" style="margin-top:10px;"></div>
+    </div>
+
+<div class="card">
+      <h2 style="margin:0 0 10px 0; font-size:15px;">Mis eventos</h2>
+      <div id="eventsBox" class="small">Cargando…</div>
+      <table id="eventsTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Slug</th>
+            <th>Título</th>
+            <th>Ciudad</th>
+            <th>Estado</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+</div>
+
+  </div>
+
+<script>
+
+async function postJSON(url, data){
+  const res = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(data)});
+  if(!res.ok){
+    let t = await res.text();
+    try{ const j = JSON.parse(t); throw new Error(j.detail||t); }catch(e){ throw new Error(t); }
+  }
+  return res.json();
+}
+function arsToCents(v){
+  const n = Number(v||0);
+  return Math.round(n*100);
+}
+function fmtARS(cents){
+  const n = Number(cents||0)/100;
+  return "$ " + n.toLocaleString("es-AR", {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+async function refreshTicketTypes(){
+  const ev = document.getElementById("tt_event").value;
+  const tbody = document.querySelector("#tt_table tbody");
+  tbody.innerHTML = "";
+  const ttsel = document.getElementById("tier_tt");
+  ttsel.innerHTML = "";
+  if(!ev) return;
+  const res = await fetch("/api/producer/ticket-types?event="+encodeURIComponent(ev));
+  const items = res.ok ? await res.json() : [];
+  for(const tt of items){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${tt.name}</td><td>${fmtARS(tt.price_cents)}</td><td>${tt.capacity||0}</td><td>${tt.sold||0}</td><td><span class="tag ${tt.active? "on":"off"}">${tt.active? "Activo":"Pausado"}</span></td>`;
+    tbody.appendChild(tr);
+    const opt = document.createElement("option");
+    opt.value = tt.id;
+    opt.textContent = tt.name + " · " + fmtARS(tt.price_cents);
+    ttsel.appendChild(opt);
+  }
+}
+async function createTicketType(){
+  try{
+    const event_slug = document.getElementById("tt_event").value;
+    const name = (document.getElementById("tt_name").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("tt_price").value);
+    const capacity = Number(document.getElementById("tt_cap").value||0);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/ticket-types/create", {event_slug, name, price_cents, capacity});
+    document.getElementById("tt_msg").textContent = "✅ Tipo agregado.";
+    document.getElementById("tt_name").value="";
+    document.getElementById("tt_price").value="";
+    document.getElementById("tt_cap").value="";
+    await refreshTicketTypes();
+  }catch(e){
+    document.getElementById("tt_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+async function createTier(){
+  try{
+    const event_slug = document.getElementById("tt_event").value;
+    const ticket_type_id = Number(document.getElementById("tier_tt").value||0);
+    const name = (document.getElementById("tier_name").value||"").trim();
+    const start_date = (document.getElementById("tier_start").value||"").trim();
+    const end_date = (document.getElementById("tier_end").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("tier_price").value);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!ticket_type_id) throw new Error("Elegí un tipo");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/ticket-tiers/create", {event_slug, ticket_type_id, name, start_date, end_date, price_cents});
+    document.getElementById("tt_msg").textContent = "✅ Preventa agregada.";
+    document.getElementById("tier_name").value="";
+    document.getElementById("tier_start").value="";
+    document.getElementById("tier_end").value="";
+    document.getElementById("tier_price").value="";
+  }catch(e){
+    document.getElementById("tt_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function loadPointsTo(selectId, eventSlug){
+  const sel = document.getElementById(selectId);
+  sel.innerHTML = `<option value="">Cualquier punto</option>`;
+  const res = await fetch("/api/producer/consumptions/points?event="+encodeURIComponent(eventSlug));
+  const items = res.ok ? await res.json() : [];
+  for(const p of items){
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.name + " ("+p.kind+")";
+    sel.appendChild(opt);
+  }
+}
+async function createPoint(){
+  try{
+    const event_slug = document.getElementById("c_event").value;
+    const name = (document.getElementById("p_name").value||"").trim();
+    let point_slug = (document.getElementById("p_slug").value||"").trim();
+    const kind = (document.getElementById("p_kind").value||"barra").trim();
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/consumptions/points/create", {event_slug, name, point_slug, kind});
+    document.getElementById("c_msg").textContent = "✅ Punto creado.";
+    await loadPointsTo("i_point", document.getElementById("i_event").value);
+  }catch(e){
+    document.getElementById("c_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+async function createItem(){
+  try{
+    const event_slug = document.getElementById("i_event").value;
+    const point_id = document.getElementById("i_point").value || null;
+    const name = (document.getElementById("i_name").value||"").trim();
+    const price_cents = arsToCents(document.getElementById("i_price").value);
+    if(!event_slug) throw new Error("Elegí un evento");
+    if(!name) throw new Error("Nombre requerido");
+    await postJSON("/api/producer/consumptions/items/create", {event_slug, point_id, name, price_cents});
+    document.getElementById("c_msg").textContent = "✅ Item agregado.";
+    document.getElementById("i_name").value="";
+    document.getElementById("i_price").value="";
+  }catch(e){
+    document.getElementById("c_msg").textContent = "❌ " + (e.message||String(e));
+  }
+}
+
+async function loadEvents(){
+  const box = document.getElementById("eventsBox");
+  const tbl = document.getElementById("eventsTable");
+  const tbody = tbl.querySelector("tbody");
+  tbody.innerHTML = "";
+  try {
+    const res = await fetch("/api/producer/events");
+    if(!res.ok) throw new Error(await res.text());
+    const items = await res.json();
+    if(!items.length){
+      box.textContent = "Todavía no tenés eventos. Creá el primero arriba 👆";
+      tbl.style.display = "none";
+      return;
+    }
+    box.textContent = "";
+    tbl.style.display = "";
+
+    // Popular selects de evento (tickets / consumiciones)
+    const evSelects = ["tt_event","c_event","i_event"];
+    for(const sid of evSelects){
+      const sel = document.getElementById(sid);
+      if(!sel) continue;
+      const prev = sel.value;
+      sel.innerHTML = "";
+      sel.insertAdjacentHTML("beforeend", `<option value="">Elegí un evento</option>`);
+      for(const ev of items){
+        sel.insertAdjacentHTML("beforeend", `<option value="${ev.slug}">${ev.title} (${ev.slug})</option>`);
+      }
+      // mantener selección si existe
+      if(prev && items.some(e=>e.slug===prev)) sel.value = prev;
+    }
+
+    // Si no había selección, default al primero
+    const firstSlug = items[0]?.slug || "";
+    if(document.getElementById("tt_event") && !document.getElementById("tt_event").value) document.getElementById("tt_event").value = firstSlug;
+    if(document.getElementById("c_event") && !document.getElementById("c_event").value) document.getElementById("c_event").value = firstSlug;
+    if(document.getElementById("i_event") && !document.getElementById("i_event").value) document.getElementById("i_event").value = firstSlug;
+
+    // Mantener i_event alineado con c_event (misma pantalla)
+    if(document.getElementById("c_event") && document.getElementById("i_event")){
+      if(!document.getElementById("i_event").value) document.getElementById("i_event").value = document.getElementById("c_event").value;
+    }
+
+    // Bind de cambios (una vez)
+    if(!window.__producerBindings){
+      window.__producerBindings = true;
+
+      const ttEv = document.getElementById("tt_event");
+      if(ttEv){
+        ttEv.addEventListener("change", async ()=>{
+          await refreshTicketTypes();
+        });
+      }
+
+      const cEv = document.getElementById("c_event");
+      const iEv = document.getElementById("i_event");
+      if(cEv && iEv){
+        cEv.addEventListener("change", async ()=>{
+          // sincroniza con i_event
+          iEv.value = cEv.value;
+          await loadPointsTo("i_point", iEv.value);
+        });
+        iEv.addEventListener("change", async ()=>{
+          await loadPointsTo("i_point", iEv.value);
+        });
+      }
+    }
+
+    // Primer refresh
+    if(document.getElementById("tt_event")?.value){
+      await refreshTicketTypes();
+    }
+    if(document.getElementById("i_event")?.value){
+      await loadPointsTo("i_point", document.getElementById("i_event").value);
+    }
+    for(const ev of items){
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><span class="tag">${ev.slug}</span></td>
+        <td>${ev.title}</td>
+        <td>${ev.city||""}</td>
+        <td><span class="tag ${ev.active ? "on" : "off"}">${ev.active ? "Activo" : "Pausado"}</span></td>
+        <td>
+          <button class="btn" onclick="toggleEvent('${ev.slug}', ${ev.active ? 0 : 1})">${ev.active ? "Pausar" : "Activar"}</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } catch(e) {
+    box.textContent = "Error cargando eventos: " + (e?.message || e);
+    tbl.style.display = "none";
+  }
+}
+
+async function toggleEvent(slug, active){
+  try {
+    const res = await fetch("/api/producer/events/toggle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({slug, active})
+    });
+    if(!res.ok) throw new Error(await res.text());
+    await 
+loadEvents().then(async ()=>{
+  // copy events list into selects
+  const res = await fetch("/api/producer/events");
+  const evs = res.ok ? await res.json() : [];
+  const selIds = ["tt_event","c_event","i_event"];
+  for(const sid of selIds){
+    const s = document.getElementById(sid);
+    if(!s) continue;
+    s.innerHTML = evs.map(e=>`<option value="${e.slug}">${e.title}</option>`).join("");
+  }
+  document.getElementById("tt_event").addEventListener("change", async ()=>{ await refreshTicketTypes(); });
+  document.getElementById("i_event").addEventListener("change", async ()=>{ await loadPointsTo("i_point", document.getElementById("i_event").value); });
+  // initial
+  if(evs.length){
+    await refreshTicketTypes();
+    await loadPointsTo("i_point", document.getElementById("i_event").value);
+  }
+});
+
+  } catch(e) {
+    alert("Error: " + (e?.message || e));
+  }
+}
+
+loadEvents();
+</script>
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="socials">
+      <a href="#" aria-label="Facebook">f</a>
+      <a href="#" aria-label="X">x</a>
+      <a href="#" aria-label="Instagram">◉</a>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <div class="links">
+      <a href="/legal/privacidad">Política de Privacidad</a>
+      <span>·</span>
+      <a href="/legal/terminos">Términos y Condiciones</a>
+      <span>·</span>
+      <a href="/legal/defensa">Defensa del Consumidor</a>
+    </div>
+    <div class="legal">
+      TicketFlow · Entradas — Todos los derechos reservados
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

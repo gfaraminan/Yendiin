@@ -1,0 +1,2 @@
+ALTER TABLE orders
+  ADD COLUMN IF NOT EXISTS seller_code TEXT;

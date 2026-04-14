@@ -1,0 +1,123 @@
+--- app.py
++++ app.py
+@@ -2819,7 +2819,8 @@
+     }
+ 
+     if _sqlite_disabled():
+-        ev = pg_get_event_public(tenant=tenant, event_slug=event_slug)
++        # Postgres-only path
++        ev = pg_get_event_public(tenant=tenant, slug=event_slug)
+         if not ev:
+             raise HTTPException(status_code=404, detail="Evento no encontrado")
+         ticket_types = ev.pop("ticket_types", []) or []
+@@ -2841,7 +2842,55 @@
+                 (tenant, buyer_id),
+             ).fetchone()
+             if b:
+-                buyer_prefill.update({k: (b.get(k) if isinstance(b, dict) else b[i]) for i,k in enumerate(['name','email','phone'])})
++                buyer_prefill.update(
++                    {k: (b.get(k) if isinstance(b, dict) else b[i]) for i, k in enumerate(["name", "email", "phone"])}
++                )
++
++        c_pre.close()
++
++    # Normalize sqlite rows to dict for template
++    if not isinstance(ev, dict):
++        try:
++            ev = dict(ev)
++        except Exception:
++            ev = {"slug": event_slug, "title": str(getattr(ev, "title", event_slug))}
++
++    # ticket_types may be sqlite rows
++    norm_tts = []
++    for r in (ticket_types or []):
++        if isinstance(r, dict):
++            norm_tts.append(r)
++        else:
++            try:
++                norm_tts.append(dict(r))
++            except Exception:
++                norm_tts.append({"id": getattr(r, "id", None), "name": getattr(r, "name", ""), "price_cents": getattr(r, "price_cents", 0)})
++
++    ctx = {
++        "request": request,
++        "app_name": APP_NAME,
++        "tenant": tenant,
++        "event_slug": event_slug,
++        "event": ev,
++        "ticket_types": norm_tts,
++        "buyer": buyer_prefill,
++    }
++
++    # Render template; if template missing, fallback to a tiny inline page (keeps prod alive).
++    inline = f"""<!doctype html>
++<html lang='es'>
++<head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
++<title>{html.escape(APP_NAME)} · {html.escape(ev.get('title') or event_slug)}</title>
++<style>body{{font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;padding:24px;background:#0b1220;color:#e5e7eb}}a{{color:#93c5fd}}.card{{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:16px;max-width:820px;margin:0 auto}}.mut{{opacity:.8}}</style>
++</head>
++<body>
++<div class='card'>
++  <h2 style='margin:0 0 6px 0'>{html.escape(ev.get('title') or event_slug)}</h2>
++  <div class='mut' style='margin-bottom:12px'>Este template no está disponible (event_detail.html). Igual te dejo el evento vivo ✅</div>
++  <p><a href='/entradas/eventos'>← Volver</a></p>
++</div>
++</body></html>"""
++    return _render_template_or_inline(request, "event_detail.html", ctx, inline)
+ 
+ 
+ @app.post("/entradas/orden/crear")
+@@ -3249,6 +3298,15 @@
+ # Productor: Views
+ # -----------------------------
+ 
++@app.get("/productor/evento", response_class=HTMLResponse)
++def productor_evento_alias(req: Request, event: str = ""):
++    """Compat: link viejo /productor/evento?event=slug -> /productor/eventos/{slug}/editar."""
++    event_slug = (event or req.query_params.get("event") or "").strip()
++    if not event_slug:
++        return RedirectResponse(url="/productor/dashboard", status_code=302)
++    return RedirectResponse(url=f"/productor/eventos/{urllib.parse.quote(event_slug)}/editar", status_code=302)
++
++
+ @app.get("/productor/dashboard", response_class=HTMLResponse)
+ def view_producer_dashboard(req: Request):
+     prod = require_producer(req)
+@@ -3260,30 +3318,15 @@
+         "app_name": APP_NAME,
+         "tenant": tenant,
+         "base_url": base_url,
+-        "producer_email": (prod or {}).get("email"),
+-        "producer_name": (prod or {}).get("name"),
++        # Para templates legacy:
++        "producer": prod,
++        "prod": prod,
+     }
+ 
+-    # Prefer template if it exists in the repo; fallback to inline so el dashboard no se caiga por un template faltante.
+-    inline_html = PRODUCER_DASHBOARD_INLINE_HTML.format(app_name=APP_NAME, tenant=tenant)
+-    return _render_template_or_inline(req, "producer_dashboard.html", ctx, inline_html=inline_html)
+-
+-    ctx = {
+-        "request": req,
+-        "app_name": APP_NAME,
+-        "base_url": base_url,
+-        "prod": prod,
+-        "producer": prod,
+-    }
+-
+-    # FORZAR V2: si falta el template o rompe Jinja, que falle y lo veamos en logs.
+-    return templates.TemplateResponse("producer_dashboard_v2.html", ctx)
+-
+-
+-
+-# -----------------------------
+-# Productor: APIs (crear / listar / activar)
+-# -----------------------------
++    # Dashboard v2 (template). Si falta el template por deploy incompleto, caemos al inline legacy.
++    inline = PRODUCER_DASHBOARD_INLINE_HTML
++    return _render_template_or_inline(req, "producer_dashboard_v2.html", ctx, inline)
++
+ 
+ @app.get("/productor/eventos/{slug}/editar", response_class=HTMLResponse)
+ def productor_editar_evento(req: Request, slug: str):

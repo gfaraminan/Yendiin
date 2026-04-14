@@ -1,0 +1,8 @@
+app2.py
+app v1.2.py
+*.db
+*.sqlite
+__pycache__/
+*.pyc
+.env
+back

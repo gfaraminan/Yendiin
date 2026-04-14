@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ app_name }} · Eventos</title>
+
+  {# Open Graph / Social Sharing (listado) #}
+  {% set _base = (request.base_url|string) %}
+  {% set _base_no = _base[:-1] if _base.endswith('/') else _base %}
+  {% set _og_title = app_name ~ ' · Eventos' %}
+  {% set _og_desc = 'Elegí tu plan: entrás, pagás y listo. Sin fila (ni excusas).' %}
+  {% set _og_url = (request.url|string) %}
+  {% set _og_image = _base_no ~ '/static/img/login_bg.jpg' %}
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="{{ _og_title }}" />
+  <meta property="og:description" content="{{ _og_desc }}" />
+  <meta property="og:url" content="{{ _og_url }}" />
+  <meta property="og:site_name" content="{{ app_name }}" />
+  <meta property="og:image" content="{{ _og_image }}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ _og_title }}" />
+  <meta name="twitter:description" content="{{ _og_desc }}" />
+  <meta name="twitter:image" content="{{ _og_image }}" />
+
+  <style>
+    :root{
+      --bg0:#0b0710; --bg1:#140a1c;
+      --txt:#f6f2ff; --mut:#b7a9c8; --mut2:#8d7da3;
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--txt); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.78), rgba(20,10,28,.88)),
+        url("/static/img/login_bg.jpg") center/cover fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 28px 16px 40px;
+    }
+    .wrap{max-width:1180px;margin:0 auto}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:38px;height:38px;border-radius:14px;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+      box-shadow: 0 12px 30px rgba(124,92,255,.25);
+    }
+    .brand h1{margin:0;font-size:16px;font-weight:800;letter-spacing:.2px}
+    .brand small{display:block;color:var(--mut);font-weight:600;margin-top:2px}
+    .actions{display:flex;align-items:center;gap:10px}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:var(--txt); text-decoration:none; font-weight:700;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select:none;
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+    .btn.primary{
+      border:0;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+    }
+
+    .toolbar{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 12px;
+      margin-bottom: 16px;
+      align-items:center;
+    }
+    .input, .select{
+      width:100%;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(12,8,18,.55);
+      color: var(--txt);
+      outline:none;
+      box-shadow: 0 14px 34px rgba(0,0,0,.35);
+    }
+    .input::placeholder{color: rgba(183,169,200,.75); font-weight:600}
+
+    .grid{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 980px){
+      .grid{grid-template-columns: repeat(2, minmax(0,1fr))}
+      .toolbar{grid-template-columns: 1fr}
+    }
+
+    /* ✅ Mobile: 1 columna + card horizontal (como te quedó perfecto) */
+    @media (max-width: 620px){
+      body{padding: 18px 12px 72px;}
+      header{flex-direction:column;align-items:flex-start;margin-bottom:12px}
+      .actions{width:100%}
+      .actions .btn{flex:1}
+      .grid{grid-template-columns: 1fr; gap: 12px;}
+    }
+
+    .card{
+      position:relative;
+      border-radius: 22px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height: 320px;
+    }
+
+    .hero{
+      height: 190px;
+      background: linear-gradient(135deg, rgba(124,92,255,.75), rgba(255,26,166,.55));
+      opacity:.92;
+      background-size: cover;
+      /* ✅ Desktop/Tablet: center (menos “recorte feo”) */
+      background-position: center;
+      background-repeat:no-repeat;
+    }
+    .hero.has-img{ opacity: 1; }
+
+    .content{padding: 12px 14px 14px}
+    .title{font-weight:900;margin:0 0 6px;font-size:17px}
+    .meta{color:var(--mut);font-weight:650;font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .price{margin-top:10px;font-weight:900}
+
+    .pill{
+      position:absolute; top:10px; right:10px;
+      font-size:11px;font-weight:900;
+      padding:6px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.25);
+      color: var(--txt);
+      backdrop-filter: blur(10px);
+    }
+
+    /* CTA absoluto en desktop/tablet (como venías) */
+    .cta{
+      position:absolute; right:12px; bottom:12px;
+    }
+
+    .fab{
+      position:fixed; right:16px; bottom:16px;
+      display:none;
+      z-index:50;
+    }
+    @media (max-width: 620px){
+      .fab{display:flex;}
+    }
+
+    /* ✅ Card horizontal SOLO en mobile */
+    @media (max-width: 620px){
+      .card{
+        min-height: 0;
+        display:flex;
+        gap: 0;
+      }
+      .hero{
+        width: 44%;
+        height: auto;
+        min-height: 128px;
+        /* ✅ Mobile: prioriza cara/título, te gustó así */
+        background-position: center top;
+      }
+      .content{
+        width: 56%;
+        padding: 10px 10px 10px 12px;
+      }
+      .title{
+        font-size: 15px;
+        line-height: 1.12;
+        margin-bottom: 6px;
+        display:-webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow:hidden;
+      }
+      .meta{
+        font-size: 11px;
+        gap: 8px;
+        line-height: 1.15;
+      }
+      .meta span{
+        display:block;
+        white-space: nowrap;
+        overflow:hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+      }
+      .price{
+        margin-top: 8px;
+        font-size: 12px;
+        font-weight: 900;
+      }
+
+      .pill{
+        top:8px; right:auto; left:8px;
+        font-size:10px;
+        padding:5px 8px;
+      }
+
+      /* ✅ CTA deja de ser absolute en mobile para no tapar */
+      .cta{
+        position: static;
+        margin-top: 10px;
+        display:flex;
+        justify-content:flex-end;
+      }
+      .cta .btn{
+        padding: 9px 12px;
+        border-radius: 14px;
+        font-weight: 900;
+      }
+    }
+
+    /* Footer (legal + redes) */
+    .site-footer{ margin-top: 28px; }
+    .footer-top{
+      background: linear-gradient(90deg, rgba(124,92,255,.95), rgba(255,26,166,.78));
+      padding: 14px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-top: 1px solid rgba(255,255,255,.10);
+    }
+    .footer-socials{display:flex; gap:12px}
+    .footer-socials a{
+      width:38px;height:38px;border-radius:999px;
+      display:inline-flex;align-items:center;justify-content:center;
+      font-weight:900;text-decoration:none;
+      color: var(--txt);
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.18);
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .footer-socials a:hover{transform: translateY(-1px); background: rgba(0,0,0,.24); border-color: rgba(255,255,255,.26)}
+
+    .footer-bottom{
+      background: rgba(10,6,14,.92);
+      border-top: 1px solid rgba(255,255,255,.08);
+      padding: 14px 10px 18px;
+      text-align:center;
+    }
+    .footer-title{font-weight:900; letter-spacing:.2px; margin: 0 0 6px 0}
+    .footer-links{display:flex;justify-content:center;gap:10px;flex-wrap:wrap; font-size:12px}
+    .footer-links a{color: rgba(246,242,255,.86); text-decoration:none; font-weight:750}
+    .footer-links a:hover{text-decoration:underline}
+    .footer-links span{color: rgba(246,242,255,.35)}
+    .footer-legal{margin-top:8px; color: rgba(183,169,200,.82); font-size:11px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="logo"></div>
+        <div>
+          <h1>TicketFlow · Entradas</h1>
+          <small>Elegí tu plan: entrás, pagás y listo. Sin fila (ni excusas).</small>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="/entradas/mis-tickets">🎟️ Mis tickets</a>
+        <button class="btn" id="logoutBtn">Salir</button>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <input class="input" id="q" placeholder="Buscar eventos, ciudad, lugar..." />
+      <select class="select" id="city">
+        <option value="">Todas las ciudades</option>
+      </select>
+    </div>
+
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <a class="btn primary fab" href="/entradas/mis-tickets">🎟️</a>
+
+<script>
+function fillGPS(){
+  if(!navigator.geolocation){
+    alert('Geolocalización no disponible en este navegador');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition((pos)=>{
+    const lat = pos.coords.latitude.toFixed(6);
+    const lng = pos.coords.longitude.toFixed(6);
+    const inp = document.querySelector('input[name="gps"]');
+    if(inp) inp.value = `${lat},${lng}`;
+  }, (err)=>{
+    alert('No se pudo obtener ubicación: ' + (err?.message || err));
+  }, {enableHighAccuracy:true, timeout:8000});
+}
+
+  function money(cents){
+    try{ return (cents/100).toLocaleString('es-AR',{style:'currency',currency:'ARS'}); }
+    catch(e){ return '$ ' + (cents/100); }
+  }
+  function esc(s){ return (s||'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  function normUrl(u){
+    u = (u || '').trim();
+    if(!u) return '';
+    if(u.startsWith('http://') && location.protocol === 'https:') u = 'https://' + u.slice(7);
+    if(u.startsWith('http://') || u.startsWith('https://')) return u;
+    if(u.startsWith('/')) return u;
+    return '/' + u.replace(/^\/+/, '');
+  }
+
+  async function load(){
+    const r = await fetch('/api/events');
+    const data = await r.json();
+    const events = data.events || data || [];
+    const grid = document.getElementById('grid');
+
+    const citySel = document.getElementById('city');
+    const cities = Array.from(new Set(events.map(e => (e.city||'').trim()).filter(Boolean))).sort();
+    cities.forEach(c=>{
+      const o=document.createElement('option'); o.value=c; o.textContent=c; citySel.appendChild(o);
+    });
+
+    function render(){
+      const q = (document.getElementById('q').value||'').toLowerCase();
+      const city = citySel.value;
+      grid.innerHTML='';
+
+      const filtered = events.filter(e=>{
+        const hay = (e.title||'').toLowerCase() + ' ' + (e.venue||'').toLowerCase() + ' ' + (e.city||'').toLowerCase();
+        if(q && !hay.includes(q)) return false;
+        if(city && (e.city||'')!==city) return false;
+        return true;
+      });
+
+      filtered.forEach(e=>{
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const min = (e.min_price_cents ?? null);
+        const priceText = (min==null) ? 'Sin precios' : ('Desde ' + money(min));
+
+        const defaultImg = '/static/img/login_bg.jpg';
+        const flyer = normUrl(e.flyer_url || '');
+        const heroBgRaw = (e.hero_bg || '').trim();
+        const heroBg = normUrl(heroBgRaw);
+
+        const heroUrl = flyer || (heroBgRaw.match(/^(https?:\/\/|\/)/) ? heroBg : (heroBgRaw.match(/^[a-zA-Z]/) ? '' : heroBg));
+        const finalHero = heroUrl || defaultImg;
+
+        const safeHero = finalHero.replace(/'/g, "%27");
+        const heroStyle = ` style="background-image:url('${safeHero}')"`;
+        const heroClass = heroUrl ? 'hero has-img' : 'hero';
+
+        card.innerHTML = `
+          <div class="${heroClass}"${heroStyle}></div>
+          <div class="pill">${esc(e.badge || 'Nuevo')}</div>
+          <div class="content">
+            <p class="title">${esc(e.title || e.slug)}</p>
+            <div class="meta">
+              <span>📍 ${esc((e.venue || '') + (e.city ? ' · ' + e.city : ''))}</span>
+              <span>🗓 ${esc(e.date_text || '')}</span>
+            </div>
+            <div class="price">${esc(priceText)}</div>
+
+            <!-- en mobile se muestra acá; en desktop queda absoluto -->
+            <div class="cta">
+              <a class="btn primary" href="/entradas/eventos/${encodeURIComponent(e.slug)}">Elegir</a>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    document.getElementById('q').addEventListener('input', render);
+    citySel.addEventListener('change', render);
+    render();
+
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+      await fetch('/api/auth/logout', {method:'POST'});
+      location.href='/login';
+    });
+  }
+
+  load();
+</script>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="footer-top">
+      <div class="footer-socials" aria-label="Compartir">
+        <a id="shareFb" href="#" target="_blank" rel="noopener" aria-label="Compartir en Facebook">f</a>
+        <a id="shareX" href="#" target="_blank" rel="noopener" aria-label="Compartir en X">x</a>
+        <a id="shareIg" href="https://www.instagram.com/" target="_blank" rel="noopener" aria-label="Instagram">ig</a>
+        <a id="shareWa" href="#" target="_blank" rel="noopener" aria-label="Compartir por WhatsApp">wa</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-title">Productores y Salas</div>
+      <div class="footer-links">
+        <a href="/legal/privacidad">Política de Privacidad</a>
+        <span>|</span>
+        <a href="/legal/terminos">Términos y Condiciones</a>
+        <span>|</span>
+        <a href="/legal/defensa">Defensa del Consumidor</a>
+      </div>
+      <div class="footer-legal">TicketFlow · Entradas — Todos los derechos reservados</div>
+    </div>
+  </footer>
+
+  <script>
+    (function(){
+      const url = encodeURIComponent(location.href);
+      const txt = encodeURIComponent('TicketFlow · Entradas');
+      const fb = document.getElementById('shareFb');
+      const xx = document.getElementById('shareX');
+      const ig = document.getElementById('shareIg');
+      const wa = document.getElementById('shareWa');
+      if(fb) fb.href = 'https://www.facebook.com/sharer/sharer.php?u=' + url;
+      if(xx) xx.href = 'https://twitter.com/intent/tweet?url=' + url + '&text=' + txt;
+      if(ig) ig.href = ig.getAttribute('href') || 'https://www.instagram.com/';
+      if(wa) wa.href = 'https://api.whatsapp.com/send?text=' + (txt + '%20' + url);
+    })();
+  </script>
+</body>
+</html>

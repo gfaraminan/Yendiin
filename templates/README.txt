@@ -1,0 +1,1 @@
+Copiá templates/pago.html a tu proyecto (reemplazando el existente).

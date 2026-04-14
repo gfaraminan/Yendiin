@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  {# ----- OG helpers (server-side) ----- #}
+  {% set _base = (request.base_url|string) %}
+  {% set _base_no = _base[:-1] if _base.endswith('/') else _base %}
+  {% set _title = (event.title if event and event.title else event_slug) %}
+  {% set _og_url = (request.url|string) %}
+
+  {% set _flyer = (event.flyer_url if event and event.flyer_url else '') %}
+  {% if _flyer and not _flyer.startswith('http') %}
+    {% set _flyer = _base_no ~ '/' ~ _flyer.lstrip('/') %}
+  {% endif %}
+  {% set _og_image = _flyer if _flyer else (_base_no ~ '/static/img/login_bg.jpg') %}
+
+  {% set _desc_raw = (event.description if event and event.description else '') | trim %}
+  {% if _desc_raw %}
+    {% set _og_desc = (_desc_raw[:180] ~ ('…' if _desc_raw|length > 180 else '')) %}
+  {% else %}
+    {% set _og_desc = ((event.date_text if event and event.date_text else '') ~ (' · ' if event and event.date_text and (event.venue or event.city) else '') ~ (event.venue if event and event.venue else '') ~ ((' · ' ~ event.city) if event and event.city else '')) | trim %}
+  {% endif %}
+  {% if not _og_desc %}{% set _og_desc = 'Comprá tu entrada en segundos.' %}{% endif %}
+
+  <title>{{ app_name }} · {{ _title }}</title>
+
+  <!-- Open Graph / Social Sharing (detalle) -->
+  <meta property="og:type" content="event" />
+  <meta property="og:title" content="{{ app_name }} · {{ _title }}" />
+  <meta property="og:description" content="{{ _og_desc }}" />
+  <meta property="og:url" content="{{ _og_url }}" />
+  <meta property="og:site_name" content="{{ app_name }}" />
+  <meta property="og:image" content="{{ _og_image }}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{ app_name }} · {{ _title }}" />
+  <meta name="twitter:description" content="{{ _og_desc }}" />
+  <meta name="twitter:image" content="{{ _og_image }}" />
+
+  <style>
+    :root{
+      --bg0:#0b0710; --bg1:#140a1c;
+      --txt:#f6f2ff; --mut:#b7a9c8;
+      --accent:#7c5cff; --accent2:#ff1aa6;
+      --shadow: 0 18px 50px rgba(0,0,0,.55);
+      --radius: 22px;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; color:var(--txt);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      min-height:100vh;
+      background:
+        linear-gradient(180deg, rgba(11,7,16,.78), rgba(20,10,28,.88)),
+        url("/static/img/login_bg.jpg") center/cover fixed,
+        radial-gradient(1200px 700px at 20% -10%, rgba(124,92,255,.35), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(255,26,166,.18), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      padding: 22px 14px 40px;
+    }
+    .wrap{max-width:1180px;margin:0 auto}
+    .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      padding:10px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:var(--txt); text-decoration:none; font-weight:800;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      transition: transform .12s ease, background .12s ease, border-color .12s ease;
+      cursor:pointer;
+    }
+    .btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22)}
+    .btn.primary{border:0;background: linear-gradient(135deg,var(--accent),var(--accent2));}
+
+    .layout{display:grid;grid-template-columns: 1.35fr .85fr; gap:14px; align-items:start}
+    @media (max-width: 980px){
+      .layout{grid-template-columns:1fr}
+      .flyer{height: clamp(320px, 48vh, 520px);}
+    }
+    @media (max-width: 620px){
+      .flyer{height: clamp(360px, 56vh, 560px);}
+    }
+
+    .panel{
+      border-radius: 22px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.06);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .flyer{
+      position:relative;
+      width:100%;
+      height: clamp(340px, 52vh, 560px);
+      background: rgba(0,0,0,.25);
+      display:flex;align-items:center;justify-content:center;
+      overflow:hidden;
+    }
+
+    /* Fondo blur premium (usa el mismo flyer) */
+    .flyer::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: var(--flyer-bg, url('/static/img/login_bg.jpg'));
+      background-size: cover;
+      background-position: center;
+      filter: blur(26px) brightness(.55);
+      transform: scale(1.15);
+    }
+
+    .flyer img{
+      position:relative;
+      z-index:1;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      object-position:center;
+      display:block;
+    }
+    .pad{padding:14px}
+    h1{margin:0 0 6px;font-size:22px}
+    .meta{color:var(--mut);font-weight:800;font-size:12px;display:flex;gap:10px;flex-wrap:wrap}
+    .mut{color:var(--mut)}
+
+    label{display:block;color:var(--mut);font-weight:900;font-size:12px;margin:8px 0 6px}
+    input, select{
+      width:100%;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(12,8,18,.55);
+      color: var(--txt);
+      outline:none;
+    }
+    .formgrid{display:grid;grid-template-columns:1fr 1fr; gap:10px}
+    .formgrid .full{grid-column:1/-1}
+    @media (max-width: 980px){.formgrid{grid-template-columns:1fr}}
+
+    .summary{
+      margin-top:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.18);
+      border-radius: 18px;
+      padding: 12px;
+    }
+    .row{display:flex;justify-content:space-between;gap:10px;color:var(--mut);font-weight:900}
+    .row strong{color:var(--txt)}
+    .total{font-size:20px;font-weight:900;color:var(--txt)}
+
+    .notice{
+      border-radius: 16px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.18);
+      padding: 10px 12px;
+      color: var(--mut);
+      font-weight:900;
+      margin-top:10px;
+    }
+
+    /* Share bar (editorial, sin cajas) */
+    .sharebar{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      flex-wrap:wrap;
+      margin-top:12px;
+      padding:6px 0;
+      border:0;
+      background:none;
+      box-shadow:none;
+    }
+    .sharelabel{
+      font-weight:950;
+      font-size:12px;
+      color:var(--mut);
+      letter-spacing:.2px;
+      margin-right:2px;
+    }
+    .sharebtn{
+      all:unset;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--txt);
+      opacity:.68;
+      transition: opacity .15s ease, transform .15s ease;
+    }
+    .sharebtn:hover{opacity:1;transform:translateY(-1px)}
+    .sharebtn:active{transform:translateY(0px)}
+    .sharebtn.icon{width:auto;padding:0}
+    .sharebtn svg{width:18px;height:18px;opacity:.92}
+    .sharetoast{display:none;color:var(--mut);font-weight:950;font-size:12px;margin-left:6px}
+
+    .event-info{margin-top:14px;padding:14px;border-radius:18px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.16)}
+    .event-info h3{margin:0 0 8px 0;font-size:14px}
+    .facts{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0 0;padding:0;list-style:none}
+    .facts li{font-size:12px;font-weight:950;color:var(--mut);border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);padding:6px 10px;border-radius:999px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div style="display:flex;gap:10px;align-items:center;">
+        <a class="btn" href="/entradas/eventos">← Atrás</a>
+        <a class="btn" href="/entradas/mis-tickets">🎟️ Mis tickets</a>
+      </div>
+      <button class="btn" id="logoutBtn">Salir</button>
+    </div>
+
+    <div class="layout">
+      <div class="panel">
+        <div class="flyer" id="flyerBox">
+          <div class="mut" style="font-weight:900">Cargando flyer…</div>
+        </div>
+        <div class="pad">
+          <div class="mut" style="font-weight:950;margin-bottom:8px;">Flyer del evento</div>
+
+          <div class="sharebar" aria-label="Compartir evento">
+            <span class="sharelabel">Compartir</span>
+
+            <a class="sharebtn icon" id="shareWa" target="_blank" rel="noopener" aria-label="WhatsApp" title="WhatsApp">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 3.5c-4.7 0-8.5 3.62-8.5 8.07 0 1.56.46 3.02 1.25 4.26L3.5 20.5l4.84-1.19c1.13.58 2.42.9 3.66.9 4.7 0 8.5-3.62 8.5-8.07S16.7 3.5 12 3.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+                <path d="M9.2 9.1c.2-.5.4-.5.7-.5h.6c.2 0 .4.1.5.4l.6 1.5c.1.2.1.5-.1.7l-.4.5c-.1.1-.2.3-.1.5.2.5.7 1.3 1.5 2 .8.7 1.5 1 2 .9.2 0 .3-.1.4-.2l.6-.7c.2-.2.4-.3.7-.2l1.5.6c.3.1.4.3.4.5v.6c0 .3-.1.5-.4.7-.5.4-1.4.8-2.6.6-1.4-.2-3.2-1.1-4.8-2.6-1.6-1.5-2.6-3.2-2.8-4.6-.2-1.2.2-2.1.5-2.6Z" fill="currentColor" opacity=".9"/>
+              </svg>
+            </a>
+
+            <a class="sharebtn icon" id="shareFb" target="_blank" rel="noopener" aria-label="Facebook" title="Facebook">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14 8.8V7.3c0-.8.5-1.3 1.3-1.3H17V3.5h-1.7C12.9 3.5 11.5 5 11.5 7.2v1.6H9.8v2.6h1.7V20.5H14v-9.1h2.6l.4-2.6H14Z" fill="currentColor"/>
+              </svg>
+            </a>
+
+            <a class="sharebtn icon" id="shareX" target="_blank" rel="noopener" aria-label="X" title="X">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M5 5.2h3.4l4.2 5.6 4.9-5.6H20l-6.2 7.1 6.6 8.5h-3.4l-4.8-6.2-5.4 6.2H4.4l7-8L5 5.2Z" fill="currentColor"/>
+              </svg>
+            </a>
+
+            <button class="sharebtn icon" id="shareCopy" type="button" aria-label="Copiar link" title="Copiar link">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 9.5h8.2c1 0 1.8.8 1.8 1.8v8.2c0 1-.8 1.8-1.8 1.8H9c-1 0-1.8-.8-1.8-1.8v-8.2c0-1 .8-1.8 1.8-1.8Z" stroke="currentColor" stroke-width="1.8"/>
+                <path d="M7 14.5H6c-1 0-1.8-.8-1.8-1.8V6.5c0-1 .8-1.8 1.8-1.8h6.2C13.2 4.7 14 5.5 14 6.5v1" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </button>
+
+            <button class="sharebtn icon" id="shareNative" type="button" style="display:none" aria-label="Compartir" title="Compartir">
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 3.8v9.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M8.7 7.1 12 3.8l3.3 3.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M6.5 12.2v6.3c0 1 .8 1.8 1.8 1.8h7.4c1 0 1.8-.8 1.8-1.8v-6.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+
+            <span class="sharetoast" id="shareToast">Link copiado</span>
+          </div>
+
+          <div class="event-info" id="eventInfo">
+            <h3>Sobre el evento</h3>
+            <div class="mut" id="aboutText" style="font-weight:800;">Info en breve. Por ahora: entrás, pagás y listo 😄</div>
+            <ul class="facts" id="facts"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="pad">
+          <h1 id="title">Cargando…</h1>
+          <div class="meta" id="meta"></div>
+          <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a class="btn" id="uberBtn" target="_blank" rel="noopener">🚗 Ver en Uber</a>
+          </div>
+
+          <div style="margin-top:14px;">
+            <div style="font-weight:950;">Compra rápida</div>
+            <div class="mut" style="font-weight:800;margin-top:4px;">Completá lo mínimo y te llevamos directo a pagar. Nada de vueltas.</div>
+
+            <div class="formgrid" style="margin-top:10px;">
+              <div class="full">
+                <label>Tipo de entrada</label>
+                <select id="ticketType"></select>
+                <div id="noTypes" class="notice" style="display:none;">
+                  Este evento todavía no tiene precios cargados.
+                  <div style="margin-top:10px;">
+                    <a class="btn primary" id="cfgBtn" href="/productor/dashboard?event={{ event_slug }}#precios" style="display:none;">⚙️ Configurar precios</a>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label>Cantidad</label>
+                <input id="qty" type="number" min="1" value="1" />
+              </div>
+              <div>
+                <label>DNI/CUIT</label>
+                <input id="taxId" placeholder="30947021" />
+              </div>
+              <div>
+                <label>Nombre y apellido</label>
+                <input id="name" placeholder="Tu nombre" />
+              </div>
+              <div>
+                <label>Teléfono</label>
+                <input id="phone" placeholder="+54 9 ..." />
+              </div>
+              <div class="full">
+                <label>Email</label>
+                <input id="email" placeholder="vos@mail.com" />
+              </div>
+              <div class="full">
+                <label>Dirección (opcional)</label>
+                <input id="addr" placeholder="Calle 123, Mendoza" />
+              </div>
+            </div>
+
+            <div class="summary">
+              <div class="row"><span>Precio unitario</span><span><strong id="unit">$ 0</strong></span></div>
+              <div class="row"><span>Cantidad</span><span><strong id="qtxt">1</strong></span></div>
+              <div class="row"><span>Subtotal</span><span><strong id="sub">$ 0</strong></span></div>
+              <div class="row"><span id="feeLabel">Service charge</span><span><strong id="fee">$ 0</strong></span></div>
+              <div class="row" style="margin-top:8px;"><span class="total">Total</span><span class="total" id="tot">$ 0</span></div>
+            </div>
+
+            <div style="margin-top:12px;display:flex;gap:10px;">
+              <button class="btn primary" id="payBtn">Pagar ahora</button>
+            </div>
+
+            <div id="err" class="notice" style="display:none;margin-top:10px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const EVENT_SLUG = {{ event_slug|tojson }};
+  let SERVICE_FEE_PCT = 15;
+
+  function money(cents){
+    try{ return (cents/100).toLocaleString('es-AR',{style:'currency',currency:'ARS'}); }catch(e){ return '$ ' + (cents/100); }
+  }
+  function esc(s){ return (s||'').toString().replace(/[&<>\"]/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;' }[c])); }
+
+  async function load(){
+    const r = await fetch('/api/events/' + encodeURIComponent(EVENT_SLUG));
+    if(!r.ok){
+      document.getElementById('title').textContent = 'Evento no encontrado';
+      return;
+    }
+    const e = await r.json();
+
+    if(typeof e.service_fee_pct === 'number') SERVICE_FEE_PCT = Math.round(e.service_fee_pct*100);
+
+    document.getElementById('title').textContent = e.title || e.slug || EVENT_SLUG;
+
+    const meta = [];
+    if(e.date_text) meta.push('🗓 ' + e.date_text);
+    if(e.time_text) meta.push('⏰ ' + e.time_text);
+    const loc = [e.venue, e.city].filter(Boolean).join(' · ');
+    if(loc) meta.push('📍 ' + loc);
+    document.getElementById('meta').textContent = meta.join('  ');
+
+    // Share links
+    const shareTitle = (e.title || e.slug || EVENT_SLUG);
+    const shareUrl = (window.location.href || '').split('#')[0];
+    const wa = 'https://wa.me/?text=' + encodeURIComponent(shareTitle + ' - ' + shareUrl);
+    const fb = 'https://www.facebook.com/sharer/sharer.php?u=' + encodeURIComponent(shareUrl);
+    const x = 'https://twitter.com/intent/tweet?url=' + encodeURIComponent(shareUrl) + '&text=' + encodeURIComponent(shareTitle);
+    const waEl = document.getElementById('shareWa'); if(waEl) waEl.href = wa;
+    const fbEl = document.getElementById('shareFb'); if(fbEl) fbEl.href = fb;
+    const xEl = document.getElementById('shareX'); if(xEl) xEl.href = x;
+
+    // Native share (mobile)
+    const nativeBtn = document.getElementById('shareNative');
+    if(nativeBtn && navigator.share){
+      nativeBtn.style.display = '';
+      nativeBtn.addEventListener('click', async ()=>{ try{ await navigator.share({title: shareTitle, url: shareUrl}); }catch(_e){} });
+    }
+
+    // Copy link
+    const toast = document.getElementById('shareToast');
+    const copyBtn = document.getElementById('shareCopy');
+    if(copyBtn){
+      copyBtn.addEventListener('click', async ()=>{
+        try{
+          await navigator.clipboard.writeText(shareUrl);
+        }catch(_){
+          const tmp = document.createElement('input');
+          tmp.value = shareUrl;
+          document.body.appendChild(tmp);
+          tmp.select();
+          document.execCommand('copy');
+          tmp.remove();
+        }
+        if(toast){
+          toast.style.display = '';
+          clearTimeout(window.__shareToastT);
+          window.__shareToastT = setTimeout(()=> toast.style.display='none', 1400);
+        }
+      });
+    }
+
+    // Sobre el evento
+    const aboutBits = [];
+    if(e.date_text) aboutBits.push('📅 ' + e.date_text);
+    if(loc) aboutBits.push('📍 ' + loc);
+    if(e.address) aboutBits.push('🧭 ' + e.address);
+    const about = aboutBits.join(' · ');
+    const aboutEl = document.getElementById('aboutText');
+    if(aboutEl) aboutEl.textContent = about || 'Info en breve. Por ahora: entrás, pagás y listo 😄';
+
+    const facts = [];
+    if(e.category) facts.push('🎭 ' + e.category);
+    if(e.badge) facts.push('✨ ' + e.badge);
+    const factsEl = document.getElementById('facts');
+    if(factsEl){ factsEl.innerHTML = facts.map(x => `<li>${esc(x)}</li>`).join(''); }
+
+    // Flyer + fallback automático
+    const flyerBox = document.getElementById('flyerBox');
+    const flyerUrl = (e.flyer_url || '').trim();
+    const heroBg = (e.hero_bg || '').trim();
+    if(flyerUrl){
+      flyerBox.style.setProperty('--flyer-bg', `url('${esc(flyerUrl)}')`);
+      flyerBox.innerHTML = `<img alt="Flyer del evento" src="${esc(flyerUrl)}" />`;
+    } else if(heroBg && (heroBg.startsWith('http://') || heroBg.startsWith('https://') || heroBg.startsWith('/'))){
+      flyerBox.style.setProperty('--flyer-bg', `url('${esc(heroBg)}')`);
+      flyerBox.innerHTML = `<img alt="Imagen del evento" src="${esc(heroBg)}" />`;
+    } else if(heroBg){
+      // hero_bg puede ser color o gradient; sirve perfecto como background para el blur
+      flyerBox.style.setProperty('--flyer-bg', `${esc(heroBg)}`);
+      flyerBox.innerHTML = `<div style="width:100%;height:100%;background:${esc(heroBg)}"></div>`;
+    } else {
+      flyerBox.style.setProperty('--flyer-bg', `url('/static/img/login_bg.jpg')`);
+      flyerBox.innerHTML = `<img alt="Imagen del evento" src="/static/img/login_bg.jpg" />`;
+    }
+
+    const addr = (e.address || loc || '').trim();
+    const uber = 'https://m.uber.com/ul/?action=setPickup&pickup=my_location&dropoff[formatted_address]=' + encodeURIComponent(addr);
+    document.getElementById('uberBtn').href = uber;
+
+    const sel = document.getElementById('ticketType');
+    sel.innerHTML = '';
+
+    const cfgBtn = document.getElementById('cfgBtn');
+    if(e.can_configure_prices){ cfgBtn.style.display = ''; }
+    cfgBtn.href = '/productor/dashboard?event=' + encodeURIComponent(EVENT_SLUG) + '#precios';
+
+    let types = [];
+    try{
+      const tr = await fetch('/api/events/' + encodeURIComponent(EVENT_SLUG) + '/ticket-types');
+      if(tr.ok) types = await tr.json();
+    }catch(_){ types = []; }
+
+    if(!Array.isArray(types)) types = [];
+
+    if(!types.length){
+      document.getElementById('noTypes').style.display = '';
+      sel.style.display = 'none';
+      document.getElementById('payBtn').disabled = true;
+      document.getElementById('payBtn').style.opacity = 0.7;
+    } else {
+      sel.style.display = '';
+      document.getElementById('noTypes').style.display = 'none';
+      types.forEach(t=>{
+        const o=document.createElement('option');
+        o.value=t.id;
+        o.textContent=t.label || (t.name || 'Entrada');
+        o.dataset.price = (t.price_cents || 0);
+        sel.appendChild(o);
+      });
+    }
+
+    // Prefill buyer
+    const pre = {{ buyer_prefill|tojson }};
+    if(pre){
+      if(pre.dni) document.getElementById('taxId').value = pre.dni;
+      if(pre.name) document.getElementById('name').value = pre.name;
+      if(pre.phone) document.getElementById('phone').value = pre.phone;
+      if(pre.email) document.getElementById('email').value = pre.email;
+    }
+
+    function calc(){
+      const opt = sel.options[sel.selectedIndex];
+      const unit = Number(opt?.dataset?.price || 0);
+      const qty = Math.max(1, Number(document.getElementById('qty').value||1));
+      const sub = unit * qty;
+      const fee = Math.round(sub * (SERVICE_FEE_PCT/100));
+      const tot = sub + fee;
+      document.getElementById('unit').textContent = money(unit);
+      document.getElementById('qtxt').textContent = String(qty);
+      document.getElementById('sub').textContent = money(sub);
+      document.getElementById('feeLabel').textContent = 'Service charge (' + SERVICE_FEE_PCT + '%)';
+      document.getElementById('fee').textContent = money(fee);
+      document.getElementById('tot').textContent = money(tot);
+    }
+    sel.addEventListener('change', calc);
+    document.getElementById('qty').addEventListener('input', calc);
+    calc();
+
+    document.getElementById('payBtn').addEventListener('click', async ()=>{
+      const payload = {
+        event_slug: EVENT_SLUG,
+        ticket_type_id: Number(sel.value||0),
+        qty: Math.max(1, Number(document.getElementById('qty').value||1)),
+        tax_id: document.getElementById('taxId').value || '',
+        name: document.getElementById('name').value || '',
+        phone: document.getElementById('phone').value || '',
+        email: document.getElementById('email').value || '',
+        address: document.getElementById('addr').value || ''
+      };
+      const rr = await fetch('/api/orders/create', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      const out = await rr.json().catch(()=>({ok:false}));
+      if(!rr.ok || !out.ok){
+        const msg = out.error || 'No se pudo crear la orden';
+        const el = document.getElementById('err');
+        el.style.display = '';
+        el.textContent = msg;
+        return;
+      }
+      location.href = '/entradas/pago?order_id=' + encodeURIComponent(out.order_id);
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+      await fetch('/api/auth/logout', {method:'POST'});
+      location.href='/login';
+    });
+  }
+
+  load();
+</script>
+<footer class="site-footer">
+  <div class="footer-top">
+    <div class="socials">
+      <a href="#" aria-label="Facebook">f</a>
+      <a href="#" aria-label="X">x</a>
+      <a href="#" aria-label="Instagram">◉</a>
+    </div>
+  </div>
+
+  <div class="footer-bottom">
+    <div class="links">
+      <a href="/legal/privacidad">Política de Privacidad</a>
+      <span>·</span>
+      <a href="/legal/terminos">Términos y Condiciones</a>
+      <span>·</span>
+      <a href="/legal/defensa">Defensa del Consumidor</a>
+    </div>
+    <div class="legal">
+      TicketFlow · Entradas — Todos los derechos reservados
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

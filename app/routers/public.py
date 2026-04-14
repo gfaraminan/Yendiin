@@ -12,6 +12,7 @@ except Exception:  # pragma: no cover
 
 
 from app.db import get_conn
+from app.brand import get_brand_config
 
 router = APIRouter(tags=["public"])
 
@@ -125,8 +126,18 @@ def public_logout(request: Request):
 
 @router.get("/config")
 def public_config():
+    default_public_tenant = (os.getenv("DEFAULT_PUBLIC_TENANT") or os.getenv("VITE_DEFAULT_PUBLIC_TENANT") or "default").strip() or "default"
+    brand = get_brand_config()
     return {
-        "google_client_id": (os.getenv("VITE_GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+        "google_client_id": (os.getenv("VITE_GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID") or "").strip(),
+        "default_public_tenant": default_public_tenant,
+        "public_tenant": default_public_tenant,
+        "brand_name": (os.getenv("VITE_BRAND_NAME") or os.getenv("BRAND_NAME") or "").strip(),
+        "brand": {
+            "name": brand.name,
+            "support_email": brand.support_email,
+            "legal_name": brand.legal_name,
+        },
     }
 
 

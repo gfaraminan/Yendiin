@@ -178,6 +178,10 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
+import { brandConfig, makeBrandPageTitle } from "./config/brand";
+import { featureFlags } from "./config/features";
+import { legalConfig } from "./config/legal";
+import { defaultRuntimeConfig, resolvePublicTenant } from "./config/runtime";
 import {
   downloadQrPng,
   downloadTicketsPdf,
@@ -316,7 +320,9 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
   const googleButtonRef = useRef(null);
 
   // Method: "google" | "email"
-  const [loginMethod, setLoginMethod] = useState("google");
+  const allowGoogleLogin = featureFlags.googleLogin;
+  const allowMagicLinkLogin = featureFlags.magicLinkLogin;
+  const [loginMethod, setLoginMethod] = useState(allowGoogleLogin ? "google" : "email");
 
   // Email magic link state
   const [email, setEmail] = useState("");
@@ -366,13 +372,13 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
     (async () => {
       try {
         // Si no hay client_id, igual dejamos el modal usable por Email
-        if (googleClientId) {
+        if (allowGoogleLogin && googleClientId) {
           await ensureScript();
         }
         setReady(true);
 
         // Inicializa Google Identity si hay client_id
-        if (googleClientId && window.google?.accounts?.id) {
+        if (allowGoogleLogin && googleClientId && window.google?.accounts?.id) {
           window.google.accounts.id.initialize({
             client_id: googleClientId,
             use_fedcm_for_prompt: false,
@@ -420,10 +426,10 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
         setReady(false);
       }
     })();
-  }, [open, googleClientId]);
+  }, [open, googleClientId, allowGoogleLogin]);
 
   useEffect(() => {
-    if (!open || loginMethod !== "google") return;
+    if (!open || !allowGoogleLogin || loginMethod !== "google") return;
     if (!googleClientId || !ready || !window.google?.accounts?.id || !googleButtonRef.current) return;
 
     try {
@@ -440,7 +446,12 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
     } catch (e) {
       console.error(e);
     }
-  }, [open, loginMethod, googleClientId, ready]);
+  }, [open, loginMethod, googleClientId, ready, allowGoogleLogin]);
+
+  useEffect(() => {
+    if (!allowGoogleLogin && allowMagicLinkLogin) setLoginMethod("email");
+    if (allowGoogleLogin && !allowMagicLinkLogin) setLoginMethod("google");
+  }, [allowGoogleLogin, allowMagicLinkLogin]);
 
   const sendMagicLink = async () => {
     const em = String(email || "").trim().toLowerCase();
@@ -492,7 +503,7 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
         </div>
 
         <div className="space-y-4">
-          {loginMethod === "google" && (
+          {allowGoogleLogin && loginMethod === "google" && (
             <>
               <div className="flex items-center justify-center">
                 <div className="rounded-full overflow-hidden leading-none" ref={googleButtonRef} />
@@ -510,16 +521,18 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
                 </div>
               )}
 
-              <button
-                onClick={() => setLoginMethod("email")}
-                className="w-full min-h-[44px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition-all flex items-center justify-center px-5"
-              >
-                <span className="text-[13px] sm:text-[14px] font-black uppercase tracking-wide leading-none text-white/90">Continuar con Mail</span>
-              </button>
+              {allowMagicLinkLogin && (
+                <button
+                  onClick={() => setLoginMethod("email")}
+                  className="w-full min-h-[44px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition-all flex items-center justify-center px-5"
+                >
+                  <span className="text-[13px] sm:text-[14px] font-black uppercase tracking-wide leading-none text-white/90">Continuar con Mail</span>
+                </button>
+              )}
             </>
           )}
 
-          {loginMethod === "email" && (
+          {allowMagicLinkLogin && loginMethod === "email" && (
             <>
               <div className="space-y-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
@@ -571,12 +584,14 @@ const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
                 </div>
               </div>
 
-              <button
-                onClick={() => setLoginMethod("google")}
-                className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
-              >
-                Volver a Google
-              </button>
+              {allowGoogleLogin && (
+                <button
+                  onClick={() => setLoginMethod("google")}
+                  className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                >
+                  Volver a Google
+                </button>
+              )}
             </>
           )}
 
@@ -616,7 +631,7 @@ const EditorModal = ({
     setEditFormData(null);
   };
   // --- Tickets (sale-items) & Sellers helpers ---
-  const tenantId = editFormData?.tenant_id || "default";
+  const tenantId = editFormData?.tenant_id || defaultRuntimeConfig.publicTenant;
   // Para evento nuevo, el slug NO se considera válido hasta que el backend lo persista.
   const eventSlug = editFormData?._is_new ? "" : (editFormData?.slug || editFormData?.event_slug || editFormData?.eventSlug || "");
 
@@ -813,7 +828,7 @@ const EditorModal = ({
     fd.append("file", file);
 
     const r = await fetch(
-      `/api/producer/events/${encodeURIComponent(slug)}/flyer?tenant_id=${encodeURIComponent("default")}`,
+      `/api/producer/events/${encodeURIComponent(slug)}/flyer?tenant_id=${encodeURIComponent(tenantId)}`,
       { method: "POST", body: fd, credentials: "include" }
     );
     const data = await readJsonOrText(r);
@@ -870,7 +885,7 @@ const EditorModal = ({
   const connectMpOauth = async () => {
     try {
       setMpOauthBusy(true);
-      const tenantIdForOauth = editFormData?.tenant_id || "default";
+      const tenantIdForOauth = editFormData?.tenant_id || defaultRuntimeConfig.publicTenant;
       const r = await fetch(`/api/payments/mp/oauth/start?tenant=${encodeURIComponent(tenantIdForOauth)}`, {
         credentials: "include",
       });
@@ -1392,9 +1407,10 @@ const EditorModal = ({
     `${window.location.origin}/api/tickets/orders/${encodeURIComponent(String(orderId || "").trim())}/pdf`;
 
   const shareOrderPdfByWhatsapp = (orderId) => {
+    if (!featureFlags.whatsappShare) return;
     const oid = String(orderId || "").trim();
     if (!oid) return;
-    const text = `🎟️ TicketPro\nOrden: ${oid}\nPDF: ${orderPdfUrl(oid)}`;
+    const text = `🎟️ ${brandConfig.shortName}\nOrden: ${oid}\nPDF: ${orderPdfUrl(oid)}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
   };
 
@@ -1410,7 +1426,7 @@ const EditorModal = ({
     const email = window.prompt("¿A qué email enviamos el PDF?", String(defaultEmail || "").trim());
     if (!email) return;
     try {
-      const qs = new URLSearchParams({ tenant_id: isStaffMode ? "default" : tenantId });
+      const qs = new URLSearchParams({ tenant_id: isStaffMode ? defaultRuntimeConfig.publicTenant : tenantId });
       const payload = { to_email: String(email).trim() };
       const headers = { "Content-Type": "application/json" };
       const staffToken = String(staffAccess?.token || "").trim();
@@ -1816,7 +1832,7 @@ const EditorModal = ({
                       <div className="text-[12px] font-black">
                         Acepto {" "}
                         <a
-                          href="/static/legal/terminos-y-condiciones-productor.pdf"
+                          href={legalConfig.producerTermsUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="underline"
@@ -2397,7 +2413,7 @@ const EditorModal = ({
                     <div className="text-sm font-semibold text-white">
                       Acepto{" "}
                       <a
-                        href="/static/legal/terminos-y-condiciones-productor.pdf"
+                        href={legalConfig.producerTermsUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="underline"
@@ -2461,7 +2477,7 @@ const EditorModal = ({
                                 <div className="text-sm font-semibold text-amber-100">
                                   Para guardar cambios necesitás aceptar{" "}
                                   <a
-                                    href="/static/legal/terminos-y-condiciones-productor.pdf"
+                                    href={legalConfig.producerTermsUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="underline"
@@ -2587,7 +2603,7 @@ const EditorModal = ({
                                   rel="noreferrer"
                                   className="rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-white/85 hover:bg-white/10"
                                 >
-                                  ver PDF TicketPro
+                                  ver PDF
                                 </a>
                                 <button
                                   type="button"
@@ -2652,7 +2668,7 @@ const EditorModal = ({
                                 rel="noreferrer"
                                 className="rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-white/85 hover:bg-white/10"
                               >
-                                ver PDF TicketPro
+                                ver PDF
                               </a>
                               <button
                                 type="button"
@@ -2851,7 +2867,7 @@ const EditorModal = ({
                                 <div className="text-sm font-semibold text-amber-100">
                                   Para guardar cambios necesitás aceptar{" "}
                                   <a
-                                    href="/static/legal/terminos-y-condiciones-productor.pdf"
+                                    href={legalConfig.producerTermsUrl}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="underline"
@@ -3008,6 +3024,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [me, setMe] = useState(null);
   const [googleClientId, setGoogleClientId] = useState("");
+  const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -3079,17 +3096,32 @@ export default function App() {
     }
   };
 
-  // Config público (Google Client ID)
+  const publicTenant = useMemo(() => resolvePublicTenant(runtimeConfig), [runtimeConfig]);
+
+  useEffect(() => {
+    document.title = makeBrandPageTitle("Inicio");
+  }, []);
+
+  // Config público (Google Client ID + tenant público opcional)
   useEffect(() => {
     fetch("/api/public/config")
       .then((r) => r.json())
-      .then((cfg) => setGoogleClientId(cfg?.google_client_id || ""))
-      .catch(() => setGoogleClientId(""));
+      .then((cfg) => {
+        setGoogleClientId(cfg?.google_client_id || "");
+        setRuntimeConfig((prev) => ({
+          ...prev,
+          public_tenant: cfg?.public_tenant || cfg?.default_public_tenant || prev.public_tenant || "",
+          default_public_tenant: cfg?.default_public_tenant || prev.default_public_tenant || "",
+        }));
+      })
+      .catch(() => {
+        setGoogleClientId("");
+      });
   }, []);
 
   const refreshPublicEvents = async () => {
     try {
-      const r = await fetch("/api/public/events?tenant=default", { credentials: "include" });
+      const r = await fetch(`/api/public/events?tenant=${encodeURIComponent(publicTenant)}`, { credentials: "include" });
       const data = await readJsonOrText(r);
       if (r.ok && Array.isArray(data) && data.length) {
         setEvents(
@@ -3109,7 +3141,7 @@ export default function App() {
 
   useEffect(() => {
     refreshPublicEvents();
-  }, []);
+  }, [publicTenant]);
 
   useEffect(() => {
     try {
@@ -3137,7 +3169,7 @@ export default function App() {
   const openPublicEvent = async (slug) => {
     try {
       setLoading(true);
-      const r = await fetch(`/api/public/events/${encodeURIComponent(slug)}?tenant=default`, {
+      const r = await fetch(`/api/public/events/${encodeURIComponent(slug)}?tenant=${encodeURIComponent(publicTenant)}`, {
         credentials: "include",
       });
       const data = await readJsonOrText(r);
@@ -3146,7 +3178,7 @@ export default function App() {
         let items = data.items || [];
         try {
           const rItems = await fetch(
-            `/api/public/sale-items?tenant=default&event_slug=${encodeURIComponent(slug)}`,
+            `/api/public/sale-items?tenant=${encodeURIComponent(publicTenant)}&event_slug=${encodeURIComponent(slug)}`,
             { credentials: "include" }
           );
           const dItems = await readJsonOrText(rItems);
@@ -3225,7 +3257,7 @@ export default function App() {
   // -------------------------
   // Producer analytics (real backend)
   // -------------------------
-  const [tenantId] = useState("default");
+  const tenantId = publicTenant;
   const [producerEvents, setProducerEvents] = useState([]); // [{ event_slug, orders_count, total_cents, bar_cents, tickets_cents }]
   const [producerEventsLoading, setProducerEventsLoading] = useState(false);
   const [producerEventsError, setProducerEventsError] = useState(null);
@@ -3376,7 +3408,7 @@ const [selectedTicket, setSelectedTicket] = useState(null);
     setMyAssetsLoading(true);
     setMyAssetsError(null);
     try {
-      const r = await fetch(`/api/orders/my-assets?tenant=default`, { credentials: "include" });
+      const r = await fetch(`/api/orders/my-assets?tenant=${encodeURIComponent(publicTenant)}`, { credentials: "include" });
       const data = await readJsonOrText(r);
       if (!r.ok || !data?.ok) throw new Error(data?.detail || "No se pudieron cargar tus tickets");
       setMyAssets(Array.isArray(data.assets) ? data.assets : []);
@@ -3393,7 +3425,7 @@ const [selectedTicket, setSelectedTicket] = useState(null);
   };
 
   const requestCancel = async ({ kind, id, order_id, reason }) => {
-    const r = await fetch(`/api/orders/cancel-request?tenant=default`, {
+    const r = await fetch(`/api/orders/cancel-request?tenant=${encodeURIComponent(publicTenant)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -3405,7 +3437,7 @@ const [selectedTicket, setSelectedTicket] = useState(null);
   };
 
   const transferOrder = async ({ order_id, ticket_id, to_email }) => {
-    const r = await fetch(`/api/orders/transfer-order?tenant=default`, {
+    const r = await fetch(`/api/orders/transfer-order?tenant=${encodeURIComponent(publicTenant)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -3609,12 +3641,12 @@ const refreshMe = async () => {
     const safeSlug = String(slug || "").trim();
     if (!safeSlug) return;
     try {
-      const eventRes = await fetch(`/api/public/events/${encodeURIComponent(safeSlug)}?tenant=default`, {
+      const eventRes = await fetch(`/api/public/events/${encodeURIComponent(safeSlug)}?tenant=${encodeURIComponent(publicTenant)}`, {
         credentials: "include",
       });
       const eventData = await readJsonOrText(eventRes);
       const itemsRes = await fetch(
-        `/api/public/sale-items?tenant=default&event_slug=${encodeURIComponent(safeSlug)}`,
+        `/api/public/sale-items?tenant=${encodeURIComponent(publicTenant)}&event_slug=${encodeURIComponent(safeSlug)}`,
         { credentials: "include" }
       );
       const itemsData = await readJsonOrText(itemsRes);
@@ -3657,7 +3689,7 @@ const refreshMe = async () => {
     setStaffPosError("");
     setStaffPosResult(null);
     try {
-      const qs = new URLSearchParams({ tenant_id: "default" });
+      const qs = new URLSearchParams({ tenant_id: publicTenant });
       const res = await fetchJson(`/api/producer/events/${encodeURIComponent(eventSlug)}/pos-sale?${qs.toString()}`, {
         method: "POST",
         headers: {
@@ -3665,7 +3697,7 @@ const refreshMe = async () => {
           "x-staff-token": staffToken,
         },
         body: JSON.stringify({
-          tenant_id: "default",
+          tenant_id: publicTenant,
           sale_item_id: saleItemId,
           quantity,
           payment_method: String(staffPosDraft.payment_method || "cash").trim().toLowerCase(),
@@ -4354,7 +4386,7 @@ setLoading(true);
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          tenant_id: "default",
+          tenant_id: publicTenant,
           event_slug: selectedEvent.slug,
           sale_item_id: selectedTicket.id,
           quantity,
@@ -4385,7 +4417,7 @@ setLoading(true);
 
       // 2) Si es Mercado Pago: crear preferencia y redirigir al checkout
       if ((method || "").toLowerCase() === "mp") {
-        const prefRes = await fetch(`/api/payments/mp/create-preference?tenant=default`, {
+        const prefRes = await fetch(`/api/payments/mp/create-preference?tenant=${encodeURIComponent(publicTenant)}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -4457,7 +4489,7 @@ setLoading(true);
       tries += 1;
       setSuccessTries(tries);
       try {
-        const r = await fetch(`/api/orders/my-assets?tenant=default`, { credentials: "include" });
+        const r = await fetch(`/api/orders/my-assets?tenant=${encodeURIComponent(publicTenant)}`, { credentials: "include" });
         const data = await readJsonOrText(r);
         if (r.ok && data?.ok) {
           const assets = Array.isArray(data.assets) ? data.assets : [];
@@ -4544,7 +4576,7 @@ setLoading(true);
     try {
       if (!editFormData) return;
       setMpOauthBusy(true);
-      const tenantIdForOauth = editFormData?.tenant_id || "default";
+      const tenantIdForOauth = editFormData?.tenant_id || defaultRuntimeConfig.publicTenant;
       const r = await fetch(`/api/payments/mp/oauth/start?tenant=${encodeURIComponent(tenantIdForOauth)}`, {
         credentials: "include",
       });
@@ -4657,7 +4689,7 @@ setLoading(true);
   const uploadFlyerForEvent = async (slug, file) => {
     if (!slug) throw new Error("slug requerido para subir flyer");
     if (!file) throw new Error("archivo requerido para subir flyer");
-    const tenantId = editFormData?.tenant_id || "default";
+    const tenantId = editFormData?.tenant_id || defaultRuntimeConfig.publicTenant;
     const fd = new FormData();
     fd.append("file", file);
 
@@ -4895,7 +4927,7 @@ if (closeOnSuccess) {
 
               <div className="min-w-0">
                 <div className="text-white font-black uppercase italic tracking-tight text-2xl sm:text-3xl leading-none truncate">
-                  Ticket<span className="text-indigo-400">Pro</span>
+                  {brandConfig.headerLabel}
                 </div>
               </div>
 
@@ -4906,7 +4938,7 @@ if (closeOnSuccess) {
                     view === "public" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
                   }`}
                 >
-                  Cartelera
+                  {brandConfig.shortName}
                 </button>
 
                 <button
@@ -4937,7 +4969,7 @@ if (closeOnSuccess) {
                     }`}
                     title="Panel interno para staff"
                   >
-                    Administrador
+                    {(featureFlags.brandedAdminLabels ? brandConfig.adminPanelLabel : "Administrador")}
                   </button>
                 )}
               </nav>
@@ -5010,7 +5042,7 @@ if (closeOnSuccess) {
                 }`}
                 title="Panel interno para staff"
               >
-                Administrador
+                {(featureFlags.brandedAdminLabels ? brandConfig.adminPanelLabel : "Administrador")}
               </button>
             )}
           </nav>
@@ -5600,32 +5632,34 @@ if (closeOnSuccess) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
               <div>
                 <h1 className="text-5xl font-black uppercase italic tracking-tight">
-                  Cartelera <span className="text-indigo-600">Viva</span>
+                  {brandConfig.heroTitle}
                 </h1>
                 <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mt-2">
-                  Comprá tu ticket · QR antifraude · acceso rápido
+                  {brandConfig.heroSubtitle}
                 </p>
               </div>
             </div>
 
             {/* DESTACADOS / CAROUSEL */}
-            <div className="mt-10">
-              <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                Destacados
+            {featureFlags.featuredCarousel && (
+              <div className="mt-10">
+                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                  Destacados
+                </div>
+                <div className="text-2xl font-black uppercase mt-2">Eventos recomendados</div>
+                <div className="mt-4">
+                  <FeaturedCarousel
+                    events={filteredEvents}
+                    formatMoneyFn={formatMoney}
+                    onOpen={(ev) => {
+                      setQuantity(1);
+                      setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
+                      openPublicEvent(ev.slug);
+                    }}
+                  />
+                </div>
               </div>
-              <div className="text-2xl font-black uppercase mt-2">Eventos recomendados</div>
-              <div className="mt-4">
-                <FeaturedCarousel
-                  events={filteredEvents}
-                  formatMoneyFn={formatMoney}
-                  onOpen={(ev) => {
-                    setQuantity(1);
-                    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                    openPublicEvent(ev.slug);
-                  }}
-                />
-              </div>
-            </div>
+            )}
 
 
 
@@ -6161,7 +6195,7 @@ if (closeOnSuccess) {
                       <div className="text-[11px] text-neutral-300 leading-relaxed">
                         Acepto los {" "}
                         <a
-                          href="/static/legal/terminos-y-condiciones.pdf"
+                          href={legalConfig.termsUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="text-white font-bold underline"
@@ -6171,7 +6205,7 @@ if (closeOnSuccess) {
                         </a>{" "}
                         y la{" "}
                         <a
-                          href="/static/legal/politica-de-privacidad.pdf"
+                          href={legalConfig.privacyUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="underline"
@@ -7506,7 +7540,7 @@ if (closeOnSuccess) {
                       rel="noreferrer"
                       className="rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-white/85 hover:bg-white/10"
                     >
-                      ver PDF TicketPro
+                      ver PDF
                     </a>
                     <button
                       type="button"
@@ -7519,7 +7553,7 @@ if (closeOnSuccess) {
                       type="button"
                       className="rounded-lg border border-white/20 bg-white/5 px-2 py-1 text-[11px] text-white/85 hover:bg-white/10"
                       onClick={() => {
-                        const text = `🎟️ TicketPro\nOrden: ${staffOrderId}\nPDF: ${window.location.origin}${staffOrderPdfUrl}`;
+                        const text = `🎟️ ${brandConfig.shortName}\nOrden: ${staffOrderId}\nPDF: ${window.location.origin}${staffOrderPdfUrl}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
                       }}
                     >
@@ -7576,14 +7610,14 @@ if (closeOnSuccess) {
                   Panel <span className="text-indigo-600">Administrador</span>
                 </h1>
                 <p className="text-[11px] text-white/60 mt-2 max-w-2xl leading-relaxed">
-                  Panel interno para admins TicketPro. Incluye Soporte IA + dashboard + operaciones de eventos.
+                  Panel interno para admins. Incluye Soporte IA + dashboard + operaciones de eventos.
                 </p>
               </div>
             </div>
 
             <div className="p-5 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 mb-6">
               <div className="flex items-center justify-between gap-3 mb-3">
-                <div className="text-[9px] font-black uppercase tracking-widest text-indigo-200">NUEVO · Consola Admin TicketPro</div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-indigo-200">NUEVO · Consola Admin</div>
                 <div className="text-[10px] text-indigo-100/80">tenant: <b>{tenantId}</b></div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">

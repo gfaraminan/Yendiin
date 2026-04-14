@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Mail, X } from "lucide-react";
 import { UI } from "../app/constants";
+import { featureFlags } from "../config/features";
 
 export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClientId }) {
   const [ready, setReady] = useState(false);
@@ -9,6 +10,13 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const allowGoogleLogin = featureFlags.googleLogin;
+  const allowMagicLinkLogin = featureFlags.magicLinkLogin;
+
+  useEffect(() => {
+    if (!allowGoogleLogin && allowMagicLinkLogin) setTab("email");
+    if (allowGoogleLogin && !allowMagicLinkLogin) setTab("google");
+  }, [allowGoogleLogin, allowMagicLinkLogin]);
 
   const readJsonOrText = async (r) => {
     const ct = (r.headers.get("content-type") || "").toLowerCase();
@@ -52,12 +60,12 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
 
     (async () => {
       try {
-        if (googleClientId) {
+        if (allowGoogleLogin && googleClientId) {
           await ensureScript();
         }
         setReady(true);
 
-        if (googleClientId && window.google?.accounts?.id) {
+        if (allowGoogleLogin && googleClientId && window.google?.accounts?.id) {
           window.google.accounts.id.initialize({
             client_id: googleClientId,
             callback: async (resp) => {
@@ -145,6 +153,8 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
   };
 
   if (!open) return null;
+  const showGoogleTab = allowGoogleLogin;
+  const showEmailTab = allowMagicLinkLogin;
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
@@ -162,7 +172,8 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
         </div>
 
         <div className="flex gap-2 mb-5">
-          <button
+          {showGoogleTab && (
+            <button
             onClick={() => {
               if (tab === "google" && googleClientId && window.google?.accounts?.id) {
                 try {
@@ -181,7 +192,9 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
           >
             Google
           </button>
-          <button
+          )}
+          {showEmailTab && (
+            <button
             onClick={() => setTab("email")}
             className={`flex-1 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
               tab === "email"
@@ -191,10 +204,11 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
           >
             Email
           </button>
+          )}
         </div>
 
         <div className="space-y-4">
-          {tab === "google" && (
+          {showGoogleTab && tab === "google" && (
             <>
               <div className="w-full flex justify-center">
                 <div id="googleBtn" className="min-h-[44px]" />
@@ -232,7 +246,7 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
             </>
           )}
 
-          {tab === "email" && (
+          {showEmailTab && tab === "email" && (
             <>
               <div className="space-y-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Magic link</div>

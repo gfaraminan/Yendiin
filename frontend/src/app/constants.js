@@ -1,3 +1,5 @@
+import { brandConfig } from "../config/brand";
+
 export const EVENT_DRAFT_KEY = "ticketera.newEventDraft.v1";
 
 export const UI = {
@@ -25,8 +27,8 @@ export const FALLBACK_FLYER =
     <rect width='1200' height='800' fill='url(#g)'/>
     <circle cx='980' cy='260' r='160' fill='rgba(255,255,255,0.10)'/>
     <circle cx='820' cy='480' r='220' fill='rgba(255,255,255,0.06)'/>
-    <text x='80' y='160' fill='rgba(255,255,255,0.78)' font-size='54' font-family='Inter,Arial' font-weight='900'>TICKETERA</text>
-    <text x='80' y='225' fill='rgba(255,255,255,0.90)' font-size='86' font-family='Inter,Arial' font-weight='900'>TicketPro</text>
+    <text x='80' y='160' fill='rgba(255,255,255,0.78)' font-size='54' font-family='Inter,Arial' font-weight='900'>${String(brandConfig.shortName || "").toUpperCase()}</text>
+    <text x='80' y='225' fill='rgba(255,255,255,0.90)' font-size='86' font-family='Inter,Arial' font-weight='900'>${brandConfig.name}</text>
     <text x='80' y='315' fill='rgba(255,255,255,0.55)' font-size='22' font-family='Inter,Arial' font-weight='700'>EVENTO · IMAGEN NO DISPONIBLE</text>
   </svg>
 `);

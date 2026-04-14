@@ -16,6 +16,7 @@ from fastapi.responses import HTMLResponse
 from itsdangerous import URLSafeTimedSerializer, BadSignature, BadTimeSignature, SignatureExpired
 
 from app.db import get_conn
+from app.brand import get_brand_config
 from app.mailer import send_email
 from app.settings import SESSION_SECRET
 
@@ -553,6 +554,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     logo_path = os.path.join("static", "favicon-192.png")
+    brand = get_brand_config()
 
     def _fmt_date(v: Any) -> str:
         if v is None:
@@ -582,7 +584,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
         if os.path.exists(logo_path):
             c.drawImage(ImageReader(logo_path), 40, height - 88, width=36, height=36, mask="auto")
         c.setFont("Helvetica-Bold", 18)
-        c.drawString(84, height - 64, "TicketPro")
+        c.drawString(84, height - 64, brand.name)
         c.setFont("Helvetica", 10)
         c.drawString(84, height - 80, "Entrada confirmada")
 
@@ -1443,6 +1445,7 @@ async def mp_webhook(request: Request):
         allow_resend = os.getenv("MP_WEBHOOK_RESEND_EMAIL", "0").strip() == "1"
         if buyer_email and (allow_resend or not already_paid):
             base = _request_base_url(request)
+            brand = get_brand_config(base)
             mis_path = os.getenv("MIS_TICKETS_PATH", "/#/mis-tickets").strip() or "/#/mis-tickets"
             if not mis_path.startswith("/"):
                 mis_path = "/" + mis_path
@@ -1462,9 +1465,9 @@ async def mp_webhook(request: Request):
             event_address = first_ticket.get("event_address") or "-"
             qty = len(ticket_rows or [])
 
-            subject = "✅ Compra confirmada en TicketPro — tus QRs y entradas"
+            subject = f"✅ Compra confirmada en {brand.name} — tus QRs y entradas"
             text_msg = (
-                "TicketPro\n"
+                f"{brand.name}\n"
                 "Compra confirmada\n\n"
                 f"Evento: {event_title}\n"
                 f"Titular: {buyer_label}\n"
@@ -1476,13 +1479,12 @@ async def mp_webhook(request: Request):
                 f"• Ver Mis Tickets: {mis_url}\n\n"
                 "Adjuntamos el PDF con el resumen y tus QRs para ingresar.\n"
                 + (f"\n(Nota: se adjuntaron {len(qr_atts)} QRs de {len(ticket_rows)} por límite de adjuntos.)\n" if extra else "")
-                + "\nContacto TicketPro:\n"
-                + "• Soporte: soporte@ticketpro.com.ar\n"
-                + "• Comercial: hola@ticketpro.com.ar\n"
-                + "• Web: https://ticketpro.com.ar\n"
+                + f"\nContacto {brand.name}:\n"
+                + f"• Soporte: {brand.support_email}\n"
+                + f"• Web: {brand.web_url}\n"
                 + f"• Términos y Condiciones: {terms_url}\n"
                 + f"• Política de Privacidad: {privacy_url}\n\n"
-                + "TicketPro es una marca operada por The Brain Lab SAS.\n"
+                + f"{brand.name} es una marca operada por {brand.legal_name}.\n"
             )
 
             extra_html = ""
@@ -1495,7 +1497,7 @@ async def mp_webhook(request: Request):
               <div style="max-width:620px; margin:0 auto; background:#ffffff;
                           border-radius:18px; padding:0; border:1px solid #e5e7eb; overflow:hidden;">
                 <div style="background:#0f172a; padding:18px 24px;">
-                  <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">TICKET<span style='color:#818cf8;'>PRO</span></div>
+                  <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">{brand.name}</div>
                   <div style="color:#cbd5e1; font-size:12px; margin-top:4px;">Confirmación de compra</div>
                 </div>
 
@@ -1535,10 +1537,10 @@ async def mp_webhook(request: Request):
                 </div>
 
                 <div style="padding:16px 24px; border-top:1px solid #e5e7eb; background:#f8fafc; color:#475569; font-size:12px; line-height:1.6;">
-                  <div><strong>Contacto TicketPro</strong></div>
-                  <div>Soporte: <a href="mailto:soporte@ticketpro.com.ar" style="color:#334155;">soporte@ticketpro.com.ar</a> · Comercial: <a href="mailto:hola@ticketpro.com.ar" style="color:#334155;">hola@ticketpro.com.ar</a></div>
-                  <div>Web: <a href="https://ticketpro.com.ar" style="color:#334155;">ticketpro.com.ar</a></div>
-                  <div style="margin-top:8px; color:#64748b;">TicketPro es una marca operada por <strong>The Brain Lab SAS</strong>.</div>
+                  <div><strong>Contacto {brand.name}</strong></div>
+                  <div>Soporte: <a href="mailto:{brand.support_email}" style="color:#334155;">{brand.support_email}</a></div>
+                  <div>Web: <a href="{brand.web_url}" style="color:#334155;">{brand.web_url}</a></div>
+                  <div style="margin-top:8px; color:#64748b;">{brand.name} es una marca operada por <strong>{brand.legal_name}</strong>.</div>
                   <div style="margin-top:6px;">
                     <a href="{terms_url}" style="color:#334155;">Términos y Condiciones</a>
                     <span style="color:#94a3b8;"> · </span>

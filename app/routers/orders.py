@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from app.db import get_conn as db_get_conn
+from app.brand import get_brand_config
 from app.mailer import send_email
 from app.staff_auth import require_staff_token_for_event
 
@@ -125,13 +126,14 @@ def _send_transfer_notification_email(
     event_slug: str = "",
     ticket_id: str = "",
 ) -> None:
+    brand = get_brand_config()
     event_label = event_slug or "tu evento"
     from_label = from_email or "otro usuario"
     ticket_label = ticket_id or "todos los tickets de la orden"
-    subject = f"[TicketPro] Te transfirieron tickets · Orden {order_id}"
+    subject = f"[{brand.name}] Te transfirieron tickets · Orden {order_id}"
     text = (
         "¡Hola!\n\n"
-        f"{from_label} te transfirió tickets en TicketPro.\n"
+        f"{from_label} te transfirió tickets en {brand.name}.\n"
         f"Orden: {order_id}\n"
         f"Evento: {event_label}\n"
         f"Tickets transferidos: {ticket_label}\n\n"
@@ -140,7 +142,7 @@ def _send_transfer_notification_email(
     html = f"""
     <div style=\"font-family:Arial,sans-serif; line-height:1.5; color:#111;\">
       <h2>Te transfirieron tickets</h2>
-      <p><strong>{from_label}</strong> te transfirió tickets en TicketPro.</p>
+      <p><strong>{from_label}</strong> te transfirió tickets en {brand.name}.</p>
       <p><strong>Orden:</strong> {order_id}</p>
       <p><strong>Evento:</strong> {event_label}</p>
       <p><strong>Tickets transferidos:</strong> {ticket_label}</p>
@@ -754,6 +756,7 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         raise HTTPException(status_code=404, detail="No tickets found")
 
     logo_path = "static/favicon-192.png"
+    brand = get_brand_config()
 
     def _fmt_date(v):
         if v is None:
@@ -786,7 +789,7 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         if os.path.exists(logo_path):
             c.drawImage(ImageReader(logo_path), 40, height - 88, width=36, height=36, mask='auto')
         c.setFont("Helvetica-Bold", 18)
-        c.drawString(84, height - 64, "TicketPro")
+        c.drawString(84, height - 64, brand.name)
         c.setFont("Helvetica", 10)
         c.drawString(84, height - 80, "Entrada confirmada")
 
@@ -937,7 +940,8 @@ def cancel_request(
         # Importante: NO cancelamos automáticamente la orden/tickets.
         # Este endpoint solo notifica a soporte para revisión manual.
 
-    support_to = "soporte@ticketpro.com.ar"
+    brand = get_brand_config()
+    support_to = brand.support_email
     event_title = order.get("event_title") or order.get("event_slug") or "(sin evento)"
     ticket_lines = []
     for t in ticket_rows:

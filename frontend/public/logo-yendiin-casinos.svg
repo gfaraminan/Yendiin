@@ -1,0 +1,10 @@
+<svg width="420" height="220" viewBox="0 0 420 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="420" height="220" fill="#1D2739"/>
+  <g transform="translate(58,36)">
+    <rect x="110" y="0" width="66" height="46" rx="4" transform="rotate(-24 110 0)" fill="none" stroke="#E8ECF7" stroke-width="4"/>
+    <path d="M126 13h18m-27 12h38m-31 12h24" stroke="#E8ECF7" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <text x="70" y="145" font-family="Inter, Arial, sans-serif" font-size="74" font-weight="800" fill="#F4F7FF">yend</text>
+  <text x="220" y="145" font-family="Inter, Arial, sans-serif" font-size="74" font-weight="800" fill="#FF1FA8">iin</text>
+  <text x="165" y="176" font-family="Inter, Arial, sans-serif" font-size="18" font-weight="500" fill="#E8ECF7">&amp; Casinos</text>
+</svg>

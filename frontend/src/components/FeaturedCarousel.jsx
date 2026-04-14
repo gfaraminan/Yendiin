@@ -84,13 +84,13 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
             key={ev.id || ev.slug || idx}
             data-card={idx === 0 ? "1" : "0"}
             onClick={() => onOpen?.(ev)}
-            className={`shrink-0 text-left rounded-[2.25rem] ${UI.card} overflow-hidden`}
+            className={`shrink-0 text-left rounded-[2.25rem] ${UI.card} overflow-hidden border border-white/10 hover:border-indigo-300/45 transition-all duration-300`}
             style={{
               width: cardWidth,
               scrollSnapAlign: "start",
             }}
           >
-            <div className="relative h-40">
+            <div className="relative h-44">
               <img
                 src={flyerSrc(ev)}
                 onError={(e) => {
@@ -116,6 +116,9 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
             <div className="p-4">
               <div className="text-base font-black text-indigo-300 italic">
                 {priceLabelForEvent(ev, formatMoneyFn)}
+              </div>
+              <div className="mt-3 inline-flex px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
+                Ver evento
               </div>
             </div>
           </button>

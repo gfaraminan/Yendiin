@@ -178,9 +178,12 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
-import { brandConfig, makeBrandPageTitle } from "./config/brand";
-import { featureFlags } from "./config/features";
-import { legalConfig } from "./config/legal";
+import PublicHomeView from "./views/PublicHomeView";
+import EventDetailView from "./views/EventDetailView";
+import PurchaseSuccessView from "./views/PurchaseSuccessView";
+import { makeBrandPageTitle, resolveBrandConfig } from "./config/brand";
+import { resolveFeatureFlags } from "./config/features";
+import { resolveLegalConfig } from "./config/legal";
 import { defaultRuntimeConfig, resolvePublicTenant } from "./config/runtime";
 import {
   downloadQrPng,
@@ -3025,6 +3028,9 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [googleClientId, setGoogleClientId] = useState("");
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
+  const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
+  const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
+  const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -3099,8 +3105,8 @@ export default function App() {
   const publicTenant = useMemo(() => resolvePublicTenant(runtimeConfig), [runtimeConfig]);
 
   useEffect(() => {
-    document.title = makeBrandPageTitle("Inicio");
-  }, []);
+    document.title = makeBrandPageTitle("Inicio", runtimeConfig);
+  }, [runtimeConfig]);
 
   // Config público (Google Client ID + tenant público opcional)
   useEffect(() => {
@@ -3112,6 +3118,11 @@ export default function App() {
           ...prev,
           public_tenant: cfg?.public_tenant || cfg?.default_public_tenant || prev.public_tenant || "",
           default_public_tenant: cfg?.default_public_tenant || prev.default_public_tenant || "",
+          brand_name: cfg?.brand_name || prev.brand_name || "",
+          branding: typeof cfg?.branding === "object" && cfg?.branding ? cfg.branding : prev.branding,
+          legal: typeof cfg?.legal === "object" && cfg?.legal ? cfg.legal : prev.legal,
+          features: typeof cfg?.features === "object" && cfg?.features ? cfg.features : prev.features,
+          feature_flags: typeof cfg?.feature_flags === "object" && cfg?.feature_flags ? cfg.feature_flags : prev.feature_flags,
         }));
       })
       .catch(() => {
@@ -4916,12 +4927,12 @@ if (closeOnSuccess) {
   // -------------------------
   const Header = () => {
     return (
-      <header className="fixed top-0 left-0 right-0 z-50 bg-black/50 backdrop-blur-xl border-b border-white/5 overflow-x-hidden">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#070912]/85 backdrop-blur-xl border-b border-white/10 overflow-x-hidden">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4">
           {/* TOP */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-fuchsia-600 flex items-center justify-center shadow-[0_0_60px_rgba(99,102,241,0.55)] ring-1 ring-white/15 flex-shrink-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-3xl bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 flex items-center justify-center shadow-[0_12px_48px_rgba(99,102,241,0.45)] ring-1 ring-white/20 flex-shrink-0">
                 <QrCode className="text-white" size={26} />
               </div>
 
@@ -4934,11 +4945,11 @@ if (closeOnSuccess) {
               <nav className="hidden md:flex items-center justify-center gap-2 pl-3">
                 <button
                   onClick={() => setView("public")}
-                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                    view === "public" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    view === "public" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
-                  {brandConfig.shortName}
+                  Cartelera
                 </button>
 
                 <button
@@ -4953,8 +4964,8 @@ if (closeOnSuccess) {
                       try { loadMyAssets(); } catch (e) {}
                     }, 0);
                   }}
-                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                    view === "myTickets" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    view === "myTickets" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
                   Mis Tickets
@@ -4964,8 +4975,8 @@ if (closeOnSuccess) {
                 {me && supportAiStatus?.is_staff && (
                   <button
                     onClick={() => setView("supportAI")}
-                    className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                      view === "supportAI" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+                    className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                      view === "supportAI" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                     }`}
                     title="Panel interno para staff"
                   >
@@ -4980,7 +4991,7 @@ if (closeOnSuccess) {
               {!me ? (
                 <button
                   onClick={() => setLoginRequired(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-indigo-500/15 hover:bg-indigo-500/25 transition-all border border-indigo-300/35 text-white"
                 >
                   <User size={16} /> Ingresar
                 </button>
@@ -4994,7 +5005,7 @@ if (closeOnSuccess) {
                   </div>
                   <button
                     onClick={logout}
-                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white"
+                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/15 text-white"
                   >
                     Salir
                   </button>
@@ -5007,8 +5018,8 @@ if (closeOnSuccess) {
           <nav className="mt-3 md:hidden flex items-center justify-center sm:justify-start gap-2 w-full">
             <button
               onClick={() => setView("public")}
-              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                view === "public" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                view === "public" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
               Cartelera
@@ -5027,8 +5038,8 @@ if (closeOnSuccess) {
                   try { loadMyAssets(); } catch (e) {}
                 }, 0);
               }}
-              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                view === "myTickets" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                view === "myTickets" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
               Mis Tickets
@@ -5037,8 +5048,8 @@ if (closeOnSuccess) {
             {me && supportAiStatus?.is_staff && (
               <button
                 onClick={() => setView("supportAI")}
-                className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all ${
-                  view === "supportAI" ? "bg-indigo-600 text-white" : "bg-white/5 hover:bg-white/10"
+                className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  view === "supportAI" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                 }`}
                 title="Panel interno para staff"
               >
@@ -5612,6 +5623,21 @@ if (closeOnSuccess) {
     }
   };
 
+  const onBackFromDetail = () => window.history.back();
+
+  const openEventFromHome = (slug) => {
+    setQuantity(1);
+    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
+    openPublicEvent(slug);
+  };
+
+  const openMyTicketsFromSuccess = () => {
+    setView("myTickets");
+    setTimeout(() => {
+      try { loadMyAssets(); } catch (e) {}
+    }, 0);
+  };
+
   const supportAiQuickPrompts = [
     "¿Cuántas entradas llevamos vendidas en el mes?",
     "¿Cuántos eventos activos tenemos?",
@@ -5628,658 +5654,56 @@ if (closeOnSuccess) {
       <main className="min-h-screen pt-32 sm:pt-36">
         {/* PUBLIC */}
         {view === "public" && (
-          <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
-              <div>
-                <h1 className="text-5xl font-black uppercase italic tracking-tight">
-                  {brandConfig.heroTitle}
-                </h1>
-                <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 mt-2">
-                  {brandConfig.heroSubtitle}
-                </p>
-              </div>
-            </div>
-
-            {/* DESTACADOS / CAROUSEL */}
-            {featureFlags.featuredCarousel && (
-              <div className="mt-10">
-                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                  Destacados
-                </div>
-                <div className="text-2xl font-black uppercase mt-2">Eventos recomendados</div>
-                <div className="mt-4">
-                  <FeaturedCarousel
-                    events={filteredEvents}
-                    formatMoneyFn={formatMoney}
-                    onOpen={(ev) => {
-                      setQuantity(1);
-                      setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                      openPublicEvent(ev.slug);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-
-
-            {/* FILTROS RÁPIDOS */}
-            <div className={`mt-6 ${UI.card} rounded-[2.5rem] border border-white/10 p-4 sm:p-5 overflow-x-hidden`}>
-              <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                    Ciudad
-                    <select
-                      value={filterCity}
-                      onChange={(e) => setFilterCity(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-white text-[12px] font-black"
-                    >
-                      <option value="all">Todas</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                    Tipo
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-white text-[12px] font-black"
-                    >
-                      <option value="all">Todos</option>
-                      {types.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="flex-1">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Búsqueda</div>
-                  <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
-                    <Search size={18} className="text-white/60" />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Buscar por evento, venue, ciudad…"
-                      className="w-full bg-transparent outline-none text-white placeholder:text-white/30 font-black text-[12px]"
-                    />
-                    {(filterCity !== "all" || filterType !== "all" || (searchQuery || "").trim()) && (
-                      <button
-                        onClick={() => {
-                          setFilterCity("all");
-                          setFilterType("all");
-                          setSearchQuery("");
-                        }}
-                        className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] font-black uppercase tracking-widest"
-                      >
-                        Limpiar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-[10px] text-white/50 font-black uppercase tracking-widest">
-                Mostrando {filteredEvents.length} de {events.length}
-              </div>
-            </div>
-
-            {/* LISTADO MOBILE (compacto) */}
-            <div className="md:hidden mt-8 space-y-4">
-              {filteredEvents.map((ev) => (
-                <button
-                  key={ev.id}
-                  onClick={() => {
-                    setQuantity(1);
-                    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                    openPublicEvent(ev.slug);
-                  }}
-                  className={`w-full text-left ${UI.card} rounded-3xl p-3 overflow-hidden ${
-                    isEventSoldOut(ev)
-                      ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_24px_rgba(244,63,94,0.55)]"
-                      : ""
-                  }`}
-                >
-                  <div className="relative h-80 rounded-[1.25rem] overflow-hidden bg-black">
-                    <img
-                      src={flyerSrc(ev)}
-                      alt={ev.title}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = FALLBACK_FLYER;
-                      }}
-                      className="w-full h-full object-contain object-top"
-                    />
-                    {isEventSoldOut(ev) && <SoldOutRibbon />}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-                    {isEventSoldOut(ev) && (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-3 z-30 pointer-events-none">
-                        <div className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border border-rose-200/70 shadow-[0_10px_24px_rgba(244,63,94,0.55)] text-white text-[12px] font-black uppercase tracking-wider whitespace-nowrap">
-                          Entradas agotadas
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 p-5 min-w-0 space-y-2">
-                      <div className="text-[10px] text-neutral-200 flex items-center gap-2">
-                        <Calendar size={14} /> {ev.date_text}
-                      </div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2 flex-wrap">
-                        <MapPin size={13} /> {ev.city} · {ev.venue}
-                        {isEventSoldOut(ev) && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-200">SOLD OUT</span>}
-                      </div>
-                      <div className="text-2xl font-black uppercase italic leading-tight break-words">{ev.title}</div>
-                      <div className="text-xl font-black text-indigo-300 italic">
-                        {priceLabelForEvent(ev, formatMoney)}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-
-<div className="hidden md:grid grid-cols-3 gap-8">
-              {filteredEvents.map((ev) => (
-                <button
-                  key={ev.id}
-                  onClick={() => {
-                    setQuantity(1);
-                    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                    openPublicEvent(ev.slug);
-                  }}
-                  className={`text-left overflow-hidden rounded-[2.5rem] ${UI.card} hover:border-indigo-600/40 transition-all ${
-                    isEventSoldOut(ev)
-                      ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_34px_rgba(244,63,94,0.5)]"
-                      : ""
-                  }`}
-                >
-                  <div className="relative h-[26rem] bg-black">
-                    <img
-                      src={flyerSrc(ev)}
-                      alt={ev.title}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = FALLBACK_FLYER;
-                      }}
-                      className="w-full h-full object-contain object-top opacity-95"
-                    />
-                    {isEventSoldOut(ev) && <SoldOutRibbon />}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-                    {isEventSoldOut(ev) && (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-30 pointer-events-none">
-                        <div className="px-6 py-2 rounded-xl bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border border-rose-200/70 shadow-[0_10px_24px_rgba(244,63,94,0.55)] text-white text-[13px] font-black uppercase tracking-wider whitespace-nowrap">
-                          Entradas agotadas
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 p-6 space-y-2">
-                      <div className="text-[11px] text-neutral-200 flex items-center gap-2">
-                        <Calendar size={14} /> {ev.date_text}
-                      </div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2 flex-wrap">
-                        <MapPin size={13} /> {ev.city} · {ev.venue}
-                        {isEventSoldOut(ev) && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-200">SOLD OUT</span>}
-                      </div>
-                      <div className="text-3xl font-black uppercase italic leading-tight">{ev.title}</div>
-                      <div className="text-2xl font-black text-indigo-400 italic">
-                        {priceLabelForEvent(ev, formatMoney)}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <PublicHomeView
+            brandConfig={brandConfig}
+            featureFlags={featureFlags}
+            UI={UI}
+            filteredEvents={filteredEvents}
+            totalEvents={events.length}
+            cities={cities}
+            types={types}
+            filterCity={filterCity}
+            setFilterCity={setFilterCity}
+            filterType={filterType}
+            setFilterType={setFilterType}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onOpenEvent={openEventFromHome}
+            isEventSoldOut={isEventSoldOut}
+            SoldOutRibbon={SoldOutRibbon}
+            formatMoney={formatMoney}
+          />
         )}
 
         {/* DETAIL */}
         {view === "detail" && (
-          selectedEvent ? (
-          <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-            <button
-              onClick={() => window.history.back()}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all mb-8"
-            >
-              <ChevronLeft size={16} /> Volver
-            </button>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-              <div className={`overflow-hidden rounded-[2.5rem] ${UI.card} lg:col-span-2`}>
-                <div className="relative h-[30rem] md:h-[38rem] bg-black">
-                  <img
-                    src={normalizeAssetUrl(selectedEvent.flyer_url) || FALLBACK_FLYER}
-                    alt={selectedEvent.title}
-                    className="w-full h-full object-contain object-top opacity-95"
-                  />
-                  {isEventSoldOut(selectedEvent) && <SoldOutRibbon className="top-5" />}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
-                  <div className="absolute bottom-0 left-0 p-8 space-y-1">
-                    <div className="text-[11px] text-neutral-200 flex items-center gap-2">
-                      <Calendar size={14} /> {selectedEvent.date_text}
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      {(() => {
-                        const uberLink = buildUberLink(selectedEvent);
-                        const mapsLink = buildEventGoogleMapsLink(selectedEvent);
-                        return (
-                          <>
-                            {uberLink && (
-                              <a
-                                href={uberLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest"
-                              >
-                                <MapPin size={14} /> Cotizar en Uber
-                              </a>
-                            )}
-                            {mapsLink && (
-                              <a
-                                href={mapsLink}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-400/40 text-[10px] font-black uppercase tracking-widest text-indigo-100"
-                              >
-                                <MapPin size={14} /> Abrir en Google Maps
-                              </a>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-8">
-                  <div className="mb-8">
-                    <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2">
-                      <MapPin size={13} /> {selectedEvent.city} · {selectedEvent.venue}
-                      {isEventSoldOut(selectedEvent) && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-200">SOLD OUT</span>}
-                    </div>
-                    <div className="text-4xl font-black uppercase italic mt-2 leading-tight">{selectedEvent.title}</div>
-                  </div>
-
-                  {(selectedEvent.description || selectedEvent.address) && (
-                    <div className="mb-8">
-                      {selectedEvent.description && (
-                        <div className="text-[12px] text-neutral-300 leading-relaxed whitespace-pre-wrap break-words">
-                          {linkifyPlainText(selectedEvent.description)}
-                        </div>
-                      )}
-                      {selectedEvent.address && (
-                        <div className="text-[11px] text-neutral-500 mt-3 flex items-center gap-2">
-                          <MapPin size={14} /> {selectedEvent.address}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="p-3 rounded-2xl bg-indigo-600/20 border border-indigo-600/30">
-                      <Ticket className="text-indigo-300" size={18} />
-                    </div>
-                    <div>
-                      <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
-                        Elegí tu ticket
-                      </div>
-                      <div className="text-xl font-black uppercase italic">Tipos disponibles</div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {(selectedEvent.items || []).map((it) => (
-                      <button
-                        key={it.id}
-                        onClick={() => setSelectedTicket(it)}
-                        className={`w-full p-5 rounded-3xl flex items-center justify-between gap-4 transition-all border ${
-                          selectedTicket?.id === it.id
-                            ? "bg-indigo-600/10 border-indigo-600/30"
-                            : "bg-white/5 border-white/10 hover:bg-white/10"
-                        }`}
-                      >
-                        <div className="text-left">
-                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                            Ticket
-                          </div>
-                          <div className="text-lg font-black uppercase">{it.name}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
-                            Precio
-                          </div>
-                          <div className="text-xl font-black text-indigo-400 italic">
-                            {formatMoney(it.price)}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className={`p-8 rounded-[2.5rem] ${UI.card}`}>
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="p-3 rounded-2xl bg-indigo-600/20 border border-indigo-600/30">
-                    <CreditCard className="text-indigo-300" size={18} />
-                  </div>
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
-                      Checkout
-                    </div>
-                    <div className="text-xl font-black uppercase italic">Datos del titular</div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Nombre y Apellido
-                    </div>
-                    <input
-                      value={checkoutForm.fullName}
-                      onChange={(e) => setCheckoutForm({ ...checkoutForm, fullName: e.target.value })}
-                      placeholder="Nombre y Apellido"
-                      autoComplete="name"
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, fullName: true })}
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("fullName") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("fullName") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("fullName")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      DNI
-                    </div>
-                    <input
-                      value={checkoutForm.dni}
-                      onChange={(e) => {
-                        const v = String(e.target.value || "")
-                          .replace(/\D/g, "")
-                          .slice(0, 8);
-                        setCheckoutForm({ ...checkoutForm, dni: v });
-                      }}
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, dni: true })}
-                      placeholder="DNI"
-                      inputMode="numeric"
-                      minLength={7}
-                      maxLength={8}
-                      autoComplete="off"
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("dni") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("dni") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("dni")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Celular de contacto
-                    </div>
-                    <input
-                      value={checkoutForm.phone}
-                      onChange={(e) => {
-                        const v = String(e.target.value || "").replace(/\D/g, "").slice(0, 15);
-                        setCheckoutForm({ ...checkoutForm, phone: v });
-                      }}
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, phone: true })}
-                      placeholder="Ej: 2615551234"
-                      inputMode="numeric"
-                      autoComplete="tel"
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("phone") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("phone") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("phone")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Domicilio completo
-                    </div>
-                    <input
-                      value={checkoutForm.address}
-                      onChange={(e) => setCheckoutForm({ ...checkoutForm, address: e.target.value })}
-                      placeholder="Ej: San Martín 1234, Depto B"
-                      autoComplete="street-address"
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, address: true })}
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("address") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("address") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("address")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Provincia
-                    </div>
-                    <input
-                      value={checkoutForm.province}
-                      onChange={(e) => setCheckoutForm({ ...checkoutForm, province: e.target.value })}
-                      placeholder="Ej: Mendoza"
-                      autoComplete="address-level1"
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, province: true })}
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("province") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("province") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("province")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Código postal
-                    </div>
-                    <input
-                      value={checkoutForm.postalCode}
-                      onChange={(e) => setCheckoutForm({ ...checkoutForm, postalCode: e.target.value })}
-                      placeholder="Ej: 5500"
-                      autoComplete="postal-code"
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, postalCode: true })}
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("postalCode") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("postalCode") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("postalCode")}
-                      </div>
-                    )}
-                  </div>
-
-                  <div>
-                    <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">
-                      Fecha de nacimiento
-                    </div>
-                    <input
-                      type="text"
-                      value={checkoutForm.birthDate}
-                      onChange={(e) => setCheckoutForm({ ...checkoutForm, birthDate: e.target.value })}
-                      placeholder="dd/mm/aaaa"
-                      inputMode="numeric"
-                      onBlur={() => setCheckoutTouched({ ...checkoutTouched, birthDate: true })}
-                      className={`w-full px-4 py-3 rounded-2xl bg-white/5 border text-[12px] font-bold ${checkoutError("birthDate") ? "border-red-500/70" : "border-white/10"}`}
-                    />
-                    {checkoutError("birthDate") && (
-                      <div className="mt-1 text-[10px] font-bold text-red-400">
-                        {checkoutError("birthDate")}
-                      </div>
-                    )}
-                  </div>
-
-                  {selectedSellerCode && (
-                    <div className="rounded-2xl border border-indigo-500/30 bg-indigo-500/10 px-4 py-3 text-[11px] text-indigo-200">
-                      Compra atribuida a vendedor: <span className="font-black">{selectedSellerCode}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-4 pt-2">
-                    <div>
-                      <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
-                        Cantidad
-                      </div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                          disabled={quantity <= 1}
-                          className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                          aria-label="Restar"
-                        >
-                          <span className="text-lg font-black leading-none">−</span>
-                        </button>
-                        <div className="w-10 text-center text-lg font-black">{quantity}</div>
-                        <button
-                          onClick={() => setQuantity((q) => q + 1)}
-                          className="w-10 h-10 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white"
-                          aria-label="Sumar"
-                        >
-                          <span className="text-lg font-black leading-none">+</span>
-                        </button>
-                      </div>
-                    </div>
-
-<div className="text-right">
-  <div className="text-[11px] text-neutral-400 space-y-1">
-    <div className="flex items-center justify-between gap-6">
-      <span className="font-bold">Subtotal</span>
-      <span className="font-black">{formatMoney((selectedTicket?.price || 0) * quantity)}</span>
-    </div>
-    <div className="flex items-center justify-between gap-6">
-      <span className="font-bold">Service charge ({checkoutServicePctLabel})</span>
-      <span className="font-black">
-        {formatMoney(((selectedTicket?.price || 0) * quantity) * checkoutServicePct)}
-      </span>
-    </div>
-  </div>
-
-  <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mt-3">
-    Total a pagar
-  </div>
-  <div className="text-3xl font-black text-indigo-400 italic mt-1">
-    {(() => {
-      const sub = (selectedTicket?.price || 0) * quantity;
-      const fee = sub * checkoutServicePct;
-      return formatMoney(sub + fee);
-    })()}
-  </div>
-</div>
-                  </div>
-
-                  <div className="mt-6 p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <label className="flex items-start gap-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={checkoutForm.acceptTerms}
-                        onChange={(e) => {
-                          setCheckoutTouched({ ...checkoutTouched, acceptTerms: true });
-                          setCheckoutForm({ ...checkoutForm, acceptTerms: e.target.checked });
-                        }}
-                      />
-                      <div className="text-[11px] text-neutral-300 leading-relaxed">
-                        Acepto los {" "}
-                        <a
-                          href={legalConfig.termsUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-white font-bold underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          Términos y Condiciones
-                        </a>{" "}
-                        y la{" "}
-                        <a
-                          href={legalConfig.privacyUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          política de privacidad
-                        </a>
-                        .
-                      </div>
-                    </label>
-                  </div>
-                  {checkoutError("acceptTerms") && (
-                    <div className="mt-2 text-[10px] font-bold text-red-400">
-                      {checkoutError("acceptTerms")}
-                    </div>
-                  )}
-
-<div className="grid grid-cols-1 gap-3 mt-6">
-  <button
-    onClick={() => handleCheckout("mp")}
-    disabled={loading || !!checkoutBlockReason}
-    className={`w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest text-white transition-all flex items-center justify-center gap-2 ${UI.button} disabled:opacity-40 disabled:cursor-not-allowed`}
-  >
-    {loading ? <Loader2 className="animate-spin" size={16} /> : <Wallet size={16} />}
-    Pagar con Mercado Pago
-  </button>
-  {!!checkoutBlockReason && (
-    <div className="px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-400/50 text-[12px] font-black text-amber-100 text-center leading-snug shadow-[0_10px_20px_rgba(245,158,11,0.22)]">
-      {checkoutBlockReason}
-    </div>
-  )}
-
-  <button
-    disabled
-    title="Próximamente"
-    className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 opacity-40 cursor-not-allowed"
-  >
-    <CreditCard size={16} /> Pagar con tarjeta (próximamente)
-  </button>
-
-  <button
-    disabled
-    className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 opacity-40 cursor-not-allowed"
-    title="Próximamente"
-  >
-    <ShoppingCart size={16} /> Reservar (próximamente)
-  </button>
-</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          ) : (
-          <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-            <button
-              onClick={() => window.history.back()}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all mb-8"
-            >
-              <ChevronLeft size={16} /> Volver
-            </button>
-
-            <div className={`rounded-[2.5rem] ${UI.card} p-10 text-center`}>
-              <div className="inline-flex items-center gap-3 justify-center text-neutral-300">
-                <Loader2 className="animate-spin" size={18} />
-                <span className="text-[11px] font-black uppercase tracking-widest">
-                  Cargando evento…
-                </span>
-              </div>
-              <div className="text-[12px] text-neutral-400 mt-4">
-                Si esto tarda demasiado, volvé a la cartelera y reintentá.
-              </div>
-            </div>
-          </div>
-          )
+          <EventDetailView
+            selectedEvent={selectedEvent}
+            UI={UI}
+            isEventSoldOut={isEventSoldOut}
+            SoldOutRibbon={SoldOutRibbon}
+            buildUberLink={buildUberLink}
+            buildEventGoogleMapsLink={buildEventGoogleMapsLink}
+            linkifyPlainText={linkifyPlainText}
+            selectedTicket={selectedTicket}
+            setSelectedTicket={setSelectedTicket}
+            formatMoney={formatMoney}
+            checkoutForm={checkoutForm}
+            setCheckoutForm={setCheckoutForm}
+            checkoutTouched={checkoutTouched}
+            setCheckoutTouched={setCheckoutTouched}
+            checkoutError={checkoutError}
+            selectedSellerCode={selectedSellerCode}
+            quantity={quantity}
+            setQuantity={setQuantity}
+            checkoutServicePct={checkoutServicePct}
+            checkoutServicePctLabel={checkoutServicePctLabel}
+            loading={loading}
+            checkoutBlockReason={checkoutBlockReason}
+            handleCheckout={handleCheckout}
+            legalConfig={legalConfig}
+            onBack={onBackFromDetail}
+          />
         )}
 {/* PRODUCER (demo) */}
         {view === "producer" && (
@@ -8272,175 +7696,32 @@ if (closeOnSuccess) {
           </div>
         )}
 
-{view === "success" && purchaseData && (
-          <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-            <div className="max-w-3xl mx-auto">
-              <div className={`p-10 rounded-[2.5rem] ${UI.card} text-center`}>
-                <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">
-                  Compra confirmada
-                </div>
-                <div className="text-3xl font-black uppercase italic mt-2 mb-4">
-                  {purchaseData?.tickets?.length ? "LISTO... TUS TICKETS ESTÁN CONFIRMADOS" : "ESTAMOS PROCESANDO TU COMPRA"}
-                </div>
-                <div className="text-[12px] text-neutral-400 leading-relaxed mb-8">
-                  {purchaseData?.tickets?.length
-                    ? "Tus tickets ya están listos: podés descargarlos, compartirlos y además te los enviamos por mail."
-                    : "Mercado Pago confirmó la operación. Estamos esperando la emisión final de tus tickets."}
-                </div>
-                <div className="text-[12px] text-neutral-300 leading-relaxed mb-8">
-                  {successProcessing ? `Procesando tu compra... intento ${successTries}/12` : ""}
-                </div>
-
-                <div className="p-6 rounded-3xl bg-white/5 border border-white/10 flex flex-col md:flex-row items-center gap-6 mb-8">
-                  <div className="w-24 h-24 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <QrCode size={42} className="text-indigo-300" />
-                  </div>
-
-                  <div className="flex-1 space-y-4 text-center md:text-left">
-                    <div>
-                      <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">
-                        Titular de Entrada
-                      </div>
-                      <div className="text-xl font-black uppercase">{purchaseData?.user?.fullName || purchaseData?.tickets?.[0]?.buyer_name || me?.fullName || "Titular"}</div>
-                    </div>
-
-                    <div>
-                      <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">
-                        Tickets x{purchaseData?.quantity || purchaseData?.tickets?.length || 1}
-                      </div>
-                      <div className="text-xl font-black text-indigo-400 italic uppercase leading-none">
-                        {(() => {
-                          const candidates = [
-                            purchaseData?.event?.title,
-                            purchaseData?.event?.name,
-                            purchaseData?.ticket?.event_title,
-                            purchaseData?.ticket?.event_slug,
-                            purchaseData?.tickets?.[0]?.event_title,
-                            purchaseData?.tickets?.[0]?.event_slug,
-                            selectedEvent?.title,
-                            selectedEvent?.name,
-                          ];
-                          const eventName = candidates.find((v) => String(v || "").trim().length > 0);
-                          return eventName || "Evento";
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Tickets emitidos (1 QR por entrada) */}
-                <div className="mb-8">
-                  <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-3">
-                    Tus QRs ({purchaseData?.tickets?.length || 0})
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(purchaseData?.tickets || []).map((t, idx) => (
-                      <div key={t.ticket_id || idx} className="p-5 rounded-3xl bg-white/5 border border-white/10 flex items-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
-                          <QrCode className="text-indigo-300" size={22} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
-                            Ticket #{idx + 1}
-                          </div>
-                          <div className="text-[12px] font-mono text-white truncate">
-                            {t.ticket_id}
-                          </div>
-                          <div className="text-[10px] text-neutral-500 truncate">
-                            {t.qr_payload || t.ticket_id}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => navigator.clipboard?.writeText(t.qr_payload || t.ticket_id || "")}
-                          className="px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest"
-                        >
-                          Copiar
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-
-                  {!purchaseData?.tickets?.length && (
-                    <div className="text-[11px] text-neutral-500 mt-3">
-                      Procesando tu compra... estamos esperando la emisión de tickets.
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => {
-                      const orderId = String(purchaseData?.order_id || "").trim();
-                      if (!orderId) {
-                        alert("No hay orden para descargar todavía.");
-                        return;
-                      }
-                      const url = `/api/tickets/orders/${encodeURIComponent(orderId)}/pdf`;
-                      window.open(url, "_blank", "noopener,noreferrer");
-                    }}
-                    className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    <Download size={16} /> Descargar PDF
-                  </button>
-                  <button
-                    onClick={async () => {
-                      const orderId = String(purchaseData?.order_id || "").trim();
-                      if (!orderId) {
-                        alert("No hay orden para compartir todavía.");
-                        return;
-                      }
-                      const url = `${window.location.origin}/api/tickets/orders/${encodeURIComponent(orderId)}/pdf`;
-                      try {
-                        if (navigator.share) {
-                          await navigator.share({
-                            title: "Mis tickets",
-                            text: "Te comparto mis tickets (PDF).",
-                            url,
-                          });
-                        } else {
-                          await navigator.clipboard?.writeText(url);
-                          alert("Link copiado al portapapeles.");
-                        }
-                      } catch (e) {
-                        // usuario canceló o no disponible
-                      }
-                    }}
-                    className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 p-5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    <Share2 size={16} /> Compartir
-                  </button>
-                </div>
-
-                <div className="mt-4">
-                  <button
-                    onClick={() => {
-                      setView("myTickets");
-                      setTimeout(() => {
-                        try { loadMyAssets(); } catch (e) {}
-                      }, 0);
-                    }}
-                    className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all"
-                  >
-                    Ver también en Mis Tickets
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setView("public");
-                    setSelectedEvent(null);
-                  }}
-                  className="w-full text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em] hover:text-white transition-colors mt-8"
-                >
-                  Volver a la cartelera
-                </button>
-              </div>
-            </div>
-          </div>
+        {view === "success" && purchaseData && (
+          <PurchaseSuccessView
+            purchaseData={purchaseData}
+            UI={UI}
+            successProcessing={successProcessing}
+            successTries={successTries}
+            me={me}
+            selectedEvent={selectedEvent}
+            onOpenMyTickets={openMyTicketsFromSuccess}
+            onBackToPublic={() => {
+              setView("public");
+              setSelectedEvent(null);
+            }}
+          />
         )}
       </main>
 
-      <AppFooter me={me} openLoginModal={openLoginModal} setView={setView} loadProducerEvents={loadProducerEvents} />
+      <AppFooter
+        me={me}
+        openLoginModal={openLoginModal}
+        setView={setView}
+        loadProducerEvents={loadProducerEvents}
+        brand={brandConfig}
+        legal={legalConfig}
+        features={featureFlags}
+      />
 
       {isEditing && (
         <EditorModal

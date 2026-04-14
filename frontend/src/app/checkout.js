@@ -1,4 +1,4 @@
-import { isEventSoldOut } from "./eventSales";
+import { isEventSoldOut } from "./eventSales.js";
 
 export const validateCheckoutForm = (checkoutForm = {}) => {
   const errors = {};

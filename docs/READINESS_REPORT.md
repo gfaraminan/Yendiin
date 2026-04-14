@@ -25,5 +25,6 @@
 ## Smoke checks ejecutables
 - `scripts/smoke_readiness.sh`
 - `node frontend/scripts/smoke_flag_views.mjs`
+- `node frontend/scripts/smoke_checkout_helpers.mjs`
 
 - `tests/test_public_google_login_tenant_normalization.py` valida normalización de tenant en login Google.

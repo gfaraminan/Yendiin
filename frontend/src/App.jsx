@@ -73,6 +73,7 @@ import { buildCheckoutBlockReason, buildOrderPayload, resolveCheckoutServicePct,
 import { createMpPreference } from "./app/payments";
 import { getOwnerSummary, getProducerDashboard, listProducerEvents } from "./app/producerApi";
 import { buildStaffPosPayload, buildValidateQrPayload, normalizeStaffPosResult } from "./app/staff";
+import { resolveFlaggedViews } from "./app/flagViews";
 
 // --- HELPERS RESPONSIVE / PRECIO / IMÁGENES ---
 function useIsMobile(breakpoint = 768) {
@@ -2845,15 +2846,18 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
   const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
   const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
-  const isAltStaffUiEnabled = Boolean(featureFlags.altStaffUi);
-  const isAltProducerUiEnabled = Boolean(featureFlags.altProducerUi);
   const isAltCheckoutUxEnabled = Boolean(featureFlags.altCheckoutUx);
-  const staffValidatorView = isAltStaffUiEnabled ? "qrValidatorAlt" : "qrValidator";
-  const staffPosView = isAltStaffUiEnabled ? "staffPosAlt" : "staffPos";
-  const producerHomeView = isAltProducerUiEnabled ? "producerAlt" : "producer";
-  const isProducerView = view === "producer" || view === "producerAlt";
-  const isStaffValidatorView = view === "qrValidator" || view === "qrValidatorAlt";
-  const isStaffPosView = view === "staffPos" || view === "staffPosAlt";
+  const flaggedViews = useMemo(
+    () => resolveFlaggedViews({
+      altProducerUi: Boolean(featureFlags.altProducerUi),
+      altStaffUi: Boolean(featureFlags.altStaffUi),
+    }),
+    [featureFlags.altProducerUi, featureFlags.altStaffUi]
+  );
+  const { producerHomeView, staffValidatorView, staffPosView } = flaggedViews;
+  const isProducerView = flaggedViews.isProducerView(view);
+  const isStaffValidatorView = flaggedViews.isStaffValidatorView(view);
+  const isStaffPosView = flaggedViews.isStaffPosView(view);
   const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);

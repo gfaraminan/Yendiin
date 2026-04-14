@@ -48,7 +48,7 @@ export default function EventDetailView({
   }
 
   return (
-    <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
+    <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white" data-checkout-ux={useAltCheckoutUx ? "alt" : "current"}>
       <button onClick={onBack} className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/15 text-[10px] font-black uppercase tracking-widest transition-all mb-8">
         <ChevronLeft size={16} /> Volver
       </button>

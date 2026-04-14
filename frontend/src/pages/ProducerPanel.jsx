@@ -445,7 +445,7 @@ const App = () => {
       )}
 
       <footer className="mt-32 border-t border-white/5 py-12 text-center opacity-40">
-        <p className="text-neutral-700 font-bold text-[9px] uppercase tracking-widest">TicketPro Producer Suite © 2026</p>
+        <p className="text-neutral-700 font-bold text-[9px] uppercase tracking-widest">Yendiin Producer Suite © 2026</p>
       </footer>
     </div>
   );

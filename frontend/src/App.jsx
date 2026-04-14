@@ -73,6 +73,7 @@ import { buildCheckoutBlockReason, buildOrderPayload, resolveCheckoutServicePct,
 import { createMpPreference } from "./app/payments";
 import { getOwnerSummary, getProducerDashboard, listProducerEvents } from "./app/producerApi";
 import { buildStaffPosPayload, buildValidateQrPayload, normalizeStaffPosResult } from "./app/staff";
+import { resolveFlaggedViews } from "./app/flagViews";
 
 // --- HELPERS RESPONSIVE / PRECIO / IMÁGENES ---
 function useIsMobile(breakpoint = 768) {
@@ -2845,7 +2846,18 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
   const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
   const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
-  const isAltStaffUiEnabled = Boolean(featureFlags.altStaffUi);
+  const isAltCheckoutUxEnabled = Boolean(featureFlags.altCheckoutUx);
+  const flaggedViews = useMemo(
+    () => resolveFlaggedViews({
+      altProducerUi: Boolean(featureFlags.altProducerUi),
+      altStaffUi: Boolean(featureFlags.altStaffUi),
+    }),
+    [featureFlags.altProducerUi, featureFlags.altStaffUi]
+  );
+  const { producerHomeView, staffValidatorView, staffPosView } = flaggedViews;
+  const isProducerView = flaggedViews.isProducerView(view);
+  const isStaffValidatorView = flaggedViews.isStaffValidatorView(view);
+  const isStaffPosView = flaggedViews.isStaffPosView(view);
   const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
@@ -3287,11 +3299,11 @@ const refreshMe = async () => {
     setOwnerBarSummaryBySlug({});
     setProducerEventsError(null);
     setProducerDashboardError(null);
-    if (view === "producer" && me) {
+    if (isProducerView && me) {
       loadProducerEvents();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me?.producer, view]);
+  }, [isProducerView, me?.producer, view]);
 
 // -------------------------
   // Producer analytics loaders
@@ -3384,7 +3396,7 @@ const refreshMe = async () => {
     });
     setValidatorInput("");
     setValidatorResult(null);
-    setView(uiGuards.altStaffUi ? "qrValidator" : "qrValidator");
+    setView(staffValidatorView);
   };
 
   const openPosTaquilla = (ev) => {
@@ -3600,10 +3612,10 @@ const refreshMe = async () => {
   };
 
   useEffect(() => {
-    if (view !== "qrValidator") stopQrScanner();
+    if (!isStaffValidatorView) stopQrScanner();
     return () => stopQrScanner();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
+  }, [isStaffValidatorView, view]);
 
   const normalizeSoldTicketRow = (t = {}) => {
     let qrData = {};
@@ -4052,7 +4064,7 @@ const refreshMe = async () => {
   };
 
   useEffect(() => {
-    if (view === "producer") {
+    if (isProducerView) {
       window.scrollTo({ top: 0, behavior: "auto" });
       loadProducerEvents();
     }
@@ -4060,7 +4072,7 @@ const refreshMe = async () => {
   }, [view, adminEventFilter]);
 
   useEffect(() => {
-    if (view !== "producer") return;
+    if (!isProducerView) return;
     if (marketingSection === "audience") {
       loadAudience();
     } else if (marketingSection === "campaigns") {
@@ -4080,7 +4092,7 @@ const refreshMe = async () => {
   }, [me?.email]);
 
   useEffect(() => {
-    if (view === "producer" && selectedProducerEventSlug) {
+    if (isProducerView && selectedProducerEventSlug) {
       loadProducerDashboard(selectedProducerEventSlug);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4272,7 +4284,7 @@ setLoading(true);
         setValidatorInput("");
         setValidatorResult(null);
         setStaffPosError(route.token ? "" : "Falta token de staff en el link.");
-        setView(isAltStaffUiEnabled ? (route.mode === "pos" ? "staffPos" : "qrValidator") : "qrValidator");
+        setView(route.mode === "pos" ? staffPosView : staffValidatorView);
         loadStaffEventContext(route.slug);
         return;
       }
@@ -5408,10 +5420,11 @@ if (closeOnSuccess) {
             handleCheckout={handleCheckout}
             legalConfig={legalConfig}
             onBack={onBackFromDetail}
+            useAltCheckoutUx={isAltCheckoutUxEnabled}
           />
         )}
 {/* PRODUCER (demo) */}
-        {view === "producer" && (
+        {isProducerView && (
           <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-8 mb-12">
               <div>
@@ -6395,7 +6408,7 @@ if (closeOnSuccess) {
 
         {/* VALIDADOR QR */}
 
-        {view === "qrValidator" && (
+        {isStaffValidatorView && (
           <div className="pt-0 pb-20 px-6 max-w-3xl mx-auto animate-in fade-in text-white">
             <button
               onClick={() => {
@@ -6404,7 +6417,7 @@ if (closeOnSuccess) {
                   setView("public");
                   window.history.pushState({ ticketpro_view: "public" }, "", "/");
                 } else {
-                  setView("producer");
+                  setView(producerHomeView);
                 }
               }}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all mb-6"
@@ -6439,7 +6452,7 @@ if (closeOnSuccess) {
                   {staffAccess.mode === "validate" ? (
                     <button
                       type="button"
-                      onClick={() => setView("staffPos")}
+                      onClick={() => setView(staffPosView)}
                       className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-white/10 border border-white/15 hover:bg-white/15"
                     >
                       Ir a POS
@@ -6561,10 +6574,10 @@ if (closeOnSuccess) {
           </div>
         )}
 
-        {view === "staffPos" && (
+        {isStaffPosView && (
           <div className="pt-0 pb-20 px-6 max-w-4xl mx-auto animate-in fade-in text-white">
             <button
-              onClick={() => setView("qrValidator")}
+              onClick={() => setView(staffValidatorView)}
               className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all mb-6"
             >
               <ChevronLeft size={16} /> Ir al validador

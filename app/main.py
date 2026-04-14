@@ -54,11 +54,18 @@ LEGAL_FILE_ALIASES = {
 
 
 
+SPA_DIR_CANDIDATES = [
+    Path("frontend/dist"),
+    Path("static"),
+    Path("app/static"),
+]
+
+
 def _spa_index_path() -> Path | None:
-    if Path("static/index.html").exists():
-        return Path("static/index.html")
-    if Path("app/static/index.html").exists():
-        return Path("app/static/index.html")
+    for d in SPA_DIR_CANDIDATES:
+        index = d / "index.html"
+        if index.exists() and index.is_file():
+            return index
     return None
 
 
@@ -341,12 +348,8 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
 # SPA (serve React build)
 # -------------------------
 # We mount ONLY ONCE at "/".
-# Prefer "static/" (root) if it has index.html, otherwise fallback to "app/static".
-SPA_DIR = None
-if os.path.exists("static/index.html"):
-    SPA_DIR = "static"
-elif os.path.exists("app/static/index.html"):
-    SPA_DIR = "app/static"
+# Prefer frontend build output first (frontend/dist), then static/ fallback.
+SPA_DIR = next((str(d) for d in SPA_DIR_CANDIDATES if (d / "index.html").exists()), None)
 
 if SPA_DIR:
     app.mount("/", StaticFiles(directory=SPA_DIR, html=True), name="spa")
@@ -358,7 +361,7 @@ else:
             {
                 "ok": False,
                 "error": "SPA build not found",
-                "hint": "Run frontend build so that static/index.html or app/static/index.html exists.",
+                "hint": "Run frontend build so that frontend/dist/index.html (or static/index.html) exists.",
             },
             status_code=404,
         )

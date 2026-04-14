@@ -20,3 +20,7 @@
 ## Residual risks
 - Large legacy `App.jsx` surface still central to many views.
 - Environment parity (Render/prod) must include new flags and legal/runtime env values.
+
+
+## Smoke checks ejecutables
+- `scripts/smoke_readiness.sh`

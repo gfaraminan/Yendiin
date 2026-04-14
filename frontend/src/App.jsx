@@ -2845,11 +2845,7 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
   const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
   const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
-  const uiGuards = useMemo(() => ({
-    altCheckoutUx: Boolean(featureFlags.altCheckoutUx),
-    altProducerUi: Boolean(featureFlags.altProducerUi),
-    altStaffUi: Boolean(featureFlags.altStaffUi),
-  }), [featureFlags.altCheckoutUx, featureFlags.altProducerUi, featureFlags.altStaffUi]);
+  const isAltStaffUiEnabled = Boolean(featureFlags.altStaffUi);
   const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
@@ -4276,7 +4272,7 @@ setLoading(true);
         setValidatorInput("");
         setValidatorResult(null);
         setStaffPosError(route.token ? "" : "Falta token de staff en el link.");
-        setView(uiGuards.altStaffUi ? (route.mode === "pos" ? "staffPos" : "qrValidator") : "qrValidator");
+        setView(isAltStaffUiEnabled ? (route.mode === "pos" ? "staffPos" : "qrValidator") : "qrValidator");
         loadStaffEventContext(route.slug);
         return;
       }

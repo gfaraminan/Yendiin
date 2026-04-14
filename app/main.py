@@ -273,8 +273,18 @@ app.add_middleware(
 # IMPORTANT:
 # - The frontend and DB reference /static/uploads/<file>
 # - En Render: usar Disk montado (por defecto /var/data/uploads).
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+def _resolve_upload_dir() -> str:
+    configured = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    try:
+        os.makedirs(configured, exist_ok=True)
+        return configured
+    except PermissionError:
+        fallback = "/tmp/uploads"
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+
+UPLOAD_DIR = _resolve_upload_dir()
 
 # Serve uploads at the expected URL used by the frontend
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads_static")

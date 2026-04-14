@@ -29,6 +29,16 @@ export default function EventDetailView({
   legalConfig,
   onBack,
 }) {
+  const Ribbon = SoldOutRibbon || (({ className = "" }) => (
+    <div className={`pointer-events-none absolute inset-x-0 top-4 z-20 ${className}`}>
+      <div className="w-full py-2.5 bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border-y border-rose-200/70">
+        <div className="text-center">
+          <span className="text-[12px] font-black uppercase tracking-[0.32em] text-white">SOLD OUT</span>
+        </div>
+      </div>
+    </div>
+  ));
+
   if (!selectedEvent) {
     return (
       <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
@@ -56,7 +66,7 @@ export default function EventDetailView({
         <div className={`overflow-hidden rounded-[2.5rem] ${UI.card} border border-white/10 lg:col-span-2`}>
           <div className="relative h-[30rem] md:h-[38rem] bg-black">
             <img src={normalizeAssetUrl(selectedEvent.flyer_url) || FALLBACK_FLYER} alt={selectedEvent.title} className="w-full h-full object-contain object-top opacity-95" />
-            {isEventSoldOut(selectedEvent) && <SoldOutRibbon className="top-5" />}
+            {isEventSoldOut(selectedEvent) && <Ribbon className="top-5" />}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
             <div className="absolute bottom-0 left-0 p-8 space-y-1">
               <div className="text-[11px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {selectedEvent.date_text}</div>

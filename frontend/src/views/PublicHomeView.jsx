@@ -22,6 +22,16 @@ export default function PublicHomeView({
   SoldOutRibbon,
   formatMoney,
 }) {
+  const Ribbon = SoldOutRibbon || (({ className = "" }) => (
+    <div className={`pointer-events-none absolute inset-x-0 top-4 z-20 ${className}`}>
+      <div className="w-full py-2.5 bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border-y border-rose-200/70">
+        <div className="text-center">
+          <span className="text-[12px] font-black uppercase tracking-[0.32em] text-white">SOLD OUT</span>
+        </div>
+      </div>
+    </div>
+  ));
+
   return (
     <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
       <section className={`relative overflow-hidden rounded-[2.7rem] border border-white/10 ${UI.card} px-6 sm:px-10 py-10 mb-10`}>
@@ -130,7 +140,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top"
               />
-              {isEventSoldOut(ev) && <SoldOutRibbon />}
+              {isEventSoldOut(ev) && <Ribbon />}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-5 min-w-0 space-y-2">
                 <div className="text-[10px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>
@@ -159,7 +169,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top opacity-95"
               />
-              {isEventSoldOut(ev) && <SoldOutRibbon />}
+              {isEventSoldOut(ev) && <Ribbon />}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute bottom-0 left-0 p-6 space-y-2 w-full">
                 <div className="text-[11px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>

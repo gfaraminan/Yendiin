@@ -7,139 +7,6 @@ const clearDraft = ()=>{localStorage.removeItem(EVENT_DRAFT_KEY)};
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-// -------------------------
-// Imagen helper: soporta
-// - URLs absolutas (https://...)
-// - rutas relativas del backend (/static/uploads/..., /uploads/...)
-// - rutas sin slash (static/uploads/..)
-// -------------------------
-function normalizeImgUrl(raw) {
-  if (!raw) return "";
-  const v = typeof raw === "string" ? raw.trim() : (raw.url ? String(raw.url).trim() : "");
-  if (!v) return "";
-  if (/^https?:\/\//i.test(v)) return v;
-  const withSlash = v.startsWith("/") ? v : `/${v}`;
-  // mismo host (Render): front y api conviven en el mismo dominio
-  return `${window.location.origin}${withSlash}`;
-}
-
-
-// -------------------------
-// Producer: progreso de ventas
-// - Soporta payloads distintos (stock_total/stock_sold o items[].stock/items[].sold)
-// - Devuelve { sold, total, pct }
-// -------------------------
-function eventSalesProgress(ev) {
-  // Caso 1: campos directos
-  const totalDirect = Number(ev?.stock_total);
-  const soldDirect = Number(ev?.stock_sold);
-  if (
-    Number.isFinite(totalDirect) &&
-    totalDirect > 0 &&
-    Number.isFinite(soldDirect) &&
-    soldDirect >= 0
-  ) {
-    const pct = Math.max(0, Math.min(100, (soldDirect / totalDirect) * 100));
-    return { sold: soldDirect, total: totalDirect, pct };
-  }
-
-  // Caso 2: derivado de items
-  const items = Array.isArray(ev?.items) ? ev.items : [];
-  const totals = items.reduce(
-    (acc, it) => {
-      const t = Number(it?.stock);
-      const s = Number(it?.sold);
-      acc.total += Number.isFinite(t) && t > 0 ? t : 0;
-      acc.sold += Number.isFinite(s) && s > 0 ? s : 0;
-      return acc;
-    },
-    { total: 0, sold: 0 }
-  );
-
-  if (totals.total > 0) {
-    const pct = Math.max(0, Math.min(100, (totals.sold / totals.total) * 100));
-    return { ...totals, pct };
-  }
-
-  return { sold: 0, total: 0, pct: 0 };
-}
-
-function isEventSoldOut(ev) {
-  if (Boolean(ev?.sold_out)) return true;
-  const p = eventSalesProgress(ev);
-  return p.total > 0 && p.sold >= p.total;
-}
-
-function SoldOutRibbon({ className = "" }) {
-  return (
-    <div className={`pointer-events-none absolute inset-x-0 top-4 z-20 ${className}`}>
-      <div className="w-full py-2.5 bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border-y border-rose-200/70 shadow-[0_10px_28px_rgba(244,63,94,0.45)]">
-        <div className="text-center">
-          <span className="text-[12px] font-black uppercase tracking-[0.32em] text-white">SOLD OUT</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-class ModalErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error) {
-    console.error("Modal render error", error);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-xl rounded-3xl bg-[#14141a] border border-rose-500/30 p-6 text-white">
-            <div className="text-[11px] font-black uppercase tracking-widest text-rose-300">Error al renderizar detalle</div>
-            <div className="mt-2 text-[12px] text-white/80">El detalle falló en esta sesión. Cerrá y volvé a abrir el modal.</div>
-            <button
-              onClick={() => {
-                this.setState({ hasError: false });
-                if (typeof this.props.onClose === "function") this.props.onClose();
-              }}
-              className="mt-4 px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-[10px] font-black uppercase"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
-
-function formatEventDateText(dateISO, timeStr) {
-  if (!dateISO) return "";
-  const [y, m, d] = String(dateISO || "").split("-").map((n) => Number(n));
-  if (!y || !m || !d) return "";
-
-  const [hh, mm] = String(timeStr || "").split(":").map((n) => Number(n));
-  const hasTime = Number.isFinite(hh) && Number.isFinite(mm);
-
-  const dt = hasTime ? new Date(y, m - 1, d, hh, mm) : new Date(y, m - 1, d);
-  if (Number.isNaN(dt.getTime())) return "";
-
-  const weekday = dt.toLocaleDateString("es-AR", { weekday: "short" }).replace(".", "");
-  const day = String(dt.getDate()).padStart(2, "0");
-  const month = dt.toLocaleDateString("es-AR", { month: "long" });
-  const base = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${day} de ${month.charAt(0).toUpperCase() + month.slice(1)}`;
-
-  if (!hasTime) return base;
-  return `${base}, ${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}hs`;
-}
-
 import {
   Loader2,
   MapPin,
@@ -195,8 +62,7 @@ import {
   sendTicketsByEmail,
   slugify,
 } from "./app/helpers";
-
-
+import { eventSalesProgress, formatEventDateText, isEventSoldOut } from "./app/eventSales";
 
 // --- HELPERS RESPONSIVE / PRECIO / IMÁGENES ---
 function useIsMobile(breakpoint = 768) {

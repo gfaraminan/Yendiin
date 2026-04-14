@@ -45,6 +45,7 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
+import SoldOutRibbon from "./components/SoldOutRibbon";
 import PublicHomeView from "./views/PublicHomeView";
 import EventDetailView from "./views/EventDetailView";
 import PurchaseSuccessView from "./views/PurchaseSuccessView";
@@ -185,13 +186,13 @@ const linkifyPlainText = (value) => {
 const SafeMailIcon = ({ size = 16 }) => <span style={{ fontSize: size }}>✉</span>;
 const SafeSocialIcon = ({ size = 16 }) => <span style={{ fontSize: size }}>🐦</span>;
 
-const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId }) => {
+const GoogleLoginModal = ({ open, onClose, onLoggedIn, googleClientId, featureFlags }) => {
   const [ready, setReady] = useState(false);
   const googleButtonRef = useRef(null);
 
   // Method: "google" | "email"
-  const allowGoogleLogin = featureFlags.googleLogin;
-  const allowMagicLinkLogin = featureFlags.magicLinkLogin;
+  const allowGoogleLogin = Boolean(featureFlags?.googleLogin);
+  const allowMagicLinkLogin = Boolean(featureFlags?.magicLinkLogin);
   const [loginMethod, setLoginMethod] = useState(allowGoogleLogin ? "google" : "email");
 
   // Email magic link state
@@ -7413,6 +7414,7 @@ if (closeOnSuccess) {
         open={loginRequired}
         onClose={closeLoginModal}
         googleClientId={googleClientId}
+        featureFlags={featureFlags}
         onLoggedIn={async (u) => {
           setMe(u);
           await refreshMe();

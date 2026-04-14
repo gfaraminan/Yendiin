@@ -106,11 +106,14 @@ def _oauth_state_serializer(secret: str) -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(secret, salt="mp-oauth-state")
 
 
-def _build_oauth_state(tenant_id: str) -> str:
+def _build_oauth_state(tenant_id: str, opener_origin: Optional[str] = None) -> str:
     payload = {
         "nonce": uuid.uuid4().hex,
         "tenant": _norm_tenant_id(tenant_id),
     }
+    safe_opener = _safe_origin(str(opener_origin or ""))
+    if safe_opener:
+        payload["opener_origin"] = safe_opener
     signer_secret = _oauth_state_secret_candidates()[0]
     return _oauth_state_serializer(signer_secret).dumps(payload)
 
@@ -216,37 +219,6 @@ def _safe_session(request: Request) -> Dict[str, Any]:
         logger.exception("Unexpected error while reading request session")
         return {}
     return sess or {}
-
-
-def _oauth_state_serializer() -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(SESSION_SECRET, salt="mp-oauth-state")
-
-
-def _build_oauth_state(tenant_id: str, opener_origin: Optional[str] = None) -> str:
-    payload: Dict[str, Any] = {
-        "nonce": uuid.uuid4().hex,
-        "tenant": _norm_tenant_id(tenant_id),
-    }
-    if opener_origin:
-        payload["opener_origin"] = opener_origin
-    return _oauth_state_serializer().dumps(payload)
-
-
-def _parse_oauth_state(token: str) -> Optional[Dict[str, Any]]:
-    raw = str(token or "").strip()
-    if not raw:
-        return None
-    try:
-        payload = _oauth_state_serializer().loads(raw, max_age=MP_OAUTH_STATE_MAX_AGE_SECONDS)
-    except (BadSignature, BadTimeSignature, SignatureExpired):
-        return None
-
-    if not isinstance(payload, dict):
-        return None
-
-    tenant_id = _norm_tenant_id(str(payload.get("tenant") or "default"))
-    opener_origin = str(payload.get("opener_origin") or "").strip() or None
-    return {"tenant": tenant_id, "opener_origin": opener_origin}
 
 
 def _ensure_oauth_sellers_table(cur) -> None:

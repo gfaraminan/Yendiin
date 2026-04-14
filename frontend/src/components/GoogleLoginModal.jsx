@@ -1,50 +1,43 @@
-import { useEffect, useState } from "react";
-import { Loader2, Mail, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, X } from "lucide-react";
 import { UI } from "../app/constants";
-import { featureFlags } from "../config/features";
 
-export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClientId }) {
+const SafeMailIcon = ({ size = 16 }) => <span style={{ fontSize: size }}>✉</span>;
+
+export default function GoogleLoginModal({
+  open,
+  onClose,
+  onLoggedIn,
+  googleClientId,
+  allowGoogleLogin = true,
+  allowMagicLinkLogin = true,
+}) {
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState("google");
+  const googleButtonRef = useRef(null);
+  const [loginMethod, setLoginMethod] = useState(allowGoogleLogin ? "google" : "email");
   const [email, setEmail] = useState("");
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState("");
-  const allowGoogleLogin = featureFlags.googleLogin;
-  const allowMagicLinkLogin = featureFlags.magicLinkLogin;
-
-  useEffect(() => {
-    if (!allowGoogleLogin && allowMagicLinkLogin) setTab("email");
-    if (allowGoogleLogin && !allowMagicLinkLogin) setTab("google");
-  }, [allowGoogleLogin, allowMagicLinkLogin]);
 
   const readJsonOrText = async (r) => {
     const ct = (r.headers.get("content-type") || "").toLowerCase();
     if (ct.includes("application/json")) return await r.json();
     const t = await r.text();
-    try {
-      return JSON.parse(t);
-    } catch {
-      return { detail: t };
-    }
+    try { return JSON.parse(t); } catch { return { detail: t }; }
   };
 
   useEffect(() => {
     if (!open) return;
-
     setEmailSent(false);
     setEmailError("");
     setEmailSending(false);
-
     const ensureScript = () =>
       new Promise((resolve, reject) => {
         if (window.google?.accounts?.id) return resolve(true);
         const id = "google-identity";
         if (document.getElementById(id)) {
-          const check = () => {
-            if (window.google?.accounts?.id) resolve(true);
-            else setTimeout(check, 50);
-          };
+          const check = () => (window.google?.accounts?.id ? resolve(true) : setTimeout(check, 50));
           check();
           return;
         }
@@ -60,14 +53,15 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
 
     (async () => {
       try {
-        if (allowGoogleLogin && googleClientId) {
-          await ensureScript();
-        }
+        if (allowGoogleLogin && googleClientId) await ensureScript();
         setReady(true);
-
         if (allowGoogleLogin && googleClientId && window.google?.accounts?.id) {
           window.google.accounts.id.initialize({
             client_id: googleClientId,
+            use_fedcm_for_prompt: false,
+            use_fedcm_for_button: false,
+            button_auto_select: false,
+            itp_support: true,
             callback: async (resp) => {
               try {
                 const r = await fetch("/api/auth/google", {
@@ -78,20 +72,16 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
                 });
                 const data = await readJsonOrText(r);
                 if (!r.ok) throw new Error((data && data.detail) || "Login falló");
-
-                let u = data && data.user ? data.user : data || {};
+                let u = data?.user || data || {};
                 if (!u || (!u.email && !u.name && !u.meaningful_name)) {
                   try {
                     const meR = await fetch("/api/auth/me", { credentials: "include" });
                     if (meR.ok) {
                       const me = await meR.json();
-                      u = me && me.user ? me.user : me || u;
+                      u = me?.user || me || u;
                     }
-                  } catch {
-                    // noop
-                  }
+                  } catch {}
                 }
-
                 onLoggedIn({
                   fullName: u?.name || u?.meaningful_name || "User",
                   email: u?.email || "",
@@ -104,32 +94,41 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
               }
             },
           });
-
-          const el = document.getElementById("googleBtn");
-          if (el) {
-            el.innerHTML = "";
-            window.google.accounts.id.renderButton(el, {
-              theme: "outline",
-              size: "large",
-              shape: "pill",
-              text: "continue_with",
-              width: 340,
-            });
-          }
         }
       } catch (e) {
         console.error(e);
         setReady(false);
       }
     })();
-  }, [open, googleClientId, onLoggedIn]);
+  }, [open, googleClientId, allowGoogleLogin, onLoggedIn]);
+
+  useEffect(() => {
+    if (!open || !allowGoogleLogin || loginMethod !== "google") return;
+    if (!googleClientId || !ready || !window.google?.accounts?.id || !googleButtonRef.current) return;
+    try {
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: "standard",
+        theme: "filled_black",
+        size: "large",
+        text: "continue_with",
+        shape: "pill",
+        logo_alignment: "left",
+        width: 360,
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  }, [open, loginMethod, googleClientId, ready, allowGoogleLogin]);
+
+  useEffect(() => {
+    if (!allowGoogleLogin && allowMagicLinkLogin) setLoginMethod("email");
+    if (allowGoogleLogin && !allowMagicLinkLogin) setLoginMethod("google");
+  }, [allowGoogleLogin, allowMagicLinkLogin]);
 
   const sendMagicLink = async () => {
     const em = String(email || "").trim().toLowerCase();
-    if (!em || !em.includes("@")) {
-      setEmailError("Ingresá un email válido.");
-      return;
-    }
+    if (!em || !em.includes("@")) return setEmailError("Ingresá un email válido.");
     setEmailError("");
     setEmailSent(false);
     setEmailSending(true);
@@ -142,7 +141,6 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
       });
       const data = await readJsonOrText(r);
       if (!r.ok) throw new Error((data && data.detail) || "No se pudo enviar el link");
-
       setEmailSent(true);
     } catch (e) {
       console.error(e);
@@ -153,9 +151,6 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
   };
 
   if (!open) return null;
-  const showGoogleTab = allowGoogleLogin;
-  const showEmailTab = allowMagicLinkLogin;
-
   return (
     <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
       <div className={`w-full max-w-md p-8 rounded-[2.5rem] ${UI.card} text-white`}>
@@ -165,143 +160,41 @@ export default function GoogleLoginModal({ open, onClose, onLoggedIn, googleClie
             <div className="text-2xl font-black uppercase italic">Ingresar</div>
             <div className="text-[11px] text-neutral-400 mt-2">Iniciá sesión para comprar o gestionar eventos.</div>
           </div>
-
-          <button onClick={onClose} className="p-2 rounded-2xl hover:bg-white/5 transition-all">
-            <X />
-          </button>
+          <button onClick={onClose} className="p-2 rounded-2xl hover:bg-white/5 transition-all"><X /></button>
         </div>
-
-        <div className="flex gap-2 mb-5">
-          {showGoogleTab && (
-            <button
-            onClick={() => {
-              if (tab === "google" && googleClientId && window.google?.accounts?.id) {
-                try {
-                  window.google.accounts.id.prompt();
-                } catch {
-                  // noop
-                }
-              }
-              setTab("google");
-            }}
-            className={`flex-1 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-              tab === "google"
-                ? "bg-white/10 border-white/20"
-                : "bg-white/5 hover:bg-white/10 border-white/10"
-            }`}
-          >
-            Google
-          </button>
-          )}
-          {showEmailTab && (
-            <button
-            onClick={() => setTab("email")}
-            className={`flex-1 py-2 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${
-              tab === "email"
-                ? "bg-white/10 border-white/20"
-                : "bg-white/5 hover:bg-white/10 border-white/10"
-            }`}
-          >
-            Email
-          </button>
-          )}
-        </div>
-
         <div className="space-y-4">
-          {showGoogleTab && tab === "google" && (
+          {allowGoogleLogin && loginMethod === "google" && (
             <>
-              <div className="w-full flex justify-center">
-                <div id="googleBtn" className="min-h-[44px]" />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  if (googleClientId && window.google?.accounts?.id) {
-                    try {
-                      window.google.accounts.id.prompt();
-                    } catch (e) {
-                      console.error(e);
-                      alert("No se pudo abrir Google en este navegador.");
-                    }
-                  }
-                }}
-                disabled={!googleClientId || !window.google?.accounts?.id}
-                className={`w-full py-3 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${
-                  !googleClientId || !window.google?.accounts?.id
-                    ? "bg-white/5 border-white/10 opacity-70"
-                    : "bg-white/10 hover:bg-white/15 border-white/20"
-                }`}
-              >
-                Continuar con Google
-              </button>
-
-              {!googleClientId && (
-                <div className="text-[11px] text-neutral-400 text-center">
-                  Falta configurar <span className="text-white/90 font-bold">GOOGLE_CLIENT_ID</span> en el backend.
-                </div>
-              )}
-
+              <div className="flex items-center justify-center"><div className="rounded-full overflow-hidden leading-none" ref={googleButtonRef} /></div>
+              {!googleClientId && <div className="text-[11px] text-neutral-400 text-center">Falta configurar <span className="text-white/90 font-bold">GOOGLE_CLIENT_ID</span> en el backend.</div>}
               {googleClientId && !ready && <div className="text-[11px] text-neutral-400 text-center">Cargando Google…</div>}
+              {allowMagicLinkLogin && (
+                <button onClick={() => setLoginMethod("email")} className="w-full min-h-[44px] rounded-full bg-white/10 hover:bg-white/15 border border-white/10 transition-all flex items-center justify-center px-5">
+                  <span className="text-[13px] sm:text-[14px] font-black uppercase tracking-wide leading-none text-white/90">Continuar con Mail</span>
+                </button>
+              )}
             </>
           )}
-
-          {showEmailTab && tab === "email" && (
+          {allowMagicLinkLogin && loginMethod === "email" && (
             <>
               <div className="space-y-2">
                 <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Magic link</div>
-
                 <div className="flex gap-2">
                   <div className="flex-1">
-                    <input
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        setEmailError("");
-                        setEmailSent(false);
-                      }}
-                      placeholder="tu@email.com"
-                      className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-                      autoComplete="email"
-                      inputMode="email"
-                    />
+                    <input value={email} onChange={(e) => { setEmail(e.target.value); setEmailError(""); setEmailSent(false); }} placeholder="tu@email.com" className="w-full px-4 py-3 rounded-2xl bg-white/5 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm" autoComplete="email" inputMode="email" />
                   </div>
-
-                  <button
-                    onClick={sendMagicLink}
-                    disabled={emailSending}
-                    className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${
-                      emailSending
-                        ? "bg-white/5 border-white/10 opacity-70"
-                        : "bg-indigo-600 hover:bg-indigo-500 border-white/10"
-                    }`}
-                  >
-                    {emailSending ? <Loader2 className="animate-spin" size={16} /> : <Mail size={16} />}
-                    Enviar
+                  <button onClick={sendMagicLink} disabled={emailSending} className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${emailSending ? "bg-white/5 border-white/10 opacity-70" : "bg-indigo-600 hover:bg-indigo-500 border-white/10"}`}>
+                    {emailSending ? <Loader2 className="animate-spin" size={16} /> : <SafeMailIcon size={16} />} Enviar
                   </button>
                 </div>
-
                 {!!emailError && <div className="text-[11px] text-red-300">{emailError}</div>}
-
-                {emailSent && (
-                  <div className="text-[11px] text-emerald-300">
-                    Listo ✅ Te mandamos un link. Abrilo desde tu correo para iniciar sesión.
-                  </div>
-                )}
-
-                <div className="text-[11px] text-neutral-400">
-                  El link vence en pocos minutos. Si no llega, revisá spam/promociones.
-                </div>
+                {emailSent && <div className="text-[11px] text-emerald-300">Listo ✅ Te mandamos un link. Abrilo desde tu correo para iniciar sesión.</div>}
+                <div className="text-[11px] text-neutral-400">El link vence en pocos minutos. Si no llega, revisá spam/promociones.</div>
               </div>
+              {allowGoogleLogin && <button onClick={() => setLoginMethod("google")} className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all">Volver a Google</button>}
             </>
           )}
-
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
-          >
-            Cancelar
-          </button>
+          <button onClick={onClose} className="w-full py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all">Cancelar</button>
         </div>
       </div>
     </div>

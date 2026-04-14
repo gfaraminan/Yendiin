@@ -399,7 +399,7 @@ const App = () => {
 
     const prompt = `Usuario dice: "${userInput}". Lista de eventos disponibles: ${eventListStr}. Recomienda el mejor evento de la lista de forma breve y persuasiva.`;
     const system =
-      "Eres el Gurú de Experiencias de TicketPro. Responde de forma emocionante y breve.";
+      "Eres el Gurú de Experiencias de Yendiin. Responde de forma emocionante y breve.";
 
     const resp = await fetchGemini(prompt, system);
     setAiRecommendation(resp);
@@ -495,7 +495,7 @@ const App = () => {
       <div className="h-screen bg-[#0a0a0a] flex flex-col items-center justify-center">
         <Loader2 className="w-10 h-10 animate-spin text-indigo-500 mb-4" />
         <p className="text-neutral-500 font-bold uppercase tracking-widest text-[10px]">
-          Iniciando TicketPro
+          Iniciando Yendiin
         </p>
       </div>
     );
@@ -516,7 +516,7 @@ const App = () => {
             T
           </div>
           <span className="font-black tracking-tighter text-2xl italic uppercase">
-            Ticket<span className="text-indigo-500">Pro</span>
+            Yen<span className="text-indigo-500">diin</span>
           </span>
         </div>
 
@@ -981,11 +981,11 @@ const App = () => {
             T
           </div>
           <span className="font-black text-xs tracking-[1em] uppercase italic">
-            TicketPro
+            Yendiin
           </span>
         </div>
         <p className="text-neutral-800 font-bold text-[9px] uppercase tracking-[0.5em]">
-          © 2026 TicketFlow · UI
+          © 2026 Yendiin · UI
         </p>
       </footer>
     </div>

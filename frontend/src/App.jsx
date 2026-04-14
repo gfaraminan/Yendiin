@@ -45,8 +45,7 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
-import SoldOutRibbon from "./components/SoldOutRibbon";
-import ModalErrorBoundary from "./components/ModalErrorBoundary";
+import PublicHomeView from "./views/PublicHomeView";
 import { makeBrandPageTitle, resolveBrandConfig } from "./config/brand";
 import { resolveFeatureFlags } from "./config/features";
 import { resolveLegalConfig } from "./config/legal";
@@ -5488,6 +5487,12 @@ if (closeOnSuccess) {
     }
   };
 
+  const openEventFromHome = (slug) => {
+    setQuantity(1);
+    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
+    openPublicEvent(slug);
+  };
+
   const supportAiQuickPrompts = [
     "¿Cuántas entradas llevamos vendidas en el mes?",
     "¿Cuántos eventos activos tenemos?",
@@ -5504,243 +5509,25 @@ if (closeOnSuccess) {
       <main className="min-h-screen pt-32 sm:pt-36">
         {/* PUBLIC */}
         {view === "public" && (
-          <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-            <section className={`relative overflow-hidden rounded-[2.7rem] border border-white/10 ${UI.card} px-6 sm:px-10 py-10 mb-10`}>
-              <div className="absolute -top-20 -right-10 w-64 h-64 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-24 -left-10 w-64 h-64 rounded-full bg-fuchsia-500/20 blur-3xl pointer-events-none" />
-              <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-                <div className="max-w-3xl">
-                  <div className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] bg-white/10 text-white/80 border border-white/15 mb-4">
-                    Eventos activos
-                  </div>
-                  <h1 className="text-4xl sm:text-5xl font-black uppercase italic tracking-tight leading-[0.95]">
-                  {brandConfig.heroTitle}
-                  </h1>
-                  <p className="text-[11px] sm:text-[12px] font-black uppercase tracking-widest text-neutral-300 mt-4">
-                    {brandConfig.heroSubtitle}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 min-w-[220px]">
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                    <div className="text-[9px] uppercase font-black tracking-widest text-neutral-400">Disponibles</div>
-                    <div className="text-2xl font-black mt-1">{filteredEvents.length}</div>
-                  </div>
-                  <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                    <div className="text-[9px] uppercase font-black tracking-widest text-neutral-400">Ciudades</div>
-                    <div className="text-2xl font-black mt-1">{cities.length}</div>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            {/* DESTACADOS / CAROUSEL */}
-            {featureFlags.featuredCarousel && (
-              <div className="mt-10">
-                <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                  Destacados
-                </div>
-                <div className="text-2xl font-black uppercase mt-2">Eventos recomendados</div>
-                <div className="mt-4">
-                  <FeaturedCarousel
-                    events={filteredEvents}
-                    formatMoneyFn={formatMoney}
-                    onOpen={(ev) => {
-                      setQuantity(1);
-                      setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                      openPublicEvent(ev.slug);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-
-
-
-            {/* FILTROS RÁPIDOS */}
-            <div className={`mt-6 ${UI.card} rounded-[2.5rem] border border-white/10 p-4 sm:p-5 overflow-x-hidden shadow-[0_10px_30px_rgba(2,6,23,0.35)]`}>
-              <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
-                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                    Ciudad
-                    <select
-                      value={filterCity}
-                      onChange={(e) => setFilterCity(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-white text-[12px] font-black"
-                    >
-                      <option value="all">Todas</option>
-                      {cities.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                    Tipo
-                    <select
-                      value={filterType}
-                      onChange={(e) => setFilterType(e.target.value)}
-                      className="mt-2 w-full rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-white text-[12px] font-black"
-                    >
-                      <option value="all">Todos</option>
-                      {types.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="flex-1">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-neutral-500">Búsqueda</div>
-                  <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 px-4 py-3">
-                    <Search size={18} className="text-white/60" />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Buscar por evento, venue, ciudad…"
-                      className="w-full bg-transparent outline-none text-white placeholder:text-white/30 font-black text-[12px]"
-                    />
-                    {(filterCity !== "all" || filterType !== "all" || (searchQuery || "").trim()) && (
-                      <button
-                        onClick={() => {
-                          setFilterCity("all");
-                          setFilterType("all");
-                          setSearchQuery("");
-                        }}
-                        className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] font-black uppercase tracking-widest"
-                      >
-                        Limpiar
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-[10px] text-white/50 font-black uppercase tracking-widest">
-                Mostrando {filteredEvents.length} de {events.length}
-              </div>
-            </div>
-
-            {/* LISTADO MOBILE (compacto) */}
-            <div className="md:hidden mt-8 space-y-4">
-              {filteredEvents.map((ev) => (
-                <button
-                  key={ev.id}
-                  onClick={() => {
-                    setQuantity(1);
-                    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                    openPublicEvent(ev.slug);
-                  }}
-                  className={`w-full text-left ${UI.card} rounded-3xl p-3 overflow-hidden border border-white/10 ${
-                    isEventSoldOut(ev)
-                      ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_24px_rgba(244,63,94,0.55)]"
-                      : ""
-                  }`}
-                >
-                  <div className="relative h-80 rounded-[1.25rem] overflow-hidden bg-black">
-                    <img
-                      src={flyerSrc(ev)}
-                      alt={ev.title}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = FALLBACK_FLYER;
-                      }}
-                      className="w-full h-full object-contain object-top"
-                    />
-                    {isEventSoldOut(ev) && <SoldOutRibbon />}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-                    {isEventSoldOut(ev) && (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-3 z-30 pointer-events-none">
-                        <div className="px-5 py-2 rounded-xl bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border border-rose-200/70 shadow-[0_10px_24px_rgba(244,63,94,0.55)] text-white text-[12px] font-black uppercase tracking-wider whitespace-nowrap">
-                          Entradas agotadas
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute inset-x-0 bottom-0 p-5 min-w-0 space-y-2">
-                      <div className="text-[10px] text-neutral-200 flex items-center gap-2">
-                        <Calendar size={14} /> {ev.date_text}
-                      </div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2 flex-wrap">
-                        <MapPin size={13} /> {ev.city} · {ev.venue}
-                        {isEventSoldOut(ev) && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-200">SOLD OUT</span>}
-                      </div>
-                      <div className="text-2xl font-black uppercase italic leading-tight break-words">{ev.title}</div>
-                      <div className="text-xl font-black text-indigo-300 italic">
-                        {priceLabelForEvent(ev, formatMoney)}
-                      </div>
-                      <div className="pt-2">
-                        <span className="inline-flex items-center rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
-                          Ver detalle
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-
-<div className="hidden md:grid grid-cols-2 xl:grid-cols-3 gap-8">
-              {filteredEvents.map((ev) => (
-                <button
-                  key={ev.id}
-                  onClick={() => {
-                    setQuantity(1);
-                    setCheckoutForm({ fullName: "", dni: "", phone: "", address: "", province: "", postalCode: "", birthDate: "", acceptTerms: false });
-                    openPublicEvent(ev.slug);
-                  }}
-                  className={`text-left overflow-hidden rounded-[2.5rem] ${UI.card} border border-white/10 hover:border-indigo-400/45 hover:-translate-y-1 transition-all duration-300 ${
-                    isEventSoldOut(ev)
-                      ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_34px_rgba(244,63,94,0.5)]"
-                      : ""
-                  }`}
-                >
-                  <div className="relative h-[23rem] bg-black">
-                    <img
-                      src={flyerSrc(ev)}
-                      alt={ev.title}
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = FALLBACK_FLYER;
-                      }}
-                      className="w-full h-full object-contain object-top opacity-95"
-                    />
-                    {isEventSoldOut(ev) && <SoldOutRibbon />}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
-                    {isEventSoldOut(ev) && (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-4 z-30 pointer-events-none">
-                        <div className="px-6 py-2 rounded-xl bg-gradient-to-r from-rose-600/95 via-red-500/95 to-rose-600/95 border border-rose-200/70 shadow-[0_10px_24px_rgba(244,63,94,0.55)] text-white text-[13px] font-black uppercase tracking-wider whitespace-nowrap">
-                          Entradas agotadas
-                        </div>
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 left-0 p-6 space-y-2 w-full">
-                      <div className="text-[11px] text-neutral-200 flex items-center gap-2">
-                        <Calendar size={14} /> {ev.date_text}
-                      </div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400 flex items-center gap-2 flex-wrap">
-                        <MapPin size={13} /> {ev.city} · {ev.venue}
-                        {isEventSoldOut(ev) && <span className="px-2 py-0.5 rounded-full bg-rose-500/20 border border-rose-500/40 text-rose-200">SOLD OUT</span>}
-                      </div>
-                      <div className="text-3xl font-black uppercase italic leading-tight line-clamp-2">{ev.title}</div>
-                      <div className="text-2xl font-black text-indigo-400 italic">
-                        {priceLabelForEvent(ev, formatMoney)}
-                      </div>
-                      <div className="pt-2">
-                        <span className="inline-flex items-center rounded-xl px-3 py-2 text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
-                          Ver detalle
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+          <PublicHomeView
+            brandConfig={brandConfig}
+            featureFlags={featureFlags}
+            UI={UI}
+            filteredEvents={filteredEvents}
+            totalEvents={events.length}
+            cities={cities}
+            types={types}
+            filterCity={filterCity}
+            setFilterCity={setFilterCity}
+            filterType={filterType}
+            setFilterType={setFilterType}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            onOpenEvent={openEventFromHome}
+            isEventSoldOut={isEventSoldOut}
+            SoldOutRibbon={SoldOutRibbon}
+            formatMoney={formatMoney}
+          />
         )}
 
         {/* DETAIL */}

@@ -45,6 +45,7 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
+import SoldOutRibbon from "./components/SoldOutRibbon";
 import PublicHomeView from "./views/PublicHomeView";
 import EventDetailView from "./views/EventDetailView";
 import PurchaseSuccessView from "./views/PurchaseSuccessView";

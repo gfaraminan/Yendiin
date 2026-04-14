@@ -53,7 +53,7 @@ import MyTicketsView from "./views/MyTicketsView";
 import { makeBrandPageTitle, resolveBrandConfig } from "./config/brand";
 import { resolveFeatureFlags } from "./config/features";
 import { resolveLegalConfig } from "./config/legal";
-import { defaultRuntimeConfig, normalizePublicConfigPayload, resolvePublicTenant } from "./config/runtime";
+import { defaultRuntimeConfig, resolvePublicTenant } from "./config/runtime";
 import {
   downloadQrPng,
   downloadTicketsPdf,
@@ -66,6 +66,13 @@ import {
   slugify,
 } from "./app/helpers";
 import { eventSalesProgress, formatEventDateText, isEventSoldOut } from "./app/eventSales";
+import { fetchPublicRuntimeConfig, resolveCheckoutSuccessState, resolveRuntimeConfigState } from "./app/runtimeBootstrap";
+import { parseAppLocation } from "./app/navigation";
+import { buildEventGoogleMapsLink, buildUberLink, formatMoneyAr, normalizeErrorDetail } from "./app/formatters";
+import { buildCheckoutBlockReason, buildOrderPayload, resolveCheckoutServicePct, validateCheckoutForm } from "./app/checkout";
+import { createMpPreference } from "./app/payments";
+import { getOwnerSummary, getProducerDashboard, listProducerEvents } from "./app/producerApi";
+import { buildStaffPosPayload, buildValidateQrPayload, normalizeStaffPosResult } from "./app/staff";
 
 // --- HELPERS RESPONSIVE / PRECIO / IMÁGENES ---
 function useIsMobile(breakpoint = 768) {
@@ -95,66 +102,6 @@ function minPositivePrice(items) {
 // -------------------------
 // Helpers (demo / placeholders)
 // -------------------------
-const formatMoney = (n) => {
-  const v = Number(n || 0);
-  return `$${v.toLocaleString()}`;
-};
-
-const parseCoordinate = (value) => {
-  if (value == null) return null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const normalized = raw.replace(",", ".");
-  const num = Number(normalized);
-  return Number.isFinite(num) ? num : null;
-};
-
-const getEventCoordinates = (ev) => {
-  const lat = parseCoordinate(ev?.lat ?? ev?.latitude);
-  const lng = parseCoordinate(ev?.lng ?? ev?.longitude);
-  if (lat == null || lng == null) return null;
-  return { lat, lng };
-};
-
-const buildUberLink = (ev) => {
-  if (!ev) return null;
-  const coords = getEventCoordinates(ev);
-  // Pedido: cotizar en Uber directo con coordenadas del evento.
-  if (!coords) return null;
-
-  // Deep link oficial (web/mobile). Pickup se define por el usuario en la app.
-  const params = new URLSearchParams({ action: "setPickup" });
-  params.set("dropoff[latitude]", String(coords.lat));
-  params.set("dropoff[longitude]", String(coords.lng));
-  params.set("dropoff[nickname]", ev.title || "Evento");
-
-  return `https://m.uber.com/ul/?${params.toString()}`;
-};
-
-const buildEventGoogleMapsLink = (ev) => {
-  const coords = getEventCoordinates(ev);
-  if (!coords) return null;
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${coords.lat},${coords.lng}`)}`;
-};
-
-const normalizeErrorDetail = (data, response, fallbackMessage) => {
-  const detail = String(data?.detail || data?.message || "").trim();
-
-  if (detail) {
-    if (/<!doctype html|<html/i.test(detail)) {
-      const status = response?.status ? ` (HTTP ${response.status})` : "";
-      return `Servicio temporalmente no disponible${status}. Intentá nuevamente en unos minutos.`;
-    }
-    return detail.length > 280 ? `${detail.slice(0, 280)}…` : detail;
-  }
-
-  if (response?.status && response.status >= 500) {
-    return `Servicio temporalmente no disponible (HTTP ${response.status}). Intentá nuevamente en unos minutos.`;
-  }
-
-  return fallbackMessage;
-};
-
 const linkifyPlainText = (value) => {
   const text = String(value || "");
   const urlRegex = /(https?:\/\/[^\s]+|(?:www\.)?maps\.app\.goo\.gl\/[^\s]+)/gi;
@@ -2898,6 +2845,7 @@ export default function App() {
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
   const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
   const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
+  const isAltStaffUiEnabled = Boolean(featureFlags.altStaffUi);
   const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
@@ -2961,14 +2909,7 @@ export default function App() {
   const scannerRafRef = useRef(null);
   const scannerBusyRef = useRef(false);
 
-  const formatMoney = (amount) => {
-    const value = Number(amount) || 0;
-    try {
-      return `$${new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 }).format(value)}`;
-    } catch {
-      return `$${value}`;
-    }
-  };
+  const formatMoney = formatMoneyAr;
 
   const publicTenant = useMemo(() => resolvePublicTenant(runtimeConfig), [runtimeConfig]);
 
@@ -2978,11 +2919,13 @@ export default function App() {
 
   // Config público (Google Client ID + tenant público opcional)
   useEffect(() => {
-    fetch("/api/public/config")
-      .then((r) => r.json())
+    fetchPublicRuntimeConfig()
       .then((cfg) => {
-        setGoogleClientId(cfg?.google_client_id || "");
-        setRuntimeConfig((prev) => normalizePublicConfigPayload(cfg, prev));
+        setRuntimeConfig((prev) => {
+          const next = resolveRuntimeConfigState(cfg, prev);
+          setGoogleClientId(next.googleClientId);
+          return next.runtimeConfig;
+        });
       })
       .catch(() => {
         setGoogleClientId("");
@@ -3015,24 +2958,21 @@ export default function App() {
 
   useEffect(() => {
     try {
-      const hash = String(window.location.hash || "");
-      const m = hash.match(/^#\/checkout\/success(?:\?(.*))?$/i);
-      if (!m) return;
-      const params = new URLSearchParams(m[1] || "");
-      const orderId = (params.get("order_id") || "").trim();
-      setPurchaseData((prev) => ({
-        event: prev?.event || selectedEvent || { title: "Tu evento" },
-        ticket: prev?.ticket || selectedTicket || null,
-        quantity: prev?.quantity || quantity || 1,
-        user: prev?.user || checkoutForm || {},
-        method: prev?.method || "mp",
-        order_id: orderId || prev?.order_id || null,
-        tickets: Array.isArray(prev?.tickets) ? prev.tickets : [],
-      }));
+      const nextPurchase = resolveCheckoutSuccessState({
+        hash: window.location.hash,
+        previousPurchaseData: purchaseData,
+        selectedEvent,
+        selectedTicket,
+        quantity,
+        checkoutForm,
+      });
+      if (!nextPurchase) return;
+      setPurchaseData(nextPurchase);
       setView("success");
     } catch (e) {
       console.warn("No se pudo procesar checkout/success", e);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
@@ -3217,30 +3157,7 @@ export default function App() {
     acceptTerms: false,
   });
 
-  const checkoutErrors = useMemo(() => {
-    const errors = {};
-    const name = (checkoutForm.fullName || "").trim();
-    const address = (checkoutForm.address || "").trim();
-    const province = (checkoutForm.province || "").trim();
-    const postalCode = (checkoutForm.postalCode || "").trim();
-    const birthDate = (checkoutForm.birthDate || "").trim();
-    const dni = String(checkoutForm.dni || "").replace(/\D/g, "");
-    const phone = String(checkoutForm.phone || "").replace(/\D/g, "");
-
-    if (!name) errors.fullName = "Ingresá tu nombre y apellido.";
-    if (!dni) errors.dni = "Ingresá tu DNI.";
-    else if (dni.length < 7) errors.dni = "DNI.";
-    if (!phone) errors.phone = "Ingresá tu celular de contacto.";
-    else if (phone.length < 8) errors.phone = "El celular debe tener al menos 8 dígitos.";
-    if (!address) errors.address = "Ingresá tu domicilio completo.";
-    if (!province) errors.province = "Ingresá tu provincia.";
-    if (!postalCode) errors.postalCode = "Ingresá tu código postal.";
-    if (!birthDate) errors.birthDate = "Ingresá tu fecha de nacimiento.";
-    if (!checkoutForm.acceptTerms)
-      errors.acceptTerms = "Aceptá Términos y Condiciones para continuar.";
-
-    return errors;
-  }, [checkoutForm]);
+  const checkoutErrors = useMemo(() => validateCheckoutForm(checkoutForm), [checkoutForm]);
 
   const hasCheckoutErrors = Object.keys(checkoutErrors).length > 0;
   const checkoutError = (key) => (checkoutTouched[key] ? checkoutErrors[key] : "");
@@ -3254,23 +3171,9 @@ const [selectedTicket, setSelectedTicket] = useState(null);
     }
   }, [selectedEvent, selectedTicket]);
 
-  const checkoutBlockReason = !selectedTicket
-    ? ((selectedEvent?.items || []).length === 0
-      ? "Este evento todavía no tiene tickets habilitados para la venta."
-      : "Seleccioná un ticket para continuar.")
-    : isEventSoldOut(selectedEvent)
-      ? "Este evento está SOLD OUT. No se pueden comprar más entradas."
-    : hasCheckoutErrors
-      ? "Completá correctamente los datos del titular para continuar."
-      : "";
+  const checkoutBlockReason = buildCheckoutBlockReason({ selectedTicket, selectedEvent, hasCheckoutErrors });
 
-  const checkoutServicePct = (() => {
-    const raw = Number(selectedEvent?.service_charge_pct);
-    if (!Number.isFinite(raw) || raw < 0) return 0.15;
-    const normalized = raw > 1 ? (raw / 100) : raw;
-    if (normalized < 0 || normalized > 1) return 0.15;
-    return normalized;
-  })();
+  const checkoutServicePct = resolveCheckoutServicePct(selectedEvent);
   const checkoutServicePctLabel = `${(checkoutServicePct * 100).toFixed(2)}%`;
 
   
@@ -3417,19 +3320,9 @@ const refreshMe = async () => {
     await Promise.all(
       slugs.map(async (slug) => {
         try {
-          const base = `/api/owner/summary?event=${encodeURIComponent(slug)}`;
-          const withOwner = owner ? `${base}&owner=${encodeURIComponent(owner)}` : base;
-          let res = await fetch(withOwner, { credentials: "include" });
-          if (!res.ok && owner) {
-            res = await fetch(base, { credentials: "include" });
-          }
-          if (!res.ok) return;
-          const data = await res.json().catch(() => null);
-          if (!data || typeof data !== "object") return;
-          next[slug] = {
-            gross: Number(data?.gross || data?.gross_amount || 0),
-            paid_count: Number(data?.paid_count || data?.paid || 0),
-          };
+          const summary = await getOwnerSummary({ slug, owner });
+          if (!summary) return;
+          next[slug] = summary;
         } catch {
           // fallback silencioso: mantenemos datos de /api/producer/events
         }
@@ -3443,7 +3336,7 @@ const refreshMe = async () => {
     setProducerEventsLoading(true);
     setProducerEventsError(null);
     try {
-      const data = await fetchJson(`/api/producer/events?tenant_id=${encodeURIComponent(tenantId)}`);
+      const data = await listProducerEvents({ tenantId });
       const list = Array.isArray(data?.events) ? data.events : Array.isArray(data) ? data : [];
       setProducerEvents(list);
       loadOwnerBarSummaries(list);
@@ -3467,9 +3360,7 @@ const refreshMe = async () => {
     setProducerDashboardLoading(true);
     setProducerDashboardError(null);
     try {
-      const data = await fetchJson(
-        `/api/producer/dashboard?tenant_id=${encodeURIComponent(tenantId)}&event_slug=${encodeURIComponent(eventSlug)}`
-      );
+      const data = await getProducerDashboard({ tenantId, eventSlug });
       setProducerDashboard(data);
     } catch (e) {
       setProducerDashboardError(e?.message || "No se pudo cargar el dashboard.");
@@ -3566,26 +3457,13 @@ const refreshMe = async () => {
           "Content-Type": "application/json",
           "x-staff-token": staffToken,
         },
-        body: JSON.stringify({
-          tenant_id: publicTenant,
-          sale_item_id: saleItemId,
-          quantity,
-          payment_method: String(staffPosDraft.payment_method || "cash").trim().toLowerCase(),
-          seller_code: String(staffPosDraft.seller_code || "").trim() || null,
-          buyer_name: String(staffPosDraft.buyer_name || "").trim() || null,
-          buyer_email: String(staffPosDraft.buyer_email || "").trim() || null,
-          buyer_phone: String(staffPosDraft.buyer_phone || "").trim() || null,
-          buyer_dni: String(staffPosDraft.buyer_dni || "").trim() || null,
-          note: String(staffPosDraft.note || "").trim() || null,
-        }),
+        body: JSON.stringify(buildStaffPosPayload({ publicTenant, staffPosDraft, saleItemId, quantity })),
       });
-      setStaffPosResult({
-        order_id: String(res?.order_id || ""),
-        quantity: Number(res?.quantity || quantity),
-        payment_method: String(res?.payment_method || staffPosDraft.payment_method || "cash"),
-        total_cents: Number(res?.total_cents || 0),
-        tickets: Array.isArray(res?.tickets) ? res.tickets : [],
-      });
+      setStaffPosResult(normalizeStaffPosResult({
+        response: res,
+        quantity,
+        paymentMethod: staffPosDraft.payment_method,
+      }));
     } catch (e) {
       setStaffPosError(String(e?.message || e));
     } finally {
@@ -3631,11 +3509,7 @@ const refreshMe = async () => {
           ...(staffToken ? { "x-staff-token": staffToken } : {}),
         },
         credentials: "include",
-        body: JSON.stringify({
-          qr_token: qrToken,
-          event_slug: validatorEvent?.slug || "",
-          ...(staffToken ? { staff_token: staffToken } : {}),
-        }),
+        body: JSON.stringify(buildValidateQrPayload({ qrToken, validatorEvent, staffToken })),
       });
       const data = await readJsonOrText(r);
       if (!r.ok) {
@@ -4242,37 +4116,22 @@ const refreshMe = async () => {
 setLoading(true);
 
 
-    const name = (checkoutForm.fullName || "").trim();
-    const dni = String(checkoutForm.dni || "").replace(/\D/g, "").trim();
-    const address = (checkoutForm.address || "").trim();
-    const province = (checkoutForm.province || "").trim();
-    const postalCode = (checkoutForm.postalCode || "").trim();
-    const birthDate = (checkoutForm.birthDate || "").trim();
-
     try {
       // 1) Crear orden (si es MP/Card, queda pending sin tickets)
       const res = await fetch("/api/orders/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({
-          tenant_id: publicTenant,
-          event_slug: selectedEvent.slug,
-          sale_item_id: selectedTicket.id,
+        body: JSON.stringify(buildOrderPayload({
+          publicTenant,
+          selectedEvent,
+          selectedTicket,
           quantity,
-          payment_method: method || "cash",
-          seller_code: selectedSellerCode || undefined,
-          buyer: {
-            full_name: name,
-            dni: String(checkoutForm.dni || "").trim(),
-            address,
-            province,
-            postal_code: postalCode,
-            birth_date: birthDate,
-            email: userNow?.email || checkoutForm.email,
-            phone: String(checkoutForm.phone || "").replace(/\D/g, ""),
-          },
-        }),
+          method,
+          selectedSellerCode,
+          checkoutForm,
+          userNow,
+        })),
       });
 
       if (res.status === 401) {
@@ -4287,16 +4146,11 @@ setLoading(true);
 
       // 2) Si es Mercado Pago: crear preferencia y redirigir al checkout
       if ((method || "").toLowerCase() === "mp") {
-        const prefRes = await fetch(`/api/payments/mp/create-preference?tenant=${encodeURIComponent(publicTenant)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ order_id: data.order_id }),
+        const pref = await createMpPreference({
+          publicTenant,
+          orderId: data.order_id,
+          readJsonOrText,
         });
-        const pref = await readJsonOrText(prefRes);
-        if (!prefRes.ok || !pref?.ok || !pref?.checkout_url) {
-          throw new Error(pref?.detail || "No se pudo iniciar Mercado Pago");
-        }
         try {
           const debugPayload = {
             at: new Date().toISOString(),
@@ -4397,37 +4251,29 @@ setLoading(true);
 
   useEffect(() => {
     const syncViewFromPath = () => {
-      const path = window.location?.pathname || "/";
-      const match = path.match(/^\/evento\/([^\/?#]+)$/);
-      const staffMatch = path.match(/^\/staff\/evento\/([^\/?#]+)$/);
+      const route = parseAppLocation(window.location);
 
-      if (match?.[1]) {
-        const slug = decodeURIComponent(match[1]);
-        if (selectedEvent?.slug !== slug || view !== "detail") {
-          openPublicEvent(slug);
+      if (route.type === "event") {
+        if (selectedEvent?.slug !== route.slug || view !== "detail") {
+          openPublicEvent(route.slug);
         }
         return;
       }
 
-      if (staffMatch?.[1]) {
-        const slug = decodeURIComponent(staffMatch[1]);
-        const qs = new URLSearchParams(window.location.search || "");
-        const mode = String(qs.get("mode") || "validate").trim().toLowerCase();
-        const token = String(qs.get("token") || "").trim();
-        const safeMode = mode === "pos" ? "pos" : "validate";
+      if (route.type === "staff") {
         setStaffAccess({
-          active: !!token,
-          slug,
-          mode: safeMode,
-          token,
-          title: slug,
+          active: !!route.token,
+          slug: route.slug,
+          mode: route.mode,
+          token: route.token,
+          title: route.slug,
         });
-        setValidatorEvent({ slug, title: slug });
+        setValidatorEvent({ slug: route.slug, title: route.slug });
         setValidatorInput("");
         setValidatorResult(null);
-        setStaffPosError(token ? "" : "Falta token de staff en el link.");
-        setView(safeMode === "pos" ? "staffPos" : "qrValidator");
-        loadStaffEventContext(slug);
+        setStaffPosError(route.token ? "" : "Falta token de staff en el link.");
+        setView(isAltStaffUiEnabled ? (route.mode === "pos" ? "staffPos" : "qrValidator") : "qrValidator");
+        loadStaffEventContext(route.slug);
         return;
       }
 

@@ -178,9 +178,9 @@ import {
 import { FALLBACK_FLYER, UI } from "./app/constants";
 import FeaturedCarousel from "./components/FeaturedCarousel";
 import AppFooter from "./components/AppFooter";
-import { brandConfig, makeBrandPageTitle } from "./config/brand";
-import { featureFlags } from "./config/features";
-import { legalConfig } from "./config/legal";
+import { makeBrandPageTitle, resolveBrandConfig } from "./config/brand";
+import { resolveFeatureFlags } from "./config/features";
+import { resolveLegalConfig } from "./config/legal";
 import { defaultRuntimeConfig, resolvePublicTenant } from "./config/runtime";
 import {
   downloadQrPng,
@@ -3025,6 +3025,9 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [googleClientId, setGoogleClientId] = useState("");
   const [runtimeConfig, setRuntimeConfig] = useState(defaultRuntimeConfig);
+  const brandConfig = useMemo(() => resolveBrandConfig(runtimeConfig), [runtimeConfig]);
+  const featureFlags = useMemo(() => resolveFeatureFlags(runtimeConfig), [runtimeConfig]);
+  const legalConfig = useMemo(() => resolveLegalConfig(runtimeConfig), [runtimeConfig]);
   const [loginRequired, setLoginRequired] = useState(false);
   const [pendingCheckout, setPendingCheckout] = useState(null);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -3099,8 +3102,8 @@ export default function App() {
   const publicTenant = useMemo(() => resolvePublicTenant(runtimeConfig), [runtimeConfig]);
 
   useEffect(() => {
-    document.title = makeBrandPageTitle("Inicio");
-  }, []);
+    document.title = makeBrandPageTitle("Inicio", runtimeConfig);
+  }, [runtimeConfig]);
 
   // Config público (Google Client ID + tenant público opcional)
   useEffect(() => {
@@ -3112,6 +3115,11 @@ export default function App() {
           ...prev,
           public_tenant: cfg?.public_tenant || cfg?.default_public_tenant || prev.public_tenant || "",
           default_public_tenant: cfg?.default_public_tenant || prev.default_public_tenant || "",
+          brand_name: cfg?.brand_name || prev.brand_name || "",
+          branding: typeof cfg?.branding === "object" && cfg?.branding ? cfg.branding : prev.branding,
+          legal: typeof cfg?.legal === "object" && cfg?.legal ? cfg.legal : prev.legal,
+          features: typeof cfg?.features === "object" && cfg?.features ? cfg.features : prev.features,
+          feature_flags: typeof cfg?.feature_flags === "object" && cfg?.feature_flags ? cfg.feature_flags : prev.feature_flags,
         }));
       })
       .catch(() => {
@@ -8468,7 +8476,15 @@ if (closeOnSuccess) {
         )}
       </main>
 
-      <AppFooter me={me} openLoginModal={openLoginModal} setView={setView} loadProducerEvents={loadProducerEvents} />
+      <AppFooter
+        me={me}
+        openLoginModal={openLoginModal}
+        setView={setView}
+        loadProducerEvents={loadProducerEvents}
+        brand={brandConfig}
+        legal={legalConfig}
+        features={featureFlags}
+      />
 
       {isEditing && (
         <EditorModal

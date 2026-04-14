@@ -5,7 +5,7 @@ const trimOr = (value, fallback) => {
   return normalized || fallback;
 };
 
-export const brandConfig = {
+const envBrandConfig = {
   name: trimOr(env.VITE_BRAND_NAME, "Yendiin"),
   shortName: trimOr(env.VITE_BRAND_SHORT_NAME, "Yendiin"),
   headerLabel: trimOr(env.VITE_BRAND_HEADER_LABEL, "Yendiin"),
@@ -24,8 +24,32 @@ export const brandConfig = {
   adminPanelLabel: trimOr(env.VITE_BRAND_ADMIN_PANEL_LABEL, "Administrador"),
 };
 
-export const makeBrandPageTitle = (page = "") => {
-  const suffix = brandConfig.shortName || brandConfig.name;
+const readWindowConfig = () => {
+  if (typeof window === "undefined") return {};
+  const cfg = window.__APP_CONFIG__;
+  return cfg && typeof cfg === "object" ? cfg : {};
+};
+
+export const resolveBrandConfig = (runtimeConfig = null) => {
+  const windowCfg = readWindowConfig();
+  const fromRuntime = runtimeConfig?.branding || runtimeConfig?.brand || {};
+  const fromWindow = windowCfg.branding || windowCfg.brand || {};
+
+  return {
+    ...envBrandConfig,
+    ...fromWindow,
+    ...fromRuntime,
+    name: trimOr(fromRuntime.name ?? fromWindow.name ?? runtimeConfig?.brand_name, envBrandConfig.name),
+    shortName: trimOr(fromRuntime.shortName ?? fromWindow.shortName, envBrandConfig.shortName),
+    headerLabel: trimOr(fromRuntime.headerLabel ?? fromWindow.headerLabel, envBrandConfig.headerLabel),
+  };
+};
+
+export const brandConfig = resolveBrandConfig();
+
+export const makeBrandPageTitle = (page = "", runtimeConfig = null) => {
+  const resolved = resolveBrandConfig(runtimeConfig);
+  const suffix = resolved.shortName || resolved.name;
   const prefix = String(page || "").trim();
   return prefix ? `${prefix} · ${suffix}` : suffix;
 };

@@ -5,7 +5,7 @@ const trimOr = (value, fallback) => {
   return normalized || fallback;
 };
 
-export const legalConfig = {
+const envLegalConfig = {
   termsUrl: trimOr(env.VITE_LEGAL_TERMS_URL, "/static/legal/terminos-y-condiciones.pdf"),
   privacyUrl: trimOr(env.VITE_LEGAL_PRIVACY_URL, "/static/legal/politica-de-privacidad.pdf"),
   refundsUrl: trimOr(env.VITE_LEGAL_REFUNDS_URL, "/static/legal/politica-de-reembolsos.pdf"),
@@ -13,3 +13,18 @@ export const legalConfig = {
   producerFaqUrl: trimOr(env.VITE_FAQ_PRODUCER_URL, "/legal/faqs-productor-ticketpro.html"),
   producerTermsUrl: trimOr(env.VITE_LEGAL_PRODUCER_TERMS_URL, "/static/legal/terminos-y-condiciones-productor.pdf"),
 };
+
+const readWindowConfig = () => {
+  if (typeof window === "undefined") return {};
+  const cfg = window.__APP_CONFIG__;
+  return cfg && typeof cfg === "object" ? cfg : {};
+};
+
+export const resolveLegalConfig = (runtimeConfig = null) => {
+  const windowCfg = readWindowConfig();
+  const fromRuntime = runtimeConfig?.legal || {};
+  const fromWindow = windowCfg.legal || {};
+  return { ...envLegalConfig, ...fromWindow, ...fromRuntime };
+};
+
+export const legalConfig = resolveLegalConfig();

@@ -3,12 +3,12 @@ import { brandConfig } from "../config/brand";
 export const EVENT_DRAFT_KEY = "ticketera.newEventDraft.v1";
 
 export const UI = {
-  bg: "bg-[#050508]",
-  card: "bg-neutral-900/40 border border-white/5 backdrop-blur-md",
+  bg: "bg-[#05070f]",
+  card: "bg-[#0b1020]/70 border border-white/8 backdrop-blur-md",
   input:
     "bg-neutral-100 text-neutral-900 border border-neutral-300 placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 dark:bg-white/5 dark:text-white dark:border-white/10 dark:placeholder:text-neutral-500",
   button:
-    "bg-indigo-600 hover:bg-indigo-500 transition-all duration-300 shadow-[0_0_20px_rgba(79,70,229,0.3)]",
+    "bg-indigo-600 hover:bg-indigo-500 transition-all duration-300 shadow-[0_10px_28px_rgba(79,70,229,0.35)]",
   buttonGhost:
     "bg-white/5 hover:bg-white/10 transition-all duration-300 border border-white/10",
 };

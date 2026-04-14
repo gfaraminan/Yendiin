@@ -85,7 +85,7 @@ async def public_login_google(payload: GoogleLoginIn, request: Request):
     }
 
     # Persistimos "usuarios registrados" aunque no compren (para analytics / Mis Tickets)
-    tenant_id = _norm_tenant_id(request.query_params.get("tenant"))
+    tenant_id = _tenant_id_from_query(request.query_params.get("tenant") or "default")
     try:
         with get_conn() as conn:
             cur = conn.cursor()
@@ -161,6 +161,9 @@ def public_config():
         "whatsappShare": _env_bool("VITE_FEATURE_WHATSAPP_SHARE", True),
         "supportLinks": _env_bool("VITE_FEATURE_SUPPORT_LINKS", True),
         "brandedAdminLabels": _env_bool("VITE_FEATURE_BRANDED_ADMIN_LABELS", True),
+        "altCheckoutUx": _env_bool("VITE_FEATURE_ALT_CHECKOUT_UX", False),
+        "altProducerUi": _env_bool("VITE_FEATURE_ALT_PRODUCER_UI", False),
+        "altStaffUi": _env_bool("VITE_FEATURE_ALT_STAFF_UI", False),
     }
     return {
         "google_client_id": (os.getenv("VITE_GOOGLE_CLIENT_ID") or os.getenv("GOOGLE_CLIENT_ID") or "").strip(),

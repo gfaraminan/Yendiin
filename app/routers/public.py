@@ -213,45 +213,13 @@ def _table_columns(cur, table: str) -> set[str]:
 
 
 def _ensure_events_visibility_schema(cur) -> None:
-    cols = _table_columns(cur, "events")
-    if "visibility" in cols:
-        return
-    try:
-        cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS visibility TEXT")
-        cur.execute("ALTER TABLE events ALTER COLUMN visibility SET DEFAULT 'public'")
-        cur.execute("UPDATE events SET visibility='public' WHERE visibility IS NULL")
-        cur.execute("ALTER TABLE events ALTER COLUMN visibility SET NOT NULL")
-        cur.execute(
-            """
-            DO $$
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'events_visibility_check'
-              ) THEN
-                ALTER TABLE events
-                  ADD CONSTRAINT events_visibility_check
-                  CHECK (visibility IN ('public','unlisted'));
-              END IF;
-            END $$;
-            """
-        )
-    except Exception:
-        # Si el rol no tiene permisos DDL, mantenemos compatibilidad sin bloquear lectura.
-        pass
+    # No ejecutamos DDL en runtime para endpoints públicos.
+    return
 
 
 def _ensure_events_sold_out_schema(cur) -> None:
-    cols = _table_columns(cur, "events")
-    if "sold_out" in cols:
-        return
-    try:
-        cur.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS sold_out BOOLEAN")
-        cur.execute("UPDATE events SET sold_out = FALSE WHERE sold_out IS NULL")
-        cur.execute("ALTER TABLE events ALTER COLUMN sold_out SET DEFAULT FALSE")
-        cur.execute("ALTER TABLE events ALTER COLUMN sold_out SET NOT NULL")
-    except Exception:
-        # Compatibilidad best-effort: no bloquear lectura si no hay permisos DDL.
-        pass
+    # No ejecutamos DDL en runtime para endpoints públicos.
+    return
 
 
 # -------------------------
@@ -278,13 +246,18 @@ def get_public_events(
 
         select_cols = [
             "slug", "title", "category", "date_text", "venue", "city",
-            "flyer_url", "hero_bg", "address", "lat", "lng", "badge", "active",
+            "flyer_url", "hero_bg", "address", "lat", "lng",
         ]
+        if "badge" in ev_cols:
+            select_cols.append("badge")
+        if "active" in ev_cols:
+            select_cols.append("active")
         if "sold_out" in ev_cols:
             select_cols.append("sold_out")
         if has_visibility:
             select_cols.append("visibility")
 
+        where_active = "AND active = TRUE" if "active" in ev_cols else ""
         where_visibility = "AND COALESCE(visibility, 'public') = 'public'" if has_visibility else ""
 
         if category and category != "Todos":
@@ -292,7 +265,8 @@ def get_public_events(
                 f"""
                 SELECT {", ".join(select_cols)}
                 FROM events
-                WHERE active = TRUE
+                WHERE 1=1
+                  {where_active}
                   AND tenant_id = %s
                   {where_visibility}
                   AND category = %s
@@ -305,7 +279,8 @@ def get_public_events(
                 f"""
                 SELECT {", ".join(select_cols)}
                 FROM events
-                WHERE active = TRUE
+                WHERE 1=1
+                  {where_active}
                   AND tenant_id = %s
                   {where_visibility}
                 ORDER BY created_at DESC

@@ -84,7 +84,7 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
             key={ev.id || ev.slug || idx}
             data-card={idx === 0 ? "1" : "0"}
             onClick={() => onOpen?.(ev)}
-            className={`shrink-0 text-left rounded-[2.25rem] ${UI.card} overflow-hidden border border-white/10 hover:border-indigo-300/45 transition-all duration-300`}
+            className={`shrink-0 text-left rounded-none ${UI.card} overflow-hidden border border-white/10 hover:border-indigo-300/45 transition-all duration-300`}
             style={{
               width: cardWidth,
               scrollSnapAlign: "start",
@@ -117,7 +117,7 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
               <div className="text-base font-black text-indigo-300 italic">
                 {priceLabelForEvent(ev, formatMoneyFn)}
               </div>
-              <div className="mt-3 inline-flex px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
+              <div className="mt-3 inline-flex px-3 py-2 rounded-none text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
                 Ver evento
               </div>
             </div>
@@ -130,7 +130,7 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
           <button
             key={i}
             onClick={() => jumpTo(i)}
-            className={`h-2 rounded-full transition-all ${
+            className={`h-2 rounded-none transition-all ${
               i === active ? "w-6 bg-white/80" : "w-2 bg-white/25"
             }`}
             aria-label={`Ir a destacado ${i + 1}`}

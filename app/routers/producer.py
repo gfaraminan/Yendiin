@@ -3471,7 +3471,16 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
                     (slug,),
                 )
             except pg_errors.UndefinedTable:
-                _ensure_events_table_exists(conn)
+                # El SELECT dejó la transacción en estado aborted; hay que resetearla
+                # antes de ejecutar cualquier otro statement.
+                conn.rollback()
+                try:
+                    _ensure_events_table_exists(conn)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="events_table_missing_and_create_failed",
+                    ) from e
                 _invalidate_table_columns_cache("events")
                 _invalidate_table_column_types_cache("events")
                 cols = _table_columns(conn, "events")

@@ -24,8 +24,12 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(75% 45% at 50% -5%, rgba(99, 102, 241, 0.28), transparent 60%),
-    linear-gradient(180deg, #080b16 0%, #05070f 38%, #04050b 100%);
+    linear-gradient(180deg, rgba(3, 6, 18, 0.85) 0%, rgba(2, 5, 14, 0.9) 100%),
+    url("https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&w=1920&q=80");
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
 }
 
 button {

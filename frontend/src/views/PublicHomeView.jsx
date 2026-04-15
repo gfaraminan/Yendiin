@@ -25,15 +25,15 @@ export default function PublicHomeView({
 }) {
   return (
     <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-      <section className={`relative overflow-hidden rounded-[2.7rem] border border-white/25 bg-gradient-to-br ${HOME_BRAND_THEME.bgBase} px-6 sm:px-10 py-10 mb-10`}>
-        <div className={`absolute -top-20 -right-10 w-64 h-64 rounded-full ${HOME_BRAND_THEME.glowSecondary} blur-3xl pointer-events-none`} />
-        <div className={`absolute -bottom-24 -left-10 w-64 h-64 rounded-full ${HOME_BRAND_THEME.glowPrimary} blur-3xl pointer-events-none`} />
+      <section className={`relative overflow-hidden rounded-none border border-white/25 bg-gradient-to-br ${HOME_BRAND_THEME.bgBase} px-6 sm:px-10 py-10 mb-10`}>
+        <div className={`absolute -top-20 -right-10 w-64 h-64 rounded-none ${HOME_BRAND_THEME.glowSecondary} blur-3xl pointer-events-none`} />
+        <div className={`absolute -bottom-24 -left-10 w-64 h-64 rounded-none ${HOME_BRAND_THEME.glowPrimary} blur-3xl pointer-events-none`} />
         <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] bg-white/25 text-white/90 border border-white/35 shadow-[0_10px_30px_rgba(148,163,184,0.25)] mb-4">
+            <div className="inline-flex items-center rounded-none px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] bg-white/25 text-white/90 border border-white/35 shadow-[0_10px_30px_rgba(148,163,184,0.25)] mb-4">
               Eventos activos
             </div>
-            <div className="mb-5 inline-flex items-center rounded-2xl border border-white/15 bg-white/20 p-3">
+            <div className="mb-5 inline-flex items-center rounded-none border border-white/15 bg-white/20 p-3">
               <img src="/logo-yendiin-casinos.svg" alt="Yendiin & Casinos" className="h-16 w-auto" loading="lazy" />
             </div>
             <h1 className="text-4xl sm:text-5xl font-black uppercase italic tracking-tight leading-[0.95]">
@@ -45,11 +45,11 @@ export default function PublicHomeView({
           </div>
 
           <div className="grid grid-cols-2 gap-3 min-w-[220px]">
-            <div className="rounded-2xl bg-white/15 border border-white/30 backdrop-blur-xl p-3">
+            <div className="rounded-none bg-white/15 border border-white/30 backdrop-blur-xl p-3">
               <div className="text-[9px] uppercase font-black tracking-widest text-white/70">Disponibles</div>
               <div className="text-2xl font-black mt-1">{filteredEvents.length}</div>
             </div>
-            <div className="rounded-2xl bg-white/15 border border-white/30 backdrop-blur-xl p-3">
+            <div className="rounded-none bg-white/15 border border-white/30 backdrop-blur-xl p-3">
               <div className="text-[9px] uppercase font-black tracking-widest text-white/70">Ciudades</div>
               <div className="text-2xl font-black mt-1">{cities.length}</div>
             </div>
@@ -67,12 +67,12 @@ export default function PublicHomeView({
         </div>
       )}
 
-      <div className={`mt-6 rounded-[2.5rem] border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-hidden shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
+      <div className={`mt-6 rounded-none border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-hidden shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Ciudad
-              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`mt-2 w-full rounded-2xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`mt-2 w-full rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
                 <option value="all">Todas</option>
                 {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -80,7 +80,7 @@ export default function PublicHomeView({
 
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Tipo
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`mt-2 w-full rounded-2xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`mt-2 w-full rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
                 <option value="all">Todos</option>
                 {types.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -89,7 +89,7 @@ export default function PublicHomeView({
 
           <div className="flex-1">
             <div className="text-[10px] font-black uppercase tracking-widest text-white/65">Búsqueda</div>
-            <div className={`mt-2 flex items-center gap-3 rounded-2xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3`}>
+            <div className={`mt-2 flex items-center gap-3 rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3`}>
               <Search size={18} className="text-white/60" />
               <input
                 value={searchQuery}
@@ -104,7 +104,7 @@ export default function PublicHomeView({
                     setFilterType("all");
                     setSearchQuery("");
                   }}
-                  className={`px-3 py-2 rounded-xl ${HOME_BRAND_THEME.accentSoftBg} hover:bg-[#FF9AD8]/30 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
+                  className={`px-3 py-2 rounded-none ${HOME_BRAND_THEME.accentSoftBg} hover:bg-[#FF9AD8]/30 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
                 >
                   Limpiar
                 </button>
@@ -123,11 +123,11 @@ export default function PublicHomeView({
           <button
             key={ev.id}
             onClick={() => onOpenEvent(ev.slug)}
-            className={`w-full text-left bg-white/14 backdrop-blur-xl rounded-3xl p-3 overflow-hidden border border-white/25 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
+            className={`w-full text-left bg-white/14 backdrop-blur-xl rounded-none p-3 overflow-hidden border border-white/25 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
               isEventSoldOut(ev) ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_24px_rgba(244,63,94,0.55)]" : ""
             }`}
           >
-            <div className="relative h-80 rounded-[1.25rem] overflow-hidden bg-black">
+            <div className="relative h-80 rounded-none overflow-hidden bg-black">
               <img
                 src={flyerSrc(ev)}
                 alt={ev.title}
@@ -152,7 +152,7 @@ export default function PublicHomeView({
           <button
             key={ev.id}
             onClick={() => onOpenEvent(ev.slug)}
-            className={`text-left overflow-hidden rounded-[2.5rem] bg-white/14 backdrop-blur-xl border border-white/25 hover:border-[#FF9AD8]/65 hover:-translate-y-1 transition-all duration-300 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
+            className={`text-left overflow-hidden rounded-none bg-white/14 backdrop-blur-xl border border-white/25 hover:border-[#FF9AD8]/65 hover:-translate-y-1 transition-all duration-300 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
               isEventSoldOut(ev) ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_34px_rgba(244,63,94,0.5)]" : ""
             }`}
           >

@@ -70,34 +70,18 @@ def _invalidate_table_columns_cache(table: str, schema: str = "public") -> None:
         del _table_columns._cache[key]
 
 
+def _invalidate_table_column_types_cache(table: str, schema: str = "public") -> None:
+    key = f"{schema}.{table}"
+    if hasattr(_table_column_types, "_cache") and key in _table_column_types._cache:
+        del _table_column_types._cache[key]
+
+
 def _ensure_events_visibility_schema(conn) -> None:
-    """Best-effort self-heal for environments where SQL migrations weren't applied yet."""
-    cols = _table_columns(conn, "events")
-    if "visibility" in cols:
-        return
-    try:
-        conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS visibility TEXT")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET DEFAULT 'public'")
-        conn.execute("UPDATE events SET visibility='public' WHERE visibility IS NULL")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET NOT NULL")
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'events_visibility_check'
-              ) THEN
-                ALTER TABLE events
-                  ADD CONSTRAINT events_visibility_check
-                  CHECK (visibility IN ('public','unlisted'));
-              END IF;
-            END $$;
-            """
-        )
-    except Exception:
-        # Si no hay permisos DDL, no rompemos el flujo; la migración manual lo resuelve.
-        return
-    _invalidate_table_columns_cache("events")
+    """No-op: no ejecutamos DDL desde la app en runtime.
+
+    Si falta la columna `visibility`, debe resolverse por migraciones.
+    """
+    return
 
 
 def _ensure_sale_items_schema(conn) -> None:
@@ -141,36 +125,41 @@ def _register_terms_acceptance(
     if not accepted:
         return
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS terms_acceptance_log (
-            id BIGSERIAL PRIMARY KEY,
-            tenant_id TEXT,
-            producer TEXT,
-            event_slug TEXT,
-            accepted BOOLEAN NOT NULL,
-            accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            ip_address TEXT,
-            user_agent TEXT
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS terms_acceptance_log (
+                id BIGSERIAL PRIMARY KEY,
+                tenant_id TEXT,
+                producer TEXT,
+                event_slug TEXT,
+                accepted BOOLEAN NOT NULL,
+                accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                ip_address TEXT,
+                user_agent TEXT
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        """
-        INSERT INTO terms_acceptance_log
-            (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
-        VALUES
-            (%s, %s, %s, %s, NOW(), %s, %s)
-        """,
-        (
-            tenant_id,
-            producer,
-            event_slug,
-            bool(accepted),
-            _client_ip_from_request(request),
-            (request.headers.get("user-agent") or "")[:512],
-        ),
-    )
+        conn.execute(
+            """
+            INSERT INTO terms_acceptance_log
+                (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
+            VALUES
+                (%s, %s, %s, %s, NOW(), %s, %s)
+            """,
+            (
+                tenant_id,
+                producer,
+                event_slug,
+                bool(accepted),
+                _client_ip_from_request(request),
+                (request.headers.get("user-agent") or "")[:512],
+            ),
+        )
+    except Exception:
+        # No bloqueamos el alta/edición de evento por un fallo de auditoría.
+        # En algunos entornos (DB gestionada sin permisos DDL) CREATE TABLE puede fallar.
+        return
 
 
 # -------------------------------------------------------------------
@@ -789,47 +778,78 @@ def _table_column_types(conn, table: str, schema: str = "public") -> dict[str, s
 
 
 def _ensure_events_columns(conn) -> None:
-    """Ensure the 'events' table contains columns used by the UI.
-    Works for both SQLite and Postgres-ish backends (best-effort).
+    """No-op: no ejecutamos ALTER TABLE desde la app en producción.
+
+    Las columnas nuevas deben venir por migraciones versionadas.
     """
-    desired = {
-        "flyer_url": "TEXT",
-        "hero_bg": "TEXT",
-        "description": "TEXT",
-        "address": "TEXT",
-        "city": "TEXT",
-        "venue": "TEXT",
-        "lat": "REAL",
-        "lng": "REAL",
-        "updated_at": "TEXT",
-        # payment settlement fields (needed for MP split)
-        "payout_alias": "TEXT",
-        "cuit": "TEXT",
-        "settlement_mode": "TEXT",
-        "mp_collector_id": "TEXT",
-        "sold_out": "BOOLEAN",
-    }
-    try:
-        cols = set(_table_columns(conn, "events"))
-    except Exception:
-        # If we can't introspect, don't block writes.
-        return
+    return
 
-    missing = [c for c in desired.keys() if c not in cols]
-    if not missing:
-        return
 
-    for c in missing:
-        coltype = desired[c]
-        # Try Postgres syntax first, then SQLite.
-        try:
-            conn.execute(f'ALTER TABLE events ADD COLUMN IF NOT EXISTS {c} {coltype}')
-        except Exception:
-            try:
-                conn.execute(f'ALTER TABLE events ADD COLUMN {c} {coltype}')
-            except Exception:
-                # If still failing, keep going; we'll just not persist that field.
-                continue
+def _ensure_events_table_exists(conn) -> None:
+    """Crea la tabla `events` mínima si no existe.
+
+    En algunos despliegues nuevos la tabla puede no estar creada aún y el alta
+    de eventos termina en `UndefinedTable`. Este helper permite auto-recuperar
+    ese caso puntual sin depender de DDL en cada request.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id BIGSERIAL PRIMARY KEY,
+            tenant_id TEXT NOT NULL DEFAULT 'default',
+            tenant TEXT,
+            producer TEXT,
+            slug TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            category TEXT,
+            date_text TEXT,
+            venue TEXT,
+            city TEXT,
+            flyer_url TEXT,
+            hero_bg TEXT,
+            address TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            description TEXT,
+            visibility TEXT NOT NULL DEFAULT 'public',
+            payout_alias TEXT,
+            cuit TEXT,
+            settlement_mode TEXT NOT NULL DEFAULT 'manual_transfer',
+            mp_collector_id TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            sold_out BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+
+
+def _ensure_sale_items_table_exists(conn) -> None:
+    """Crea tabla `sale_items` mínima para entornos sin migraciones aplicadas."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sale_items (
+            id BIGSERIAL PRIMARY KEY,
+            tenant TEXT NOT NULL,
+            event_slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'ticket',
+            price_cents BIGINT NOT NULL DEFAULT 0,
+            stock_total INTEGER NOT NULL DEFAULT 0,
+            stock_sold INTEGER NOT NULL DEFAULT 0,
+            start_date TEXT,
+            end_date TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            display_order INTEGER NOT NULL DEFAULT 0,
+            created_at BIGINT,
+            updated_at BIGINT,
+            item_name TEXT,
+            item_type TEXT,
+            UNIQUE (tenant, event_slug, kind, name)
+        )
+        """
+    )
 
 def _smart_now_for_column(col_type: str):
     """Retorna valor 'ahora' compatible con el tipo de columna."""
@@ -3472,14 +3492,39 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
         slug = base
         i = 2
         while True:
-            cur = conn.execute(
-                """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
-                (slug,),
-            )
+            try:
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
+            except pg_errors.UndefinedTable:
+                # El SELECT dejó la transacción en estado aborted; hay que resetearla
+                # antes de ejecutar cualquier otro statement.
+                conn.rollback()
+                try:
+                    _ensure_events_table_exists(conn)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="events_table_missing_and_create_failed",
+                    ) from e
+                _invalidate_table_columns_cache("events")
+                _invalidate_table_column_types_cache("events")
+                cols = _table_columns(conn, "events")
+                col_types = _table_column_types(conn, "events")
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
             if not cur.fetchone():
                 break
             slug = f"{base}-{i}"
             i += 1
+
+        if not cols:
+            cols = _table_columns(conn, "events")
+        if not col_types:
+            col_types = _table_column_types(conn, "events")
 
         data = {
             "tenant_id": tenant_id,
@@ -3793,34 +3838,37 @@ def api_sale_items(
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT
-                si.id,
-                si.tenant,
-                si.event_slug,
-                si.name,
-                COALESCE(si.kind, 'ticket') AS kind,
-                COALESCE(si.price_cents, 0) AS price_cents,
-                COALESCE(si.stock_total, 0) AS stock_total,
-                COALESCE(si.stock_sold, 0) AS stock_sold,
-                COALESCE(si.start_date, '') AS start_date,
-                COALESCE(si.end_date, '') AS end_date,
-                COALESCE(si.active, TRUE) AS active,
-                COALESCE(si.display_order, 0) AS display_order,
-                si.created_at,
-                si.updated_at
-            FROM sale_items si
-            JOIN events e
-              ON e.slug = si.event_slug
-             AND (e.tenant = si.tenant OR e.producer = si.tenant)
-            WHERE e.tenant_id = %s
-              AND e.slug = %s
-              AND (e.tenant = %s OR e.producer = %s)
-            ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
-            """,
-            (tenant_id, event_slug, producer, producer),
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    si.id,
+                    si.tenant,
+                    si.event_slug,
+                    si.name,
+                    COALESCE(si.kind, 'ticket') AS kind,
+                    COALESCE(si.price_cents, 0) AS price_cents,
+                    COALESCE(si.stock_total, 0) AS stock_total,
+                    COALESCE(si.stock_sold, 0) AS stock_sold,
+                    COALESCE(si.start_date, '') AS start_date,
+                    COALESCE(si.end_date, '') AS end_date,
+                    COALESCE(si.active, TRUE) AS active,
+                    COALESCE(si.display_order, 0) AS display_order,
+                    si.created_at,
+                    si.updated_at
+                FROM sale_items si
+                JOIN events e
+                  ON e.slug = si.event_slug
+                 AND (e.tenant = si.tenant OR e.producer = si.tenant)
+                WHERE e.tenant_id = %s
+                  AND e.slug = %s
+                  AND (e.tenant = %s OR e.producer = %s)
+                ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
+                """,
+                (tenant_id, event_slug, producer, producer),
+            ).fetchall()
+        except pg_errors.UndefinedTable:
+            return {"ok": True, "items": []}
 
     items = []
     for r in rows:
@@ -3902,8 +3950,7 @@ def api_sale_item_create(
 
     with get_conn() as conn:
         # Upsert por unique constraint real: (tenant, event_slug, kind, name)
-        row = conn.execute(
-            """
+        sql = """
             INSERT INTO sale_items (
                 tenant, event_slug, name, kind,
                 price_cents, stock_total, stock_sold,
@@ -3928,24 +3975,97 @@ def api_sale_item_create(
                 id, tenant, event_slug, name, kind, price_cents,
                 stock_total, stock_sold, start_date, end_date,
                 active, display_order, created_at, updated_at
-            """,
-            (
-                producer,
-                event_slug,
-                name,
-                kind,
-                price_cents,
-                stock_total,
-                start_date,
-                end_date,
-                active,
-                display_order,
-                now_s,
-                now_s,
-                name,
-                kind,
-            ),
-        ).fetchone()
+        """
+        params = (
+            producer,
+            event_slug,
+            name,
+            kind,
+            price_cents,
+            stock_total,
+            start_date,
+            end_date,
+            active,
+            display_order,
+            now_s,
+            now_s,
+            name,
+            kind,
+        )
+        compat_insert_order = [
+            "tenant", "event_slug", "name", "kind",
+            "price_cents", "stock_total", "stock_sold",
+            "start_date", "end_date",
+            "active", "display_order",
+            "created_at", "updated_at",
+            "item_name", "item_type",
+        ]
+        compat_data = {
+            "tenant": producer,
+            "event_slug": event_slug,
+            "name": name,
+            "kind": kind,
+            "price_cents": price_cents,
+            "stock_total": stock_total,
+            "stock_sold": 0,
+            "start_date": start_date,
+            "end_date": end_date,
+            "active": active,
+            "display_order": display_order,
+            "created_at": now_s,
+            "updated_at": now_s,
+            "item_name": name,
+            "item_type": kind,
+        }
+
+        def _run_compat_upsert():
+            si_cols = _table_columns(conn, "sale_items")
+            insert_cols = [c for c in compat_insert_order if c in si_cols]
+            conflict_cols = [c for c in ("tenant", "event_slug", "kind", "name") if c in si_cols]
+            if len(conflict_cols) < 4:
+                raise HTTPException(status_code=500, detail="sale_items_schema_incompatible")
+
+            update_candidates = [
+                "price_cents", "stock_total", "start_date", "end_date",
+                "active", "display_order", "updated_at", "item_name", "item_type",
+            ]
+            update_cols = [c for c in update_candidates if c in si_cols]
+            set_clause = ",\n                ".join([f"{c} = EXCLUDED.{c}" for c in update_cols]) or "updated_at = EXCLUDED.updated_at"
+            returning_candidates = [
+                "id", "tenant", "event_slug", "name", "kind", "price_cents",
+                "stock_total", "stock_sold", "start_date", "end_date",
+                "active", "display_order", "created_at", "updated_at",
+            ]
+            returning_cols = [c for c in returning_candidates if c in si_cols]
+            if not returning_cols:
+                returning_cols = ["tenant", "event_slug", "name"]
+
+            values = [compat_data[c] for c in insert_cols]
+            placeholders = ", ".join(["%s"] * len(insert_cols))
+            sql_compat = f"""
+                INSERT INTO sale_items ({", ".join(insert_cols)})
+                VALUES ({placeholders})
+                ON CONFLICT ({", ".join(conflict_cols)})
+                DO UPDATE SET
+                    {set_clause}
+                RETURNING {", ".join(returning_cols)}
+            """
+            return conn.execute(sql_compat, tuple(values)).fetchone()
+
+        try:
+            row = conn.execute(sql, params).fetchone()
+        except pg_errors.UndefinedTable:
+            conn.rollback()
+            _ensure_sale_items_table_exists(conn)
+            _invalidate_table_columns_cache("sale_items")
+            try:
+                row = conn.execute(sql, params).fetchone()
+            except pg_errors.UndefinedColumn:
+                conn.rollback()
+                row = _run_compat_upsert()
+        except pg_errors.UndefinedColumn:
+            conn.rollback()
+            row = _run_compat_upsert()
         conn.commit()
 
     d = dict(row) if not isinstance(row, dict) else row

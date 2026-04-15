@@ -71,33 +71,11 @@ def _invalidate_table_columns_cache(table: str, schema: str = "public") -> None:
 
 
 def _ensure_events_visibility_schema(conn) -> None:
-    """Best-effort self-heal for environments where SQL migrations weren't applied yet."""
-    cols = _table_columns(conn, "events")
-    if "visibility" in cols:
-        return
-    try:
-        conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS visibility TEXT")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET DEFAULT 'public'")
-        conn.execute("UPDATE events SET visibility='public' WHERE visibility IS NULL")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET NOT NULL")
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'events_visibility_check'
-              ) THEN
-                ALTER TABLE events
-                  ADD CONSTRAINT events_visibility_check
-                  CHECK (visibility IN ('public','unlisted'));
-              END IF;
-            END $$;
-            """
-        )
-    except Exception:
-        # Si no hay permisos DDL, no rompemos el flujo; la migración manual lo resuelve.
-        return
-    _invalidate_table_columns_cache("events")
+    """No-op: no ejecutamos DDL desde la app en runtime.
+
+    Si falta la columna `visibility`, debe resolverse por migraciones.
+    """
+    return
 
 
 def _ensure_sale_items_schema(conn) -> None:
@@ -794,47 +772,11 @@ def _table_column_types(conn, table: str, schema: str = "public") -> dict[str, s
 
 
 def _ensure_events_columns(conn) -> None:
-    """Ensure the 'events' table contains columns used by the UI.
-    Works for both SQLite and Postgres-ish backends (best-effort).
+    """No-op: no ejecutamos ALTER TABLE desde la app en producción.
+
+    Las columnas nuevas deben venir por migraciones versionadas.
     """
-    desired = {
-        "flyer_url": "TEXT",
-        "hero_bg": "TEXT",
-        "description": "TEXT",
-        "address": "TEXT",
-        "city": "TEXT",
-        "venue": "TEXT",
-        "lat": "REAL",
-        "lng": "REAL",
-        "updated_at": "TEXT",
-        # payment settlement fields (needed for MP split)
-        "payout_alias": "TEXT",
-        "cuit": "TEXT",
-        "settlement_mode": "TEXT",
-        "mp_collector_id": "TEXT",
-        "sold_out": "BOOLEAN",
-    }
-    try:
-        cols = set(_table_columns(conn, "events"))
-    except Exception:
-        # If we can't introspect, don't block writes.
-        return
-
-    missing = [c for c in desired.keys() if c not in cols]
-    if not missing:
-        return
-
-    for c in missing:
-        coltype = desired[c]
-        # Try Postgres syntax first, then SQLite.
-        try:
-            conn.execute(f'ALTER TABLE events ADD COLUMN IF NOT EXISTS {c} {coltype}')
-        except Exception:
-            try:
-                conn.execute(f'ALTER TABLE events ADD COLUMN {c} {coltype}')
-            except Exception:
-                # If still failing, keep going; we'll just not persist that field.
-                continue
+    return
 
 def _smart_now_for_column(col_type: str):
     """Retorna valor 'ahora' compatible con el tipo de columna."""

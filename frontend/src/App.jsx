@@ -530,7 +530,7 @@ const EditorModal = ({
       setFlyerPreview(editFormData?.flyer_url || "");
       // Asegura default de términos visible desde el paso 1
       if (typeof editFormData?.accept_terms === "undefined") {
-        setEditFormData((p) => ({ ...p, accept_terms: false }));
+        setEditFormData((p) => ({ ...p, accept_terms: true }));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4402,7 +4402,7 @@ setLoading(true);
         visibility: "public",
         settlement_mode: "manual_transfer",
         mp_collector_id: "",
-        accept_terms: false,
+        accept_terms: true,
         stock_total: 0,
         stock_sold: 0,
         revenue: 0,

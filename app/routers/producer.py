@@ -824,6 +824,33 @@ def _ensure_events_table_exists(conn) -> None:
         """
     )
 
+
+def _ensure_sale_items_table_exists(conn) -> None:
+    """Crea tabla `sale_items` mínima para entornos sin migraciones aplicadas."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sale_items (
+            id BIGSERIAL PRIMARY KEY,
+            tenant TEXT NOT NULL,
+            event_slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'ticket',
+            price_cents BIGINT NOT NULL DEFAULT 0,
+            stock_total INTEGER NOT NULL DEFAULT 0,
+            stock_sold INTEGER NOT NULL DEFAULT 0,
+            start_date TEXT,
+            end_date TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            display_order INTEGER NOT NULL DEFAULT 0,
+            created_at BIGINT,
+            updated_at BIGINT,
+            item_name TEXT,
+            item_type TEXT,
+            UNIQUE (tenant, event_slug, kind, name)
+        )
+        """
+    )
+
 def _smart_now_for_column(col_type: str):
     """Retorna valor 'ahora' compatible con el tipo de columna."""
     t = (col_type or "").lower()
@@ -3811,34 +3838,37 @@ def api_sale_items(
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT
-                si.id,
-                si.tenant,
-                si.event_slug,
-                si.name,
-                COALESCE(si.kind, 'ticket') AS kind,
-                COALESCE(si.price_cents, 0) AS price_cents,
-                COALESCE(si.stock_total, 0) AS stock_total,
-                COALESCE(si.stock_sold, 0) AS stock_sold,
-                COALESCE(si.start_date, '') AS start_date,
-                COALESCE(si.end_date, '') AS end_date,
-                COALESCE(si.active, TRUE) AS active,
-                COALESCE(si.display_order, 0) AS display_order,
-                si.created_at,
-                si.updated_at
-            FROM sale_items si
-            JOIN events e
-              ON e.slug = si.event_slug
-             AND (e.tenant = si.tenant OR e.producer = si.tenant)
-            WHERE e.tenant_id = %s
-              AND e.slug = %s
-              AND (e.tenant = %s OR e.producer = %s)
-            ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
-            """,
-            (tenant_id, event_slug, producer, producer),
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                """
+                SELECT
+                    si.id,
+                    si.tenant,
+                    si.event_slug,
+                    si.name,
+                    COALESCE(si.kind, 'ticket') AS kind,
+                    COALESCE(si.price_cents, 0) AS price_cents,
+                    COALESCE(si.stock_total, 0) AS stock_total,
+                    COALESCE(si.stock_sold, 0) AS stock_sold,
+                    COALESCE(si.start_date, '') AS start_date,
+                    COALESCE(si.end_date, '') AS end_date,
+                    COALESCE(si.active, TRUE) AS active,
+                    COALESCE(si.display_order, 0) AS display_order,
+                    si.created_at,
+                    si.updated_at
+                FROM sale_items si
+                JOIN events e
+                  ON e.slug = si.event_slug
+                 AND (e.tenant = si.tenant OR e.producer = si.tenant)
+                WHERE e.tenant_id = %s
+                  AND e.slug = %s
+                  AND (e.tenant = %s OR e.producer = %s)
+                ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
+                """,
+                (tenant_id, event_slug, producer, producer),
+            ).fetchall()
+        except pg_errors.UndefinedTable:
+            return {"ok": True, "items": []}
 
     items = []
     for r in rows:
@@ -3920,8 +3950,7 @@ def api_sale_item_create(
 
     with get_conn() as conn:
         # Upsert por unique constraint real: (tenant, event_slug, kind, name)
-        row = conn.execute(
-            """
+        sql = """
             INSERT INTO sale_items (
                 tenant, event_slug, name, kind,
                 price_cents, stock_total, stock_sold,
@@ -3946,24 +3975,30 @@ def api_sale_item_create(
                 id, tenant, event_slug, name, kind, price_cents,
                 stock_total, stock_sold, start_date, end_date,
                 active, display_order, created_at, updated_at
-            """,
-            (
-                producer,
-                event_slug,
-                name,
-                kind,
-                price_cents,
-                stock_total,
-                start_date,
-                end_date,
-                active,
-                display_order,
-                now_s,
-                now_s,
-                name,
-                kind,
-            ),
-        ).fetchone()
+        """
+        params = (
+            producer,
+            event_slug,
+            name,
+            kind,
+            price_cents,
+            stock_total,
+            start_date,
+            end_date,
+            active,
+            display_order,
+            now_s,
+            now_s,
+            name,
+            kind,
+        )
+        try:
+            row = conn.execute(sql, params).fetchone()
+        except pg_errors.UndefinedTable:
+            conn.rollback()
+            _ensure_sale_items_table_exists(conn)
+            _invalidate_table_columns_cache("sale_items")
+            row = conn.execute(sql, params).fetchone()
         conn.commit()
 
     d = dict(row) if not isinstance(row, dict) else row

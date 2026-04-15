@@ -278,13 +278,18 @@ def get_public_events(
 
         select_cols = [
             "slug", "title", "category", "date_text", "venue", "city",
-            "flyer_url", "hero_bg", "address", "lat", "lng", "badge", "active",
+            "flyer_url", "hero_bg", "address", "lat", "lng",
         ]
+        if "badge" in ev_cols:
+            select_cols.append("badge")
+        if "active" in ev_cols:
+            select_cols.append("active")
         if "sold_out" in ev_cols:
             select_cols.append("sold_out")
         if has_visibility:
             select_cols.append("visibility")
 
+        where_active = "AND active = TRUE" if "active" in ev_cols else ""
         where_visibility = "AND COALESCE(visibility, 'public') = 'public'" if has_visibility else ""
 
         if category and category != "Todos":
@@ -292,7 +297,8 @@ def get_public_events(
                 f"""
                 SELECT {", ".join(select_cols)}
                 FROM events
-                WHERE active = TRUE
+                WHERE 1=1
+                  {where_active}
                   AND tenant_id = %s
                   {where_visibility}
                   AND category = %s
@@ -305,7 +311,8 @@ def get_public_events(
                 f"""
                 SELECT {", ".join(select_cols)}
                 FROM events
-                WHERE active = TRUE
+                WHERE 1=1
+                  {where_active}
                   AND tenant_id = %s
                   {where_visibility}
                 ORDER BY created_at DESC

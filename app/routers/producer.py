@@ -70,34 +70,18 @@ def _invalidate_table_columns_cache(table: str, schema: str = "public") -> None:
         del _table_columns._cache[key]
 
 
+def _invalidate_table_column_types_cache(table: str, schema: str = "public") -> None:
+    key = f"{schema}.{table}"
+    if hasattr(_table_column_types, "_cache") and key in _table_column_types._cache:
+        del _table_column_types._cache[key]
+
+
 def _ensure_events_visibility_schema(conn) -> None:
-    """Best-effort self-heal for environments where SQL migrations weren't applied yet."""
-    cols = _table_columns(conn, "events")
-    if "visibility" in cols:
-        return
-    try:
-        conn.execute("ALTER TABLE events ADD COLUMN IF NOT EXISTS visibility TEXT")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET DEFAULT 'public'")
-        conn.execute("UPDATE events SET visibility='public' WHERE visibility IS NULL")
-        conn.execute("ALTER TABLE events ALTER COLUMN visibility SET NOT NULL")
-        conn.execute(
-            """
-            DO $$
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'events_visibility_check'
-              ) THEN
-                ALTER TABLE events
-                  ADD CONSTRAINT events_visibility_check
-                  CHECK (visibility IN ('public','unlisted'));
-              END IF;
-            END $$;
-            """
-        )
-    except Exception:
-        # Si no hay permisos DDL, no rompemos el flujo; la migración manual lo resuelve.
-        return
-    _invalidate_table_columns_cache("events")
+    """No-op: no ejecutamos DDL desde la app en runtime.
+
+    Si falta la columna `visibility`, debe resolverse por migraciones.
+    """
+    return
 
 
 def _ensure_sale_items_schema(conn) -> None:
@@ -141,36 +125,41 @@ def _register_terms_acceptance(
     if not accepted:
         return
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS terms_acceptance_log (
-            id BIGSERIAL PRIMARY KEY,
-            tenant_id TEXT,
-            producer TEXT,
-            event_slug TEXT,
-            accepted BOOLEAN NOT NULL,
-            accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            ip_address TEXT,
-            user_agent TEXT
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS terms_acceptance_log (
+                id BIGSERIAL PRIMARY KEY,
+                tenant_id TEXT,
+                producer TEXT,
+                event_slug TEXT,
+                accepted BOOLEAN NOT NULL,
+                accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                ip_address TEXT,
+                user_agent TEXT
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        """
-        INSERT INTO terms_acceptance_log
-            (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
-        VALUES
-            (%s, %s, %s, %s, NOW(), %s, %s)
-        """,
-        (
-            tenant_id,
-            producer,
-            event_slug,
-            bool(accepted),
-            _client_ip_from_request(request),
-            (request.headers.get("user-agent") or "")[:512],
-        ),
-    )
+        conn.execute(
+            """
+            INSERT INTO terms_acceptance_log
+                (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
+            VALUES
+                (%s, %s, %s, %s, NOW(), %s, %s)
+            """,
+            (
+                tenant_id,
+                producer,
+                event_slug,
+                bool(accepted),
+                _client_ip_from_request(request),
+                (request.headers.get("user-agent") or "")[:512],
+            ),
+        )
+    except Exception:
+        # No bloqueamos el alta/edición de evento por un fallo de auditoría.
+        # En algunos entornos (DB gestionada sin permisos DDL) CREATE TABLE puede fallar.
+        return
 
 
 # -------------------------------------------------------------------
@@ -789,47 +778,51 @@ def _table_column_types(conn, table: str, schema: str = "public") -> dict[str, s
 
 
 def _ensure_events_columns(conn) -> None:
-    """Ensure the 'events' table contains columns used by the UI.
-    Works for both SQLite and Postgres-ish backends (best-effort).
+    """No-op: no ejecutamos ALTER TABLE desde la app en producción.
+
+    Las columnas nuevas deben venir por migraciones versionadas.
     """
-    desired = {
-        "flyer_url": "TEXT",
-        "hero_bg": "TEXT",
-        "description": "TEXT",
-        "address": "TEXT",
-        "city": "TEXT",
-        "venue": "TEXT",
-        "lat": "REAL",
-        "lng": "REAL",
-        "updated_at": "TEXT",
-        # payment settlement fields (needed for MP split)
-        "payout_alias": "TEXT",
-        "cuit": "TEXT",
-        "settlement_mode": "TEXT",
-        "mp_collector_id": "TEXT",
-        "sold_out": "BOOLEAN",
-    }
-    try:
-        cols = set(_table_columns(conn, "events"))
-    except Exception:
-        # If we can't introspect, don't block writes.
-        return
+    return
 
-    missing = [c for c in desired.keys() if c not in cols]
-    if not missing:
-        return
 
-    for c in missing:
-        coltype = desired[c]
-        # Try Postgres syntax first, then SQLite.
-        try:
-            conn.execute(f'ALTER TABLE events ADD COLUMN IF NOT EXISTS {c} {coltype}')
-        except Exception:
-            try:
-                conn.execute(f'ALTER TABLE events ADD COLUMN {c} {coltype}')
-            except Exception:
-                # If still failing, keep going; we'll just not persist that field.
-                continue
+def _ensure_events_table_exists(conn) -> None:
+    """Crea la tabla `events` mínima si no existe.
+
+    En algunos despliegues nuevos la tabla puede no estar creada aún y el alta
+    de eventos termina en `UndefinedTable`. Este helper permite auto-recuperar
+    ese caso puntual sin depender de DDL en cada request.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id BIGSERIAL PRIMARY KEY,
+            tenant_id TEXT NOT NULL DEFAULT 'default',
+            tenant TEXT,
+            producer TEXT,
+            slug TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            category TEXT,
+            date_text TEXT,
+            venue TEXT,
+            city TEXT,
+            flyer_url TEXT,
+            hero_bg TEXT,
+            address TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            description TEXT,
+            visibility TEXT NOT NULL DEFAULT 'public',
+            payout_alias TEXT,
+            cuit TEXT,
+            settlement_mode TEXT NOT NULL DEFAULT 'manual_transfer',
+            mp_collector_id TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            sold_out BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
 
 def _smart_now_for_column(col_type: str):
     """Retorna valor 'ahora' compatible con el tipo de columna."""
@@ -3472,14 +3465,39 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
         slug = base
         i = 2
         while True:
-            cur = conn.execute(
-                """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
-                (slug,),
-            )
+            try:
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
+            except pg_errors.UndefinedTable:
+                # El SELECT dejó la transacción en estado aborted; hay que resetearla
+                # antes de ejecutar cualquier otro statement.
+                conn.rollback()
+                try:
+                    _ensure_events_table_exists(conn)
+                except Exception as e:
+                    raise HTTPException(
+                        status_code=500,
+                        detail="events_table_missing_and_create_failed",
+                    ) from e
+                _invalidate_table_columns_cache("events")
+                _invalidate_table_column_types_cache("events")
+                cols = _table_columns(conn, "events")
+                col_types = _table_column_types(conn, "events")
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
             if not cur.fetchone():
                 break
             slug = f"{base}-{i}"
             i += 1
+
+        if not cols:
+            cols = _table_columns(conn, "events")
+        if not col_types:
+            col_types = _table_column_types(conn, "events")
 
         data = {
             "tenant_id": tenant_id,

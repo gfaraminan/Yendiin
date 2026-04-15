@@ -440,6 +440,7 @@ const EditorModal = ({
   onFlyerPicked,
   currentView,
   onOpenStaffAccess,
+  legalConfig,
 }) => {
   if (!editFormData) return null;
 
@@ -2989,6 +2990,35 @@ export default function App() {
 
 
   const openPublicEvent = async (slug) => {
+    const localFallbackEvent = (events || []).find((ev) => String(ev?.slug || "") === String(slug || ""));
+    const openWithLocalFallback = () => {
+      if (!localFallbackEvent) return false;
+      const sellerFromUrl =
+        new URLSearchParams(window.location.search).get("seller") ||
+        new URLSearchParams(window.location.search).get("seller_code") ||
+        "";
+      const localItems = Array.isArray(localFallbackEvent?.items) ? localFallbackEvent.items : [];
+      setSelectedSellerCode(String(sellerFromUrl || "").trim());
+      setSelectedEvent({
+        id: localFallbackEvent.id || localFallbackEvent.slug,
+        ...localFallbackEvent,
+        items: localItems,
+        flyer_url: localFallbackEvent.flyer_url || localFallbackEvent.hero_bg,
+      });
+      setSelectedTicket(localItems[0] || null);
+      const detailPath = `/evento/${encodeURIComponent(slug)}`;
+      const detailUrl = `${detailPath}${window.location.search || ""}`;
+      const currentUrl = `${window.location.pathname}${window.location.search || ""}`;
+      if (currentUrl !== detailUrl) {
+        window.history.pushState({ ticketpro_view: "detail", slug }, "", detailUrl);
+      } else {
+        window.history.replaceState({ ticketpro_view: "detail", slug }, "", detailUrl);
+      }
+      window.scrollTo({ top: 0, behavior: "auto" });
+      setView("detail");
+      return true;
+    };
+
     try {
       setLoading(true);
       const r = await fetch(`/api/public/events/${encodeURIComponent(slug)}?tenant=${encodeURIComponent(publicTenant)}`, {
@@ -3033,9 +3063,11 @@ export default function App() {
         setView("detail");
         return;
       }
+      if (openWithLocalFallback()) return;
       alert("No se pudo abrir el evento (detalle).");
     } catch (e) {
       console.error(e);
+      if (openWithLocalFallback()) return;
       alert("Error abriendo evento: " + (e?.message || e));
     } finally {
       setLoading(false);
@@ -7220,6 +7252,7 @@ if (closeOnSuccess) {
           onFlyerPicked={(file) => { flyerPendingRef.current = file; }}
           currentView={view}
           onOpenStaffAccess={openStaffLinksModal}
+          legalConfig={legalConfig}
         />
       )}
 

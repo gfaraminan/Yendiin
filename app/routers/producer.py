@@ -70,6 +70,12 @@ def _invalidate_table_columns_cache(table: str, schema: str = "public") -> None:
         del _table_columns._cache[key]
 
 
+def _invalidate_table_column_types_cache(table: str, schema: str = "public") -> None:
+    key = f"{schema}.{table}"
+    if hasattr(_table_column_types, "_cache") and key in _table_column_types._cache:
+        del _table_column_types._cache[key]
+
+
 def _ensure_events_visibility_schema(conn) -> None:
     """No-op: no ejecutamos DDL desde la app en runtime.
 
@@ -777,6 +783,46 @@ def _ensure_events_columns(conn) -> None:
     Las columnas nuevas deben venir por migraciones versionadas.
     """
     return
+
+
+def _ensure_events_table_exists(conn) -> None:
+    """Crea la tabla `events` mínima si no existe.
+
+    En algunos despliegues nuevos la tabla puede no estar creada aún y el alta
+    de eventos termina en `UndefinedTable`. Este helper permite auto-recuperar
+    ese caso puntual sin depender de DDL en cada request.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS events (
+            id BIGSERIAL PRIMARY KEY,
+            tenant_id TEXT NOT NULL DEFAULT 'default',
+            tenant TEXT,
+            producer TEXT,
+            slug TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            category TEXT,
+            date_text TEXT,
+            venue TEXT,
+            city TEXT,
+            flyer_url TEXT,
+            hero_bg TEXT,
+            address TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            description TEXT,
+            visibility TEXT NOT NULL DEFAULT 'public',
+            payout_alias TEXT,
+            cuit TEXT,
+            settlement_mode TEXT NOT NULL DEFAULT 'manual_transfer',
+            mp_collector_id TEXT,
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            sold_out BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
 
 def _smart_now_for_column(col_type: str):
     """Retorna valor 'ahora' compatible con el tipo de columna."""
@@ -3419,14 +3465,30 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
         slug = base
         i = 2
         while True:
-            cur = conn.execute(
-                """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
-                (slug,),
-            )
+            try:
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
+            except pg_errors.UndefinedTable:
+                _ensure_events_table_exists(conn)
+                _invalidate_table_columns_cache("events")
+                _invalidate_table_column_types_cache("events")
+                cols = _table_columns(conn, "events")
+                col_types = _table_column_types(conn, "events")
+                cur = conn.execute(
+                    """SELECT 1 FROM events WHERE slug = %s LIMIT 1""",
+                    (slug,),
+                )
             if not cur.fetchone():
                 break
             slug = f"{base}-{i}"
             i += 1
+
+        if not cols:
+            cols = _table_columns(conn, "events")
+        if not col_types:
+            col_types = _table_column_types(conn, "events")
 
         data = {
             "tenant_id": tenant_id,

@@ -141,36 +141,41 @@ def _register_terms_acceptance(
     if not accepted:
         return
 
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS terms_acceptance_log (
-            id BIGSERIAL PRIMARY KEY,
-            tenant_id TEXT,
-            producer TEXT,
-            event_slug TEXT,
-            accepted BOOLEAN NOT NULL,
-            accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            ip_address TEXT,
-            user_agent TEXT
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS terms_acceptance_log (
+                id BIGSERIAL PRIMARY KEY,
+                tenant_id TEXT,
+                producer TEXT,
+                event_slug TEXT,
+                accepted BOOLEAN NOT NULL,
+                accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                ip_address TEXT,
+                user_agent TEXT
+            )
+            """
         )
-        """
-    )
-    conn.execute(
-        """
-        INSERT INTO terms_acceptance_log
-            (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
-        VALUES
-            (%s, %s, %s, %s, NOW(), %s, %s)
-        """,
-        (
-            tenant_id,
-            producer,
-            event_slug,
-            bool(accepted),
-            _client_ip_from_request(request),
-            (request.headers.get("user-agent") or "")[:512],
-        ),
-    )
+        conn.execute(
+            """
+            INSERT INTO terms_acceptance_log
+                (tenant_id, producer, event_slug, accepted, accepted_at, ip_address, user_agent)
+            VALUES
+                (%s, %s, %s, %s, NOW(), %s, %s)
+            """,
+            (
+                tenant_id,
+                producer,
+                event_slug,
+                bool(accepted),
+                _client_ip_from_request(request),
+                (request.headers.get("user-agent") or "")[:512],
+            ),
+        )
+    except Exception:
+        # No bloqueamos el alta/edición de evento por un fallo de auditoría.
+        # En algunos entornos (DB gestionada sin permisos DDL) CREATE TABLE puede fallar.
+        return
 
 
 # -------------------------------------------------------------------

@@ -711,6 +711,7 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
 
     with get_conn() as conn:
         cur = conn.cursor()
+        order_by_sql = "e.created_at DESC NULLS LAST, e.slug ASC" if "created_at" in ecols else "e.slug ASC"
         cur.execute(
             f"""
             SELECT
@@ -730,7 +731,7 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
               GROUP BY tenant, event_slug
             ) si ON si.tenant=e.tenant AND si.event_slug=e.slug
             WHERE e.tenant_id=%s
-            ORDER BY e.created_at DESC NULLS LAST, e.slug ASC
+            ORDER BY {order_by_sql}
             LIMIT 300
             """,
             (tenant_id,),

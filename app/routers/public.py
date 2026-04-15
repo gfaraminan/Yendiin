@@ -429,12 +429,14 @@ def get_event_detail(
             return data
 
         si_cols = _table_columns(cur, "sale_items")
+        has_kind_col = "kind" in si_cols
         si_wanted = ["id", "name", "kind", "price_cents", "stock_total", "stock_sold", "active"]
         si_select = [c for c in si_wanted if c in si_cols]
         for must in ("id", "name", "price_cents"):
             if must not in si_select:
                 raise HTTPException(status_code=500, detail=f"Schema inválido: sale_items.{must} no existe")
 
+        kind_filter_sql = "AND kind = 'ticket'" if has_kind_col else ""
         cur.execute(
             f"""
             SELECT {", ".join(si_select)}
@@ -442,7 +444,7 @@ def get_event_detail(
             WHERE tenant = %s
               AND event_slug = %s
               AND active = TRUE
-              AND kind = 'ticket'
+              {kind_filter_sql}
             ORDER BY id
             """,
             (owner_tenant, slug),
@@ -492,6 +494,10 @@ def api_public_sale_items(
         owner_tenant = owner or tenant_id
 
         # 2) listar sale_items activos del owner
+        si_cols = _table_columns(conn.cursor(), "sale_items")
+        has_kind_col = "kind" in si_cols
+        kind_select = "kind," if has_kind_col else "NULL::text AS kind,"
+
         rows = conn.execute(
             """
             SELECT
@@ -499,7 +505,7 @@ def api_public_sale_items(
                 tenant,
                 event_slug,
                 name,
-                kind,
+                {kind_select}
                 price_cents,
                 stock_total,
                 COALESCE(stock_sold, 0) AS stock_sold,
@@ -511,8 +517,12 @@ def api_public_sale_items(
             WHERE tenant = %s
               AND event_slug = %s
               AND COALESCE(active, TRUE) = TRUE
+              {kind_where}
             ORDER BY COALESCE(sort_order, 999999), id
-            """,
+            """.format(
+                kind_select=kind_select,
+                kind_where=("AND COALESCE(kind,'ticket') = 'ticket'" if has_kind_col else ""),
+            ),
             (owner_tenant, slug),
         ).fetchall()
 

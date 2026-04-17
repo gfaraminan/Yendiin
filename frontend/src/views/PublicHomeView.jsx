@@ -34,12 +34,12 @@ export default function PublicHomeView({
         </div>
       )}
 
-      <div className={`mt-6 rounded-none border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-hidden shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
+      <div className={`mt-6 rounded-3xl border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-hidden shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Ciudad
-              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`mt-2 w-full rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`mt-2 w-full rounded-xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
                 <option value="all">Todas</option>
                 {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -47,7 +47,7 @@ export default function PublicHomeView({
 
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Tipo
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`mt-2 w-full rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`mt-2 w-full rounded-xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
                 <option value="all">Todos</option>
                 {types.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -56,7 +56,7 @@ export default function PublicHomeView({
 
           <div className="flex-1">
             <div className="text-[10px] font-black uppercase tracking-widest text-white/65">Búsqueda</div>
-            <div className={`mt-2 flex items-center gap-3 rounded-none ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3`}>
+            <div className={`mt-2 flex items-center gap-3 rounded-xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3`}>
               <Search size={18} className="text-white/60" />
               <input
                 value={searchQuery}
@@ -71,7 +71,7 @@ export default function PublicHomeView({
                     setFilterType("all");
                     setSearchQuery("");
                   }}
-                  className={`px-3 py-2 rounded-none ${HOME_BRAND_THEME.accentSoftBg} hover:bg-[#FF9AD8]/30 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
+                  className={`px-3 py-2 rounded-full ${HOME_BRAND_THEME.accentSoftBg} hover:bg-[#FF9AD8]/30 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
                 >
                   Limpiar
                 </button>
@@ -90,7 +90,7 @@ export default function PublicHomeView({
           <button
             key={ev.id}
             onClick={() => onOpenEvent(ev.slug)}
-            className={`w-full text-left bg-white/14 backdrop-blur-xl rounded-none p-3 overflow-hidden border border-white/25 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
+            className={`w-full text-left bg-white/14 backdrop-blur-xl rounded-3xl p-3 overflow-hidden border border-white/25 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
               isEventSoldOut(ev) ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_24px_rgba(244,63,94,0.55)]" : ""
             }`}
           >
@@ -119,7 +119,7 @@ export default function PublicHomeView({
           <button
             key={ev.id}
             onClick={() => onOpenEvent(ev.slug)}
-            className={`text-left overflow-hidden rounded-none bg-white/14 backdrop-blur-xl border border-white/25 hover:border-[#FF9AD8]/65 hover:-translate-y-1 transition-all duration-300 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
+            className={`text-left overflow-hidden rounded-3xl bg-white/14 backdrop-blur-xl border border-white/25 hover:border-[#FF9AD8]/65 hover:-translate-y-1 transition-all duration-300 shadow-[0_16px_35px_rgba(15,23,42,0.32)] ${
               isEventSoldOut(ev) ? "border border-rose-400/70 shadow-[0_0_0_1px_rgba(251,113,133,0.35),0_0_34px_rgba(244,63,94,0.5)]" : ""
             }`}
           >

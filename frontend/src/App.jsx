@@ -5398,15 +5398,12 @@ if (closeOnSuccess) {
   // -------------------------
   return (
     <div className="min-h-screen text-white overflow-x-hidden relative">
-      <div className="home-fixed-bg" aria-hidden="true" />
-      <div className="home-fixed-overlay" aria-hidden="true" />
       <Header />
 
       <main className="min-h-screen pt-32 sm:pt-36 relative z-10">
         {/* PUBLIC */}
         {view === "public" && (
           <PublicHomeView
-            brandConfig={brandConfig}
             featureFlags={featureFlags}
             UI={UI}
             filteredEvents={filteredEvents}
@@ -7324,29 +7321,8 @@ if (closeOnSuccess) {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         html, body { width: 100%; overflow-x: hidden; }
-        body { font-family: 'Inter', sans-serif; background: #0f172a; }
+        body { font-family: 'Inter', sans-serif; }
         #root { width: 100%; overflow-x: hidden; }
-        .home-fixed-bg {
-          position: fixed;
-          inset: 0;
-          z-index: -30;
-          background-image:
-            radial-gradient(90% 60% at 20% 12%, rgba(173, 216, 255, 0.26), transparent 62%),
-            radial-gradient(65% 55% at 85% 16%, rgba(255, 109, 199, 0.22), transparent 64%),
-            linear-gradient(170deg, rgba(16, 22, 40, 0.62), rgba(9, 13, 28, 0.80)),
-            url('https://images.unsplash.com/photo-1571266028243-2558f3ec97eb?auto=format&fit=crop&w=2200&q=80');
-          background-size: cover;
-          background-position: center;
-          transform: scale(1.05);
-          filter: blur(3px) saturate(1.15);
-        }
-        .home-fixed-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: -20;
-          background:
-            linear-gradient(180deg, rgba(227, 239, 255, 0.14) 0%, rgba(216, 233, 255, 0.07) 35%, rgba(15, 23, 42, 0.52) 100%);
-        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         ::-webkit-scrollbar { width: 5px; }

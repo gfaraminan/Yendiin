@@ -5,7 +5,6 @@ import { flyerSrc, priceLabelForEvent } from "../app/helpers";
 import { HOME_BRAND_THEME } from "../app/homeTheme";
 
 export default function PublicHomeView({
-  brandConfig,
   featureFlags,
   UI,
   filteredEvents,
@@ -25,40 +24,8 @@ export default function PublicHomeView({
 }) {
   return (
     <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
-      <section className={`relative overflow-hidden rounded-none border border-white/25 bg-gradient-to-br ${HOME_BRAND_THEME.bgBase} px-6 sm:px-10 py-10 mb-10`}>
-        <div className={`absolute -top-20 -right-10 w-64 h-64 rounded-none ${HOME_BRAND_THEME.glowSecondary} blur-3xl pointer-events-none`} />
-        <div className={`absolute -bottom-24 -left-10 w-64 h-64 rounded-none ${HOME_BRAND_THEME.glowPrimary} blur-3xl pointer-events-none`} />
-        <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-          <div className="max-w-3xl">
-            <div className="inline-flex items-center rounded-none px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] bg-white/25 text-white/90 border border-white/35 shadow-[0_10px_30px_rgba(148,163,184,0.25)] mb-4">
-              Eventos activos
-            </div>
-            <div className="mb-5 inline-flex items-center rounded-none border border-white/15 bg-white/20 p-3">
-              <img src="/logo-yendiin-casinos.svg" alt="Yendiin & Casinos" className="h-16 w-auto" loading="lazy" />
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-black uppercase italic tracking-tight leading-[0.95]">
-              {brandConfig.heroTitle}
-            </h1>
-            <p className="text-[11px] sm:text-[12px] font-black uppercase tracking-widest text-[#D6DEEF] mt-4">
-              {brandConfig.heroSubtitle}
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 min-w-[220px]">
-            <div className="rounded-none bg-white/15 border border-white/30 backdrop-blur-xl p-3">
-              <div className="text-[9px] uppercase font-black tracking-widest text-white/70">Disponibles</div>
-              <div className="text-2xl font-black mt-1">{filteredEvents.length}</div>
-            </div>
-            <div className="rounded-none bg-white/15 border border-white/30 backdrop-blur-xl p-3">
-              <div className="text-[9px] uppercase font-black tracking-widest text-white/70">Ciudades</div>
-              <div className="text-2xl font-black mt-1">{cities.length}</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {featureFlags.featuredCarousel && (
-        <div className="mt-10">
+        <div className="mt-0">
           <div className="text-[10px] font-black uppercase tracking-widest text-white/65">Destacados</div>
           <div className={`text-2xl font-black uppercase mt-2 ${HOME_BRAND_THEME.accentText}`}>Eventos recomendados</div>
           <div className="mt-4">

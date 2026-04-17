@@ -5404,7 +5404,6 @@ if (closeOnSuccess) {
         {/* PUBLIC */}
         {view === "public" && (
           <PublicHomeView
-            brandConfig={brandConfig}
             featureFlags={featureFlags}
             UI={UI}
             filteredEvents={filteredEvents}

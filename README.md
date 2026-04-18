@@ -190,6 +190,9 @@ El detalle ER y contratos compartidos se amplía en:
 - `DEFAULT_TENANT`: tenant por defecto.
 - `APP_BASE_URL`: base pública para links (magic link, navegación post-email).
 - `UPLOAD_DIR`: directorio físico de subidas (default `/var/data/uploads`).
+- `RENDER_DISK_PATH`: si Render expone este path, la app prioriza `RENDER_DISK_PATH/uploads` automáticamente para persistir flyers y PDFs entre deploys.
+
+> En Render, si no hay Disk persistente montado, la app cae a `/tmp/uploads` (efímero) y los archivos se pierden al redeploy.
 
 ### Auth
 

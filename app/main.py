@@ -13,6 +13,7 @@ from app.routers import producer, public, orders, payments_mp, tickets, support_
 from app.routers.auth import router as auth_router
 from app.routers.public_event_stats import router as public_event_router  # ✅
 from app.db import get_conn
+from app.storage import resolve_upload_dir
 
 
 app = FastAPI(title="Ticketera API")
@@ -280,18 +281,7 @@ app.add_middleware(
 # IMPORTANT:
 # - The frontend and DB reference /static/uploads/<file>
 # - En Render: usar Disk montado (por defecto /var/data/uploads).
-def _resolve_upload_dir() -> str:
-    configured = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-    try:
-        os.makedirs(configured, exist_ok=True)
-        return configured
-    except PermissionError:
-        fallback = "/tmp/uploads"
-        os.makedirs(fallback, exist_ok=True)
-        return fallback
-
-
-UPLOAD_DIR = _resolve_upload_dir()
+UPLOAD_DIR = resolve_upload_dir()
 
 # Serve uploads at the expected URL used by the frontend
 app.mount("/static/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads_static")

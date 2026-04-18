@@ -24,6 +24,7 @@ from reportlab.lib.utils import ImageReader
 from app.db import get_conn
 from app.mailer import send_email
 from app.staff_auth import build_staff_token, require_staff_token_for_event
+from app.storage import resolve_upload_dir
 
 from psycopg.rows import dict_row
 from psycopg import errors as pg_errors
@@ -326,7 +327,7 @@ def _save_order_tickets_pdf(
     if not order_id or not tickets:
         return None
 
-    upload_dir = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    upload_dir = resolve_upload_dir()
     tickets_dir = os.path.join(upload_dir, "tickets")
     os.makedirs(tickets_dir, exist_ok=True)
     pdf_path = os.path.join(tickets_dir, f"order-{order_id}.pdf")
@@ -612,14 +613,7 @@ from fastapi import UploadFile, File
 import pathlib
 
 def _uploads_dir() -> str:
-    d = os.getenv("UPLOAD_DIR", "/var/data/uploads")
-    try:
-        os.makedirs(d, exist_ok=True)
-        return d
-    except PermissionError:
-        fallback = "/tmp/uploads"
-        os.makedirs(fallback, exist_ok=True)
-        return fallback
+    return resolve_upload_dir()
 
 
 def _ensure_dir(path: str) -> str:
@@ -2637,7 +2631,7 @@ def api_send_order_pdf(
     if not _can_edit_event(tenant_id, event_slug, producer):
         raise HTTPException(status_code=403, detail="forbidden")
 
-    upload_dir = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    upload_dir = resolve_upload_dir()
     tickets_dir = os.path.join(upload_dir, "tickets")
     os.makedirs(tickets_dir, exist_ok=True)
     pdf_path = os.path.join(tickets_dir, f"order-{order_id}.pdf")

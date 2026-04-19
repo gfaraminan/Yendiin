@@ -569,7 +569,7 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
 
         event_where = "AND e.slug=%s" if ev_slug else ""
         event_args = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
-        sold_out_select = "COALESCE(e.sold_out, FALSE) AS sold_out_manual," if has_sold_out else "FALSE AS sold_out_manual,"
+        sold_out_select = "COALESCE(BOOL_OR(COALESCE(e.sold_out, FALSE)), FALSE) AS sold_out_manual," if has_sold_out else "FALSE AS sold_out_manual,"
         cur.execute(
             f"""
             SELECT

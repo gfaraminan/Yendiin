@@ -5718,10 +5718,15 @@ if (closeOnSuccess) {
                               Link
                             </button>
                             <button
-                              onClick={() => window.open(barModuleUrl, "_blank", "noopener,noreferrer")}
-                              className={`h-20 w-full flex items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${UI.button}`}
+                              type="button"
+                              disabled
+                              title="Próximamente"
+                              aria-disabled="true"
+                              tabIndex={-1}
+                              className="h-20 w-full flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/50 cursor-not-allowed pointer-events-none"
                             >
-                              <ShoppingCart size={16} /> Barra
+                              <span className="flex items-center gap-2"><ShoppingCart size={16} /> Barra</span>
+                              <span className="text-[9px] tracking-[0.2em]">Próximamente</span>
                             </button>
                             <button
                               onClick={() => openSoldTicketsModal(ev)}
@@ -5730,10 +5735,15 @@ if (closeOnSuccess) {
                               <Info size={16} /> Listado de tickets
                             </button>
                             <button
-                              onClick={() => openBarOrdersModal(ev)}
-                              className="h-20 w-full flex items-center justify-center gap-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                              type="button"
+                              disabled
+                              title="Próximamente"
+                              aria-disabled="true"
+                              tabIndex={-1}
+                              className="h-20 w-full flex flex-col items-center justify-center gap-1 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/50 cursor-not-allowed pointer-events-none"
                             >
-                              <ShoppingCart size={16} /> Pedidos barra
+                              <span className="flex items-center gap-2"><ShoppingCart size={16} /> Pedidos barra</span>
+                              <span className="text-[9px] tracking-[0.2em]">Próximamente</span>
                             </button>
                             <button
                               onClick={() => openSellerSalesModal(ev)}

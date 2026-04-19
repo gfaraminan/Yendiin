@@ -71,7 +71,7 @@ export default function PublicHomeView({
                     setFilterType("all");
                     setSearchQuery("");
                   }}
-                  className={`px-3 py-2 rounded-full ${HOME_BRAND_THEME.accentSoftBg} hover:bg-[#FF9AD8]/30 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
+                  className={`px-3 py-2 rounded-full ${HOME_BRAND_THEME.accentSoftBg} hover:bg-emerald-400/25 border ${HOME_BRAND_THEME.accentBorder} text-[9px] font-black uppercase tracking-widest`}
                 >
                   Limpiar
                 </button>

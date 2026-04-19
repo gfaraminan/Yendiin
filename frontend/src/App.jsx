@@ -4676,7 +4676,7 @@ if (closeOnSuccess) {
   // -------------------------
   const Header = () => {
     return (
-      <header className="fixed top-0 left-0 right-0 z-50 bg-[#070912]/85 backdrop-blur-xl border-b border-white/10 overflow-x-hidden">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-[#09140f]/88 backdrop-blur-xl border-b border-white/10 overflow-x-hidden">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4">
           {/* TOP */}
           <div className="flex items-center justify-between gap-4">
@@ -4695,7 +4695,7 @@ if (closeOnSuccess) {
                 <button
                   onClick={() => setView("public")}
                   className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                    view === "public" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                    view === "public" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
                   Cartelera
@@ -4714,7 +4714,7 @@ if (closeOnSuccess) {
                     }, 0);
                   }}
                   className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                    view === "myTickets" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                    view === "myTickets" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
                   Mis Tickets
@@ -4725,7 +4725,7 @@ if (closeOnSuccess) {
                   <button
                     onClick={() => setView("supportAI")}
                     className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                      view === "supportAI" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                      view === "supportAI" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                     }`}
                     title="Panel interno para staff"
                   >
@@ -4740,7 +4740,7 @@ if (closeOnSuccess) {
               {!me ? (
                 <button
                   onClick={() => setLoginRequired(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-indigo-500/15 hover:bg-indigo-500/25 transition-all border border-indigo-300/35 text-white"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-emerald-500/15 hover:bg-emerald-500/25 transition-all border border-emerald-300/35 text-white"
                 >
                   <User size={16} /> Ingresar
                 </button>
@@ -4768,7 +4768,7 @@ if (closeOnSuccess) {
             <button
               onClick={() => setView("public")}
               className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                view === "public" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                view === "public" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
               Cartelera
@@ -4788,7 +4788,7 @@ if (closeOnSuccess) {
                 }, 0);
               }}
               className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                view === "myTickets" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                view === "myTickets" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
               Mis Tickets
@@ -4798,7 +4798,7 @@ if (closeOnSuccess) {
               <button
                 onClick={() => setView("supportAI")}
                 className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
-                  view === "supportAI" ? "bg-indigo-600/90 border-indigo-400/60 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
+                  view === "supportAI" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                 }`}
                 title="Panel interno para staff"
               >
@@ -7326,7 +7326,7 @@ if (closeOnSuccess) {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: #0f766e; border-radius: 10px; }
         input[type=number]::-webkit-inner-spin-button,
         input[type=number]::-webkit-outer-spin-button {
           -webkit-appearance: none;

@@ -84,7 +84,7 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
             key={ev.id || ev.slug || idx}
             data-card={idx === 0 ? "1" : "0"}
             onClick={() => onOpen?.(ev)}
-            className={`shrink-0 text-left rounded-3xl ${UI.card} overflow-hidden border border-white/10 hover:border-indigo-300/45 transition-all duration-300`}
+            className={`shrink-0 text-left rounded-3xl ${UI.card} overflow-hidden border border-white/10 hover:border-emerald-300/45 transition-all duration-300`}
             style={{
               width: cardWidth,
               scrollSnapAlign: "start",
@@ -114,10 +114,10 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
               </div>
             </div>
             <div className="p-4">
-              <div className="text-base font-black text-indigo-300 italic">
+              <div className="text-base font-black text-emerald-300 italic">
                 {priceLabelForEvent(ev, formatMoneyFn)}
               </div>
-              <div className="mt-3 inline-flex px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-indigo-500/25 border border-indigo-300/30">
+              <div className="mt-3 inline-flex px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500/25 border border-emerald-300/35">
                 Ver evento
               </div>
             </div>

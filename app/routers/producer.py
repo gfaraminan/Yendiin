@@ -1910,6 +1910,11 @@ def api_issue_courtesy_tickets(
 
     now_s = _now_epoch_s()
     with get_conn() as conn:
+        # Evita falsos negativos por cache de columnas cuando el esquema se migró
+        # en caliente (ej. desde ticketpro) sin reiniciar el proceso.
+        _invalidate_table_columns_cache("sale_items")
+        _invalidate_table_columns_cache("tickets")
+        _invalidate_table_columns_cache("orders")
         si_cols = _table_columns(conn, "sale_items")
         tcols = _table_columns(conn, "tickets")
         ocols = _table_columns(conn, "orders")

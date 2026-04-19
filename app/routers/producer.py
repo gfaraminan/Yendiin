@@ -3737,14 +3737,25 @@ def api_producer_event_toggle(request: Request, payload: EventToggleIn, user: di
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
+        ev_cols = _table_columns(conn, "events")
+        set_parts: list[str] = []
+        params: list[Any] = []
+        if "active" in ev_cols:
+            set_parts.append("active = %s")
+            params.append(bool(payload.is_active))
+        if "is_active" in ev_cols:
+            set_parts.append("is_active = %s")
+            params.append(bool(payload.is_active))
+        if not set_parts:
+            raise HTTPException(status_code=500, detail="events_active_column_missing")
         row = conn.execute(
             """
             UPDATE events
-            SET is_active = %s
+            SET {set_clause}
             WHERE tenant_id = %s AND (tenant = %s OR producer = %s) AND slug = %s
             RETURNING slug
-            """,
-            (bool(payload.is_active), tenant_id, producer, producer, payload.event_slug),
+            """.format(set_clause=", ".join(set_parts)),
+            (*params, tenant_id, producer, producer, payload.event_slug),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="event_not_found")

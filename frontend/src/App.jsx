@@ -5718,10 +5718,12 @@ if (closeOnSuccess) {
                               Link
                             </button>
                             <button
-                              onClick={() => window.open(barModuleUrl, "_blank", "noopener,noreferrer")}
-                              className={`h-20 w-full flex items-center justify-center gap-2 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${UI.button}`}
+                              type="button"
+                              disabled
+                              title="Próximamente"
+                              className="h-20 w-full flex items-center justify-center gap-2 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/50 cursor-not-allowed"
                             >
-                              <ShoppingCart size={16} /> Barra
+                              <ShoppingCart size={16} /> Barra · Próximamente
                             </button>
                             <button
                               onClick={() => openSoldTicketsModal(ev)}
@@ -5730,10 +5732,12 @@ if (closeOnSuccess) {
                               <Info size={16} /> Listado de tickets
                             </button>
                             <button
-                              onClick={() => openBarOrdersModal(ev)}
-                              className="h-20 w-full flex items-center justify-center gap-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest transition-all"
+                              type="button"
+                              disabled
+                              title="Próximamente"
+                              className="h-20 w-full flex items-center justify-center gap-2 rounded-2xl bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest text-white/50 cursor-not-allowed"
                             >
-                              <ShoppingCart size={16} /> Pedidos barra
+                              <ShoppingCart size={16} /> Pedidos barra · Próximamente
                             </button>
                             <button
                               onClick={() => openSellerSalesModal(ev)}

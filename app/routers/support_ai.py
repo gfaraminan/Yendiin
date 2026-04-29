@@ -582,16 +582,18 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
         event_where = "AND e.slug=%s" if ev_slug else ""
         event_args = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
         sold_out_select = "COALESCE(BOOL_OR(COALESCE(e.sold_out, FALSE)), FALSE) AS sold_out_manual," if has_sold_out else "FALSE AS sold_out_manual,"
+        tickets_sold_select = "COUNT(t.id)::bigint AS tickets_sold," if has_tickets_table else "0::bigint AS tickets_sold,"
+        tickets_join = "LEFT JOIN tickets t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug AND COALESCE(t.status,'') NOT ILIKE 'revoked'" if has_tickets_table else ""
         cur.execute(
             f"""
             SELECT
               e.slug,
               e.title,
               {sold_out_select}
-              COUNT(t.id)::bigint AS tickets_sold,
+              {tickets_sold_select}
               COALESCE(SUM(CASE WHEN COALESCE(si.kind,'') ILIKE 'barra' THEN 0 ELSE COALESCE(si.stock_total,0) END),0)::bigint AS ticket_stock_total
             FROM events e
-            LEFT JOIN tickets t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug AND COALESCE(t.status,'') NOT ILIKE 'revoked'
+            {tickets_join}
             LEFT JOIN sale_items si ON si.event_slug=e.slug AND si.tenant=e.tenant AND COALESCE(si.active, TRUE)=TRUE
             WHERE e.tenant_id=%s
               {event_where}

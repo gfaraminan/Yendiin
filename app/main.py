@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.settings import SESSION_SECRET, DEFAULT_TENANT
-from app.routers import producer, public, orders, payments_mp, tickets, support_ai
+from app.routers import producer, public, orders, payments_mp, tickets, support_ai, owner
 from app.routers.auth import router as auth_router
 from app.routers.public_event_stats import router as public_event_router  # ✅
 from app.db import get_conn
@@ -243,6 +243,7 @@ app.include_router(payments_mp.router, prefix="/api/payments")
 app.include_router(tickets.router)
 app.include_router(support_ai.router, prefix="/api/support")
 app.include_router(public_event_router)
+app.include_router(owner.router, prefix="/api/owner")
 
 # -------------------------
 # Compatibility: Mercado Pago OAuth callback legacy path used in old app config

@@ -4682,13 +4682,7 @@ if (closeOnSuccess) {
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
               <div className="rounded-2xl border border-white/15 bg-[#111827]/70 p-2 shadow-[0_10px_32px_rgba(8,15,30,0.5)] flex-shrink-0">
-                <img src="/logo-yendiin-casinos.svg" alt={brandConfig.headerLabel} className="h-10 sm:h-12 w-auto" loading="lazy" />
-              </div>
-
-              <div className="min-w-0">
-                <div className="text-white font-black uppercase italic tracking-tight text-xl sm:text-2xl leading-none truncate">
-                  {brandConfig.headerLabel}
-                </div>
+                <img src="/logo-yendiin-casinos.svg" alt={brandConfig.headerLabel} className="h-12 sm:h-14 w-auto" loading="lazy" />
               </div>
 
               <nav className="hidden md:flex items-center justify-center gap-2 pl-3">

@@ -475,8 +475,11 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
     has_bar_slug = "bar_slug" in order_cols
     has_order_kind = "order_kind" in order_cols
     has_kind = "kind" in order_cols
+    has_orders_table = len(order_cols) > 0
 
     ecols = _events_columns()
+    tcols = _tickets_columns()
+    has_tickets_table = len(tcols) > 0
     has_sold_out = "sold_out" in ecols
 
     with get_conn() as conn:
@@ -497,32 +500,38 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
         where_filter = "AND o.event_slug=%s" if ev_slug else ""
         args_filter = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
 
-        cur.execute(
-            f"""
-            SELECT
-              COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS paid_orders,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-            """,
-            args_filter,
-        )
-        orders_row = cur.fetchone() or {}
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS paid_orders,
+                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                """,
+                args_filter,
+            )
+            orders_row = cur.fetchone() or {}
+        else:
+            orders_row = {}
 
         ticket_filter = "AND t.event_slug=%s" if ev_slug else ""
         ticket_args = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
-        cur.execute(
-            f"""
-            SELECT COUNT(*)::bigint AS total_tickets_sold
-            FROM tickets t
-            WHERE t.tenant_id=%s
-              AND COALESCE(t.status,'') NOT ILIKE 'revoked'
-              {ticket_filter}
-            """,
-            ticket_args,
-        )
-        tickets_row = cur.fetchone() or {}
+        if has_tickets_table:
+            cur.execute(
+                f"""
+                SELECT COUNT(*)::bigint AS total_tickets_sold
+                FROM tickets t
+                WHERE t.tenant_id=%s
+                  AND COALESCE(t.status,'') NOT ILIKE 'revoked'
+                  {ticket_filter}
+                """,
+                ticket_args,
+            )
+            tickets_row = cur.fetchone() or {}
+        else:
+            tickets_row = {}
 
         bar_predicates = []
         if has_source:
@@ -535,21 +544,24 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
             bar_predicates.append("COALESCE(kind,'') ILIKE 'bar' OR COALESCE(kind,'') ILIKE 'barra'")
         bar_where = " OR ".join(bar_predicates) if bar_predicates else "FALSE"
 
-        cur.execute(
-            f"""
-            SELECT
-              COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS total_bar_orders,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-              AND ({bar_where})
-            """,
-            args_filter,
-        )
-        bar_row = cur.fetchone() or {}
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS total_bar_orders,
+                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                  AND ({bar_where})
+                """,
+                args_filter,
+            )
+            bar_row = cur.fetchone() or {}
+        else:
+            bar_row = {}
 
-        if has_buyer_email:
+        if has_orders_table and has_buyer_email:
             cur.execute(
                 f"""
                 SELECT COUNT(DISTINCT lower(o.buyer_email))::bigint AS unique_buyers
@@ -606,20 +618,25 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
                 "bar_revenue_cents": 0,
             }
 
-        cur.execute(
-            f"""
-            SELECT
-              o.event_slug,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-            GROUP BY o.event_slug
-            """,
-            args_filter,
-        )
-        for rr in (cur.fetchall() or []):
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  o.event_slug,
+                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
+                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                GROUP BY o.event_slug
+                """,
+                args_filter,
+            )
+            revenue_rows = cur.fetchall() or []
+        else:
+            revenue_rows = []
+
+        for rr in revenue_rows:
             slug = str((rr or {}).get("event_slug") or "")
             if not slug:
                 continue
@@ -709,19 +726,28 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
         ]
     )
 
+    tcols = _tickets_columns()
+    has_tickets_table = len(tcols) > 0
+
     with get_conn() as conn:
         cur = conn.cursor()
         order_by_sql = "e.created_at DESC NULLS LAST, e.slug ASC" if "created_at" in ecols else "e.slug ASC"
+        tickets_subquery = """
+              SELECT tenant_id, event_slug, COUNT(*)::bigint AS sold
+              FROM tickets
+              WHERE COALESCE(status,'') NOT ILIKE 'revoked'
+              GROUP BY tenant_id, event_slug
+            """ if has_tickets_table else """
+              SELECT NULL::text AS tenant_id, NULL::text AS event_slug, 0::bigint AS sold
+              WHERE FALSE
+            """
         cur.execute(
             f"""
             SELECT
               {', '.join(select_fields)}
             FROM events e
             LEFT JOIN (
-              SELECT tenant_id, event_slug, COUNT(*)::bigint AS sold
-              FROM tickets
-              WHERE COALESCE(status,'') NOT ILIKE 'revoked'
-              GROUP BY tenant_id, event_slug
+              {tickets_subquery}
             ) t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug
             LEFT JOIN (
               SELECT tenant, event_slug,

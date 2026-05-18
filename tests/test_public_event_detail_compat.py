@@ -210,6 +210,8 @@ class PublicEventCompatTests(unittest.TestCase):
             self.assertEqual(body["slug"], "rock-fest")
             self.assertEqual(len(body["items"]), 1)
             self.assertEqual(body["items"][0]["price_cents"], 150000)
+            self.assertEqual(body["items"][0]["price"], 1500.0)
+            self.assertEqual(body["items"][0]["price_amount"], 1500.0)
 
     def test_public_sale_items_works_without_sale_items_kind_column(self):
         with patch("app.routers.public.get_conn", return_value=_CompatConn()):

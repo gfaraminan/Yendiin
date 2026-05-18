@@ -352,6 +352,15 @@ def _split_config_status() -> Dict[str, Any]:
     }
 
 
+def _safe_rollback_from_cursor(cur) -> None:
+    try:
+        conn = getattr(cur, "connection", None)
+        if conn:
+            conn.rollback()
+    except Exception:
+        pass
+
+
 def _table_columns(cur, table: str) -> set[str]:
     out = set()
     try:
@@ -377,6 +386,7 @@ def _table_columns(cur, table: str) -> set[str]:
             if v:
                 out.add(str(v))
     except Exception:
+        _safe_rollback_from_cursor(cur)
         out = set()
 
     if out:
@@ -388,6 +398,7 @@ def _table_columns(cur, table: str) -> set[str]:
         cur.execute(f"SELECT * FROM {table} WHERE 1=0")
         return {str(d[0]) for d in (cur.description or []) if d and d[0]}
     except Exception:
+        _safe_rollback_from_cursor(cur)
         return set()
 
 
@@ -1097,7 +1108,7 @@ async def mp_create_preference(
             },
         }
 
-        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", True)
+        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", False)
         request_access_token = MP_ACCESS_TOKEN
         split_auth_mode = "platform_token"
 

@@ -140,6 +140,64 @@ class _CompatConn:
         return self._cursor.execute(query, params)
 
 
+class _DisplayOrderCursor(_CompatCursor):
+    def execute(self, query, params=None):
+        q = " ".join(str(query).split()).lower()
+        if "from information_schema.columns" in q and params == ("sale_items",):
+            self._next_fetchall = [
+                {"column_name": "id"},
+                {"column_name": "tenant"},
+                {"column_name": "event_slug"},
+                {"column_name": "name"},
+                {"column_name": "kind"},
+                {"column_name": "price_cents"},
+                {"column_name": "stock_total"},
+                {"column_name": "stock_sold"},
+                {"column_name": "active"},
+                {"column_name": "display_order"},
+            ]
+            return self
+        return super().execute(query, params)
+
+
+class _DisplayOrderConn(_CompatConn):
+    def __init__(self):
+        self._cursor = _DisplayOrderCursor()
+
+    def execute(self, query, params=None):
+        q = " ".join(str(query).split()).lower()
+        if "select tenant from events" in q:
+            class _OwnerResult:
+                @staticmethod
+                def fetchone():
+                    return {"tenant": "owner-tenant"}
+
+            return _OwnerResult()
+        if "from sale_items" in q and "order by coalesce(display_order, 999999), id" in q:
+            class _RowsResult:
+                @staticmethod
+                def fetchall():
+                    return [
+                        {
+                            "id": 20,
+                            "tenant": "owner-tenant",
+                            "event_slug": "rock-fest",
+                            "name": "VIP",
+                            "kind": "ticket",
+                            "price_cents": 250000,
+                            "stock_total": 50,
+                            "stock_sold": 5,
+                            "active": True,
+                            "sort_order": 2,
+                            "start_date": None,
+                            "end_date": None,
+                        }
+                    ]
+
+            return _RowsResult()
+        return self._cursor.execute(query, params)
+
+
 class PublicEventCompatTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
@@ -160,6 +218,15 @@ class PublicEventCompatTests(unittest.TestCase):
             body = resp.json()
             self.assertEqual(len(body), 1)
             self.assertEqual(body[0]["name"], "General")
+
+    def test_public_sale_items_works_with_display_order_schema(self):
+        with patch("app.routers.public.get_conn", return_value=_DisplayOrderConn()):
+            resp = self.client.get("/api/public/sale-items?tenant=default&event_slug=rock-fest")
+            self.assertEqual(resp.status_code, 200)
+            body = resp.json()
+            self.assertEqual(len(body), 1)
+            self.assertEqual(body[0]["name"], "VIP")
+            self.assertEqual(body[0]["sort_order"], 2)
 
 
 if __name__ == "__main__":

@@ -353,26 +353,42 @@ def _split_config_status() -> Dict[str, Any]:
 
 
 def _table_columns(cur, table: str) -> set[str]:
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s
-        """,
-        (table,),
-    )
-    rows = cur.fetchall() or []
     out = set()
-    for r in rows:
-        if not r:
-            continue
-        if isinstance(r, dict):
-            v = r.get("column_name") or (next(iter(r.values())) if len(r) else None)
-        else:
-            v = r[0] if len(r) else None
-        if v:
-            out.add(str(v))
-    return out
+    try:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            """,
+            (table,),
+        )
+        rows = cur.fetchall() or []
+        for r in rows:
+            if not r:
+                continue
+            if isinstance(r, dict):
+                v = r.get("column_name") or (next(iter(r.values())) if len(r) else None)
+            else:
+                try:
+                    v = r[0]
+                except Exception:
+                    v = getattr(r, "column_name", None)
+            if v:
+                out.add(str(v))
+    except Exception:
+        out = set()
+
+    if out:
+        return out
+
+    if not table.replace("_", "").isalnum():
+        return set()
+    try:
+        cur.execute(f"SELECT * FROM {table} WHERE 1=0")
+        return {str(d[0]) for d in (cur.description or []) if d and d[0]}
+    except Exception:
+        return set()
 
 
 def _rows_to_dicts(cur, rows):

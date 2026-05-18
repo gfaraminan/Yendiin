@@ -214,6 +214,21 @@ def _table_columns(cur, table: str) -> set[str]:
     return {r[0] for r in rows}
 
 
+def _select_expr(cols: set[str], col: str, fallback_sql: str, alias: str | None = None) -> str:
+    out = alias or col
+    if col in cols:
+        return col if out == col else f"{col} AS {out}"
+    return f"{fallback_sql} AS {out}"
+
+
+def _sale_item_order_column(cols: set[str]) -> str | None:
+    if "sort_order" in cols:
+        return "sort_order"
+    if "display_order" in cols:
+        return "display_order"
+    return None
+
+
 def _ensure_events_visibility_schema(cur) -> None:
     # No ejecutamos DDL en runtime para endpoints públicos.
     return
@@ -500,33 +515,36 @@ def api_public_sale_items(
         # 2) listar sale_items activos del owner
         si_cols = _table_columns(conn.cursor(), "sale_items")
         has_kind_col = "kind" in si_cols
-        kind_select = "kind," if has_kind_col else "NULL::text AS kind,"
+        order_col = _sale_item_order_column(si_cols)
+        order_expr = f"COALESCE({order_col}, 999999)" if order_col else "999999"
+        select_sql = ",\n                ".join(
+            [
+                _select_expr(si_cols, "id", "0"),
+                _select_expr(si_cols, "tenant", "''::text"),
+                _select_expr(si_cols, "event_slug", "''::text"),
+                _select_expr(si_cols, "name", "''::text"),
+                _select_expr(si_cols, "kind", "'ticket'::text"),
+                _select_expr(si_cols, "price_cents", "0"),
+                _select_expr(si_cols, "stock_total", "NULL::integer"),
+                _select_expr(si_cols, "stock_sold", "0", alias="stock_sold"),
+                _select_expr(si_cols, "active", "TRUE"),
+                (f"{order_col} AS sort_order" if order_col else "0 AS sort_order"),
+                _select_expr(si_cols, "start_date", "NULL::timestamptz"),
+                _select_expr(si_cols, "end_date", "NULL::timestamptz"),
+            ]
+        )
 
         rows = conn.execute(
-            """
+            f"""
             SELECT
-                id,
-                tenant,
-                event_slug,
-                name,
-                {kind_select}
-                price_cents,
-                stock_total,
-                COALESCE(stock_sold, 0) AS stock_sold,
-                COALESCE(active, TRUE) AS active,
-                sort_order,
-                start_date,
-                end_date
+                {select_sql}
             FROM sale_items
             WHERE tenant = %s
               AND event_slug = %s
-              AND COALESCE(active, TRUE) = TRUE
-              {kind_where}
-            ORDER BY COALESCE(sort_order, 999999), id
-            """.format(
-                kind_select=kind_select,
-                kind_where=("AND COALESCE(kind,'ticket') = 'ticket'" if has_kind_col else ""),
-            ),
+              AND {('COALESCE(active, TRUE)' if 'active' in si_cols else 'TRUE')} = TRUE
+              {("AND COALESCE(kind,'ticket') = 'ticket'" if has_kind_col else "")}
+            ORDER BY {order_expr}, id
+            """,
             (owner_tenant, slug),
         ).fetchall()
 

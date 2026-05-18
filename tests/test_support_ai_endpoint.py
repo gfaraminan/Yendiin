@@ -119,6 +119,14 @@ class _FakeCursor:
                 {"column_name": "hero_bg"},
             ]
             return
+        if "information_schema.columns" in q and "table_name='tickets'" in q:
+            self._next_fetchall = [
+                {"column_name": "id"},
+                {"column_name": "tenant_id"},
+                {"column_name": "event_slug"},
+                {"column_name": "status"},
+            ]
+            return
         if "information_schema.columns" in q and "table_name='orders'" in q:
             self._next_fetchall = [
                 {"column_name": "buyer_email"},
@@ -169,6 +177,9 @@ class _FakeCursor:
             return
         if "select tenant, producer, producer_id from events" in q:
             self._next_fetchone = {"tenant": "owner-mail-com", "producer": None, "producer_id": None}
+            return
+        if "select tenant, producer from events" in q:
+            self._next_fetchone = {"tenant": "owner-mail-com", "producer": None}
             return
         if "select tenant from events" in q:
             self._next_fetchone = {"tenant": "owner-mail-com"}
@@ -235,6 +246,9 @@ class _ProducerOnlyCursor(_FakeCursor):
             return
         if "select tenant, producer, producer_id from events" in q:
             self._next_fetchone = {"tenant": "", "producer": "prod-owner", "producer_id": None}
+            return
+        if "select tenant, producer from events" in q:
+            self._next_fetchone = {"tenant": "", "producer": "prod-owner"}
             return
         if "insert into sale_items" in q:
             self._next_fetchone = {"id": 321}

@@ -260,6 +260,32 @@ def _users_columns() -> set[str]:
         return {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
 
 
+def _event_owner_row(cur, tenant_id: str, event_slug: str) -> dict:
+    """Fetch only event owner columns that exist in the current schema."""
+    ecols = _events_columns()
+    select_cols = [c for c in ("tenant", "producer", "producer_id") if c in ecols]
+    if not select_cols:
+        return {}
+    cur.execute(
+        f"""
+        SELECT {', '.join(select_cols)}
+        FROM events
+        WHERE tenant_id=%s AND slug=%s
+        LIMIT 1
+        """,
+        (tenant_id, event_slug),
+    )
+    return cur.fetchone() or {}
+
+
+def _sale_item_order_column(cols: set[str]) -> str | None:
+    if "display_order" in cols:
+        return "display_order"
+    if "sort_order" in cols:
+        return "sort_order"
+    return None
+
+
 def _event_owner_from_row(event_row: dict | None) -> str:
     """Resuelve el owner/productor de un evento de forma compatible con esquemas legacy."""
     if not isinstance(event_row, dict):
@@ -1094,6 +1120,8 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
     def _sel(col: str, fallback_sql: str) -> str:
         return col if col in cols else f"{fallback_sql} AS {col}"
 
+    order_col = _sale_item_order_column(cols)
+    order_select = f"{order_col} AS display_order" if order_col else "0 AS display_order"
     select_sql = ", ".join(
         [
             _sel("id", "0"),
@@ -1106,22 +1134,14 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
             _sel("stock_total", "0"),
             _sel("stock_sold", "0"),
             _sel("active", "TRUE"),
-            _sel("display_order", "0"),
+            order_select,
+            f"{order_col} AS sort_order" if order_col else "0 AS sort_order",
         ]
     )
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             return {"ok": True, "items": []}
@@ -1131,7 +1151,7 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
             SELECT {select_sql}
             FROM sale_items
             WHERE tenant=%s AND event_slug=%s
-            ORDER BY COALESCE(display_order, 0) ASC, id ASC
+            ORDER BY COALESCE({order_col or '0'}, 0) ASC, id ASC
             """,
             (owner, event_slug),
         )
@@ -1156,20 +1176,12 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
     cols = _sale_items_columns()
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, payload.event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
+        order_col = _sale_item_order_column(cols)
         data = {
             "tenant": owner,
             "event_slug": payload.event_slug,
@@ -1178,9 +1190,10 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
             "price_cents": int(payload.price_cents),
             "currency": payload.currency or "ARS",
             "stock_total": payload.stock_total,
-            "display_order": payload.sort_order if payload.sort_order is not None else 0,
             "active": True,
         }
+        if order_col:
+            data[order_col] = payload.sort_order if payload.sort_order is not None else 0
         use_cols = [c for c in data.keys() if c in cols and data.get(c) is not None]
         values = [data[c] for c in use_cols]
         placeholders = ", ".join(["%s"] * len(use_cols))
@@ -1202,16 +1215,7 @@ def support_ai_admin_toggle_sale_item(payload: SupportAIAdminSaleItemToggleIn, r
     tenant_id = (payload.tenant_id or "default").strip() or "default"
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, payload.event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
@@ -1258,45 +1262,36 @@ def support_ai_admin_update_sale_item(
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (owner_tenant, owner_event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, owner_tenant, owner_event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
+        item_cols = _sale_items_columns()
+        updates = {
+            "name": item_name,
+            "kind": (payload.kind or "ticket").strip() or "ticket",
+            "price_cents": int(payload.price_cents),
+            "currency": payload.currency or "ARS",
+            "stock_total": payload.stock_total,
+            "active": bool(payload.active) if payload.active is not None else True,
+        }
+        order_col = _sale_item_order_column(item_cols)
+        if order_col:
+            updates[order_col] = payload.sort_order if payload.sort_order is not None else 0
+
+        set_cols = [c for c in updates if c in item_cols]
+        if not set_cols:
+            raise HTTPException(status_code=500, detail="Schema inválido: sale_items sin columnas editables")
+        set_sql = ", ".join(f"{c}=%s" for c in set_cols)
         cur.execute(
-            """
+            f"""
             UPDATE sale_items
-               SET name=%s,
-                   kind=%s,
-                   price_cents=%s,
-                   currency=%s,
-                   stock_total=%s,
-                   active=%s,
-                   display_order=%s
+               SET {set_sql}
              WHERE id=%s AND tenant=%s AND event_slug=%s
              RETURNING id
             """,
-            (
-                item_name,
-                (payload.kind or "ticket").strip() or "ticket",
-                int(payload.price_cents),
-                payload.currency or "ARS",
-                payload.stock_total,
-                bool(payload.active) if payload.active is not None else True,
-                payload.sort_order if payload.sort_order is not None else 0,
-                int(sale_item_id),
-                owner,
-                owner_event_slug,
-            ),
+            [*(updates[c] for c in set_cols), int(sale_item_id), owner, owner_event_slug],
         )
         row = cur.fetchone() or {}
 
@@ -1321,16 +1316,7 @@ def support_ai_admin_delete_sale_item(sale_item_id: int, request: Request, tenan
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")

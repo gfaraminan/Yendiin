@@ -50,43 +50,125 @@ def _conn_cm(tenant: str | None = None):
 def _table_columns(cur, table: str) -> set[str]:
     """Return column names for a table.
 
-    Works with tuple rows (default cursor) and dict-like rows (DictCursor/RealDictCursor).
+    Prefer information_schema.public, but fall back to cursor.description from the
+    relation resolved by the current search_path. This prevents false "schema
+    inválido" errors when a deployment exposes unqualified tables outside the
+    public schema or information_schema visibility is incomplete for the DB role.
     """
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s
-        """,
-        (table,),
-    )
-    rows = cur.fetchall() or []
-    if not rows:
-        return set()
+    out: set[str] = set()
+    try:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            """,
+            (table,),
+        )
+        rows = cur.fetchall() or []
 
-    first = rows[0]
-    if isinstance(first, dict):
-        out: set[str] = set()
         for r in rows:
             if not r:
                 continue
-            v = r.get("column_name")
-            if v is None and len(r):
-                v = next(iter(r.values()))
+            if isinstance(r, dict):
+                v = r.get("column_name")
+                if v is None and len(r):
+                    v = next(iter(r.values()))
+            else:
+                try:
+                    v = r[0]
+                except Exception:
+                    v = getattr(r, "column_name", None)
             if v:
                 out.add(str(v))
+    except Exception:
+        out = set()
+
+    if out:
         return out
 
-    out: set[str] = set()
-    for r in rows:
-        if not r:
-            continue
-        v = r[0] if len(r) else None
-        if v:
-            out.add(str(v))
-    return out
+    # Fallback: table is an internal constant in all current callers. Keep a
+    # defensive identifier check before interpolating it.
+    if not table.replace("_", "").isalnum():
+        return set()
+    try:
+        cur.execute(f"SELECT * FROM {table} WHERE 1=0")
+        return {str(d[0]) for d in (cur.description or []) if d and d[0]}
+    except Exception:
+        return set()
 
 
+def _ensure_orders_schema(cur) -> None:
+    """Best-effort idempotent core schema for checkout orders.
+
+    Older environments had migrations that altered public.orders but did not
+    create it. Running this before checkout keeps production purchases from
+    failing when the table or newer buyer columns are absent.
+    """
+    try:
+        cur.execute("SAVEPOINT orders_schema_guard")
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS public.orders (
+              id TEXT PRIMARY KEY,
+              tenant_id TEXT NOT NULL DEFAULT 'default',
+              event_slug TEXT NOT NULL,
+              producer_tenant TEXT,
+              items_json JSONB,
+              total_cents BIGINT NOT NULL DEFAULT 0,
+              status TEXT NOT NULL DEFAULT 'pending',
+              payment_method TEXT,
+              seller_code TEXT,
+              buyer_email TEXT,
+              buyer_name TEXT,
+              buyer_phone TEXT,
+              buyer_dni TEXT,
+              buyer_address TEXT,
+              buyer_province TEXT,
+              buyer_postal_code TEXT,
+              buyer_birth_date TEXT,
+              auth_provider TEXT,
+              auth_subject TEXT,
+              customer_id TEXT,
+              customer_label TEXT,
+              external_id TEXT,
+              paid_at TIMESTAMPTZ,
+              created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT 'default'")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS producer_tenant TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS items_json JSONB")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS total_cents BIGINT DEFAULT 0")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_method TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS seller_code TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_email TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_name TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_phone TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_dni TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_address TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_province TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_postal_code TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS buyer_birth_date TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS auth_provider TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS auth_subject TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_id TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS customer_label TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS external_id TEXT")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ")
+        cur.execute("ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()")
+        cur.execute("RELEASE SAVEPOINT orders_schema_guard")
+    except Exception:
+        # Checkout will still report the concrete insert/schema error below if
+        # the DB role cannot create/alter tables. Roll back only the best-effort
+        # DDL so the main checkout transaction can continue when possible.
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT orders_schema_guard")
+            cur.execute("RELEASE SAVEPOINT orders_schema_guard")
+        except Exception:
+            pass
 
 
 def _table_exists(cur, table: str) -> bool:
@@ -361,6 +443,7 @@ def create_order(
                 raise HTTPException(status_code=400, detail="No hay items válidos en la orden")
 
             # 3) Insert order (schema-safe)
+            _ensure_orders_schema(cur)
             order_id = str(uuid.uuid4())
             orders_cols = _table_columns(cur, "orders")
 
@@ -421,7 +504,10 @@ def create_order(
                 cols, vals, args = cols2, vals2, args2
 
             if not cols:
-                raise HTTPException(status_code=500, detail="Schema inválido: tabla orders sin columnas esperadas")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Schema inválido: tabla orders sin columnas esperadas",
+                )
 
             sql = f"INSERT INTO orders ({', '.join(cols)}) VALUES ({', '.join(vals)})"
             cur.execute(sql, tuple(args))

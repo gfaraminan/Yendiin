@@ -389,17 +389,7 @@ def _table_columns(cur, table: str) -> set[str]:
         _safe_rollback_from_cursor(cur)
         out = set()
 
-    if out:
-        return out
-
-    if not table.replace("_", "").isalnum():
-        return set()
-    try:
-        cur.execute(f"SELECT * FROM {table} WHERE 1=0")
-        return {str(d[0]) for d in (cur.description or []) if d and d[0]}
-    except Exception:
-        _safe_rollback_from_cursor(cur)
-        return set()
+    return out
 
 
 def _rows_to_dicts(cur, rows):

@@ -84,18 +84,7 @@ def _table_columns(cur, table: str) -> set[str]:
     except Exception:
         out = set()
 
-    if out:
-        return out
-
-    # Fallback: table is an internal constant in all current callers. Keep a
-    # defensive identifier check before interpolating it.
-    if not table.replace("_", "").isalnum():
-        return set()
-    try:
-        cur.execute(f"SELECT * FROM {table} WHERE 1=0")
-        return {str(d[0]) for d in (cur.description or []) if d and d[0]}
-    except Exception:
-        return set()
+    return out
 
 
 def _ensure_orders_schema(cur) -> None:

@@ -73,6 +73,8 @@ class _FakeCursor:
 
     def execute(self, query, params=None):
         q = " ".join(str(query).split()).lower()
+        if "o.total_amount" in q:
+            raise AssertionError("dashboard queries must not reference missing orders.total_amount")
         if "count(*) filter (where active=true)" in q:
             self._next_fetchone = {"active_events": 2, "total_events": 5}
             return

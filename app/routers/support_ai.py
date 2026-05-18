@@ -502,6 +502,7 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
     has_order_kind = "order_kind" in order_cols
     has_kind = "kind" in order_cols
     has_orders_table = len(order_cols) > 0
+    total_cents_expr = _orders_total_cents_expr(order_cols, "o")
 
     ecols = _events_columns()
     tcols = _tickets_columns()
@@ -531,7 +532,7 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
                 f"""
                 SELECT
                   COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS paid_orders,
-                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
                 FROM orders o
                 WHERE o.tenant_id=%s
                   {where_filter}
@@ -561,13 +562,13 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
 
         bar_predicates = []
         if has_source:
-            bar_predicates.append("COALESCE(source,'')='bar' OR COALESCE(source,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.source,'')='bar' OR COALESCE(o.source,'') ILIKE 'barra'")
         if has_bar_slug:
-            bar_predicates.append("bar_slug IS NOT NULL")
+            bar_predicates.append("o.bar_slug IS NOT NULL")
         if has_order_kind:
-            bar_predicates.append("COALESCE(order_kind,'') ILIKE 'bar' OR COALESCE(order_kind,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.order_kind,'') ILIKE 'bar' OR COALESCE(o.order_kind,'') ILIKE 'barra'")
         if has_kind:
-            bar_predicates.append("COALESCE(kind,'') ILIKE 'bar' OR COALESCE(kind,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.kind,'') ILIKE 'bar' OR COALESCE(o.kind,'') ILIKE 'barra'")
         bar_where = " OR ".join(bar_predicates) if bar_predicates else "FALSE"
 
         if has_orders_table:
@@ -575,7 +576,7 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
                 f"""
                 SELECT
                   COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS total_bar_orders,
-                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
                 FROM orders o
                 WHERE o.tenant_id=%s
                   {where_filter}
@@ -651,8 +652,8 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
                 f"""
                 SELECT
                   o.event_slug,
-                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
-                  COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
                 FROM orders o
                 WHERE o.tenant_id=%s
                   {where_filter}

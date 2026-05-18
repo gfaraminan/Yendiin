@@ -456,19 +456,24 @@ def get_event_detail(
         rows = cur.fetchall()
         tickets = _rows_to_dicts(cur, rows)
 
-        # ✅ Fix precio 0: devolvemos price_cents + price + price_amount
-        data["items"] = [
-            {
-                "id": t["id"],
-                "name": t["name"],
-                "price_cents": int(t.get("price_cents") or 0),
-                "price": int(t.get("price_cents") or 0),  # compat con front que usa item.price
-                "price_amount": (int(t.get("price_cents") or 0) / 100.0),  # pesos
-                "stock_total": int(t.get("stock_total") or 0),
-                "stock_sold": int(t.get("stock_sold") or 0),
-            }
-            for t in tickets
-        ]
+        # Devolvemos price_cents para cálculos internos y price/price_amount en pesos
+        # para la UI pública. Si price replicara centavos, una entrada de $12
+        # se mostraría como $1.200 en el detalle del evento.
+        data["items"] = []
+        for t in tickets:
+            price_cents = int(t.get("price_cents") or 0)
+            price_amount = price_cents / 100.0
+            data["items"].append(
+                {
+                    "id": t["id"],
+                    "name": t["name"],
+                    "price_cents": price_cents,
+                    "price": price_amount,  # compat con front que usa item.price en pesos
+                    "price_amount": price_amount,
+                    "stock_total": int(t.get("stock_total") or 0),
+                    "stock_sold": int(t.get("stock_sold") or 0),
+                }
+            )
 
         return data
 

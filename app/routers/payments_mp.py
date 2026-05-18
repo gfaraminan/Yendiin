@@ -1097,7 +1097,7 @@ async def mp_create_preference(
             },
         }
 
-        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", True)
+        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", False)
         request_access_token = MP_ACCESS_TOKEN
         split_auth_mode = "platform_token"
 

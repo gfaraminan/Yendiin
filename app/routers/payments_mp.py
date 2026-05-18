@@ -933,23 +933,28 @@ async def mp_create_preference(
         if "id" not in ocols or "tenant_id" not in ocols:
             raise HTTPException(status_code=500, detail="Schema inválido: orders missing id/tenant_id")
 
-        base_cols = [
+        def optional_order_col(col: str, fallback_sql: str) -> str:
+            return col if col in ocols else f"{fallback_sql} AS {col}"
+
+        # Keep a stable output shape without selecting columns that may be absent
+        # in older deployments. Missing monetary columns fall back to NULL so
+        # _choose_charge_amount can calculate from items_json/total_cents.
+        select_cols = [
             "id",
             "tenant_id",
-            "event_slug",
-            "producer_tenant",
-            "status",
-            "total_cents",
-            "base_amount",
-            "fee_amount",
-            "total_amount",
+            optional_order_col("event_slug", "NULL::text"),
+            optional_order_col("producer_tenant", "NULL::text"),
+            optional_order_col("status", "'pending'::text"),
+            optional_order_col("total_cents", "NULL::bigint"),
+            optional_order_col("base_amount", "NULL::numeric"),
+            optional_order_col("fee_amount", "NULL::numeric"),
+            optional_order_col("total_amount", "NULL::numeric"),
         ]
 
         has_items_json = "items_json" in ocols
         has_buyer_email = "buyer_email" in ocols
         has_buyer_name = "buyer_name" in ocols
 
-        select_cols = base_cols[:]
         if has_items_json:
             select_cols.append("items_json")
         if has_buyer_email:

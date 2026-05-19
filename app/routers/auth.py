@@ -15,6 +15,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.db import get_conn
+from app.user_persistence import upsert_user_with_legacy_fallback
 from app.settings import settings
 from app.mailer import send_magic_link
 
@@ -155,33 +156,7 @@ async def google_login(payload: GoogleLoginIn, request: Request):
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO users (
-                    tenant_id, auth_provider, auth_subject,
-                    email, name, picture_url,
-                    last_login_at, last_seen_at, updated_at
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, now(), now(), now())
-                ON CONFLICT (auth_provider, auth_subject)
-                DO UPDATE SET
-                    tenant_id = EXCLUDED.tenant_id,
-                    email = EXCLUDED.email,
-                    name = EXCLUDED.name,
-                    picture_url = EXCLUDED.picture_url,
-                    last_login_at = now(),
-                    last_seen_at = now(),
-                    updated_at = now()
-                """,
-                (
-                    tenant_id,
-                    user.get("provider"),
-                    user.get("sub"),
-                    user.get("email"),
-                    user.get("name"),
-                    user.get("picture"),
-                ),
-            )
+            upsert_user_with_legacy_fallback(cur, tenant_id, user)
             conn.commit()
     except Exception:
         pass

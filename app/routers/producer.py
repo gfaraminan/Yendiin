@@ -3955,6 +3955,10 @@ def api_sale_item_create(
         cols = ["tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
         vals = [producer, event_slug, name, kind, price_cents, stock_total, 0]
 
+        if "id" in si_cols:
+            cols.insert(0, "id")
+            vals.insert(0, str(uuid.uuid4()))
+
         if "start_date" in si_cols:
             cols.append("start_date")
             vals.append(start_date)

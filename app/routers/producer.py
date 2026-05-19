@@ -688,10 +688,15 @@ async def api_event_upload_flyer(
         ev_cols = _table_columns(conn, "events")
         flyer_col = "flyer_url" if "flyer_url" in ev_cols else ("hero_bg" if "hero_bg" in ev_cols else None)
         if flyer_col:
-            conn.execute(
+            cur = conn.execute(
                 f"UPDATE events SET {flyer_col} = %s WHERE tenant_id = %s AND slug = %s",
                 (public_url, tenant_id, safe_slug),
             )
+            if getattr(cur, "rowcount", 0) == 0:
+                conn.execute(
+                    f"UPDATE events SET {flyer_col} = %s WHERE slug = %s",
+                    (public_url, safe_slug),
+                )
         conn.commit()
 
     return {"ok": True, "url": public_url}
@@ -4096,6 +4101,11 @@ def api_sale_item_create(
             ).fetchone()
             if not row:
                 insert_simple_cols = [c for c in ("tenant","event_slug","name","kind","price_cents","stock_total","stock_sold","active","display_order","created_at","updated_at") if c in si_cols]
+                if "id" in si_cols:
+                    next_id_row = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items").fetchone()
+                    next_id = _row_get(next_id_row, key="next_id", idx=0, default=1)
+                    insert_simple_cols = ["id", *insert_simple_cols]
+                    compat_data["id"] = int(next_id or 1)
                 insert_simple_vals = [compat_data.get(c) for c in insert_simple_cols]
                 row = conn.execute(
                     f"""INSERT INTO sale_items ({', '.join(insert_simple_cols)}) VALUES ({', '.join(['%s']*len(insert_simple_cols))})

@@ -1228,7 +1228,28 @@ def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
         _ensure_events_columns(conn)
         _ensure_events_visibility_schema(conn)
         ev_cols = _table_columns(conn, "events")
-        select_cols = ["slug", "title", "date_text", "city", "venue", "flyer_url", "active", "hero_bg"]
+        select_cols = ["slug"]
+        if "title" in ev_cols:
+            select_cols.append("title")
+        elif "name" in ev_cols:
+            select_cols.append("name AS title")
+        else:
+            select_cols.append("slug AS title")
+
+        if "date_text" in ev_cols:
+            select_cols.append("date_text")
+        elif "starts_at" in ev_cols:
+            select_cols.append("to_char(starts_at, 'YYYY-MM-DD HH24:MI') AS date_text")
+        else:
+            select_cols.append("NULL::text AS date_text")
+
+        select_cols.extend([
+            "city" if "city" in ev_cols else "NULL::text AS city",
+            "venue" if "venue" in ev_cols else "NULL::text AS venue",
+            "flyer_url" if "flyer_url" in ev_cols else "NULL::text AS flyer_url",
+            "active" if "active" in ev_cols else "TRUE AS active",
+            "hero_bg" if "hero_bg" in ev_cols else "NULL::text AS hero_bg",
+        ])
         for optional_col in ("visibility", "payout_alias", "cuit", "settlement_mode", "mp_collector_id"):
             if optional_col in ev_cols:
                 select_cols.append(optional_col)
@@ -1889,7 +1910,7 @@ def api_issue_courtesy_tickets(
     buyer_email = (payload.buyer_email or "").strip() or None
     buyer_phone = (payload.buyer_phone or "").strip() or None
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
     with get_conn() as conn:
         si_cols = _table_columns(conn, "sale_items")
         tcols = _table_columns(conn, "tickets")
@@ -2186,7 +2207,7 @@ def api_issue_pos_sale(
 
     operator_email = str((user or {}).get("email") or "").strip().lower()
     operator_name = str((user or {}).get("name") or "").strip()
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
     with get_conn() as conn:
         # Evita falsos negativos por cache de columnas entre tests/entornos heterogéneos.
         _invalidate_table_columns_cache("sale_items")
@@ -3031,22 +3052,38 @@ def api_producer_dashboard(
     with get_conn() as conn:
         cur = conn.cursor(row_factory=dict_row)
 
-        # ---- Load event (no depender de tenant_id=default) ----
-        cur.execute(
-            """
-            SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
-            FROM events
-            WHERE tenant_id = %s AND slug = %s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        ev = cur.fetchone()
+        # ---- Load event (schema-aware; no depender de tenant_id=default) ----
+        ev_cols = _table_columns(conn, "events")
+        event_select = [
+            "slug",
+            "title" if "title" in ev_cols else ("name AS title" if "name" in ev_cols else "slug AS title"),
+            "date_text" if "date_text" in ev_cols else ("to_char(starts_at, 'YYYY-MM-DD HH24:MI') AS date_text" if "starts_at" in ev_cols else "NULL::text AS date_text"),
+            "city" if "city" in ev_cols else "NULL::text AS city",
+            "venue" if "venue" in ev_cols else "NULL::text AS venue",
+            "flyer_url" if "flyer_url" in ev_cols else "NULL::text AS flyer_url",
+            "active" if "active" in ev_cols else "TRUE AS active",
+            "tenant" if "tenant" in ev_cols else "NULL::text AS tenant",
+            "tenant_id" if "tenant_id" in ev_cols else "NULL::text AS tenant_id",
+        ]
+
+        if "tenant_id" in ev_cols:
+            cur.execute(
+                f"""
+                SELECT {', '.join(event_select)}
+                FROM events
+                WHERE tenant_id = %s AND slug = %s
+                LIMIT 1
+                """,
+                (tenant_id, event_slug),
+            )
+            ev = cur.fetchone()
+        else:
+            ev = None
 
         if not ev:
             cur.execute(
-                """
-                SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
+                f"""
+                SELECT {', '.join(event_select)}
                 FROM events
                 WHERE slug = %s
                 LIMIT 1
@@ -3447,7 +3484,7 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
     # Keep session in sync (useful for UI routing), but never trust it for auth.
     request.session["producer"] = producer
     tenant = producer
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     if not getattr(payload, 'accept_terms', False):
         raise HTTPException(status_code=400, detail='terms_required')
@@ -3534,7 +3571,7 @@ def _event_update_impl(request: Request, slug: str, payload: EventUpdateIn, prod
     """
     tenant_id = _tenant_from_request(request)
     tenant = producer
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     if not getattr(payload, 'accept_terms', False):
         raise HTTPException(status_code=400, detail='terms_required')
@@ -3788,8 +3825,26 @@ def api_sale_items(
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
+        ev_cols = _table_columns(conn, "events")
+        owner_col = _has_col(ev_cols, "tenant", "producer", "producer_id", "owner", "owner_email")
+        tenant_filter = "e.tenant_id = %s AND" if "tenant_id" in ev_cols else ""
+
+        owner_join = f" AND e.{owner_col} = si.tenant" if owner_col else ""
+        owner_where = f"AND e.{owner_col} = %s" if owner_col else ""
+
+        params = []
+        if "tenant_id" in ev_cols:
+            params.append(tenant_id)
+        params.append(event_slug)
+        if owner_col:
+            params.append(producer)
+
+        si_cols = _table_columns(conn, "sale_items")
+        start_expr = "COALESCE(si.start_date, '') AS start_date" if "start_date" in si_cols else "''::text AS start_date"
+        end_expr = "COALESCE(si.end_date, '') AS end_date" if "end_date" in si_cols else "''::text AS end_date"
+
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 si.id,
                 si.tenant,
@@ -3799,8 +3854,8 @@ def api_sale_items(
                 COALESCE(si.price_cents, 0) AS price_cents,
                 COALESCE(si.stock_total, 0) AS stock_total,
                 COALESCE(si.stock_sold, 0) AS stock_sold,
-                COALESCE(si.start_date, '') AS start_date,
-                COALESCE(si.end_date, '') AS end_date,
+                {start_expr},
+                {end_expr},
                 COALESCE(si.active, TRUE) AS active,
                 COALESCE(si.display_order, 0) AS display_order,
                 si.created_at,
@@ -3808,13 +3863,12 @@ def api_sale_items(
             FROM sale_items si
             JOIN events e
               ON e.slug = si.event_slug
-             AND (e.tenant = si.tenant OR e.producer = si.tenant)
-            WHERE e.tenant_id = %s
-              AND e.slug = %s
-              AND (e.tenant = %s OR e.producer = %s)
+             {owner_join}
+            WHERE {tenant_filter} e.slug = %s
+              {owner_where}
             ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
             """,
-            (tenant_id, event_slug, producer, producer),
+            tuple(params),
         ).fetchall()
 
     items = []
@@ -3893,54 +3947,100 @@ def api_sale_item_create(
     active = bool(payload.active) if payload.active is not None else True
     display_order = int(payload.sort_order or 0)
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
-        # Upsert por unique constraint real: (tenant, event_slug, kind, name)
-        row = conn.execute(
-            """
-            INSERT INTO sale_items (
-                tenant, event_slug, name, kind,
-                price_cents, stock_total, stock_sold,
-                start_date, end_date,
-                active, display_order,
-                created_at, updated_at,
-                item_name, item_type
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (tenant, event_slug, kind, name)
-            DO UPDATE SET
-                price_cents   = EXCLUDED.price_cents,
-                stock_total   = EXCLUDED.stock_total,
-                start_date    = EXCLUDED.start_date,
-                end_date      = EXCLUDED.end_date,
-                active        = EXCLUDED.active,
-                display_order = EXCLUDED.display_order,
-                updated_at    = EXCLUDED.updated_at,
-                item_name     = EXCLUDED.item_name,
-                item_type     = EXCLUDED.item_type
-            RETURNING
-                id, tenant, event_slug, name, kind, price_cents,
-                stock_total, stock_sold, start_date, end_date,
-                active, display_order, created_at, updated_at
-            """,
-            (
-                producer,
-                event_slug,
-                name,
-                kind,
-                price_cents,
-                stock_total,
-                start_date,
-                end_date,
-                active,
-                display_order,
-                now_s,
-                now_s,
-                name,
-                kind,
-            ),
-        ).fetchone()
+        si_cols = _table_columns(conn, "sale_items")
+
+        cols = ["tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
+        vals = [producer, event_slug, name, kind, price_cents, stock_total, 0]
+
+        if "id" in si_cols:
+            cols.insert(0, "id")
+            vals.insert(0, str(uuid.uuid4()))
+
+        if "start_date" in si_cols:
+            cols.append("start_date")
+            vals.append(start_date)
+        if "end_date" in si_cols:
+            cols.append("end_date")
+            vals.append(end_date)
+        if "active" in si_cols:
+            cols.append("active")
+            vals.append(active)
+        if "display_order" in si_cols:
+            cols.append("display_order")
+            vals.append(display_order)
+        if "created_at" in si_cols:
+            cols.append("created_at")
+            vals.append(now_v)
+        if "updated_at" in si_cols:
+            cols.append("updated_at")
+            vals.append(now_v)
+        if "item_name" in si_cols:
+            cols.append("item_name")
+            vals.append(name)
+        if "item_type" in si_cols:
+            cols.append("item_type")
+            vals.append(kind)
+
+        set_cols = ["price_cents", "stock_total"]
+        for c in ("start_date", "end_date", "active", "display_order", "updated_at", "item_name", "item_type"):
+            if c in si_cols:
+                set_cols.append(c)
+
+        returning = ["id", "tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
+        returning.append("start_date" if "start_date" in si_cols else "NULL::text AS start_date")
+        returning.append("end_date" if "end_date" in si_cols else "NULL::text AS end_date")
+        returning.append("active" if "active" in si_cols else "TRUE AS active")
+        returning.append("display_order" if "display_order" in si_cols else "0 AS display_order")
+        returning.append("created_at" if "created_at" in si_cols else "NULL::bigint AS created_at")
+        returning.append("updated_at" if "updated_at" in si_cols else "NULL::bigint AS updated_at")
+
+        # Compat legacy: algunos esquemas no tienen unique constraint para ON CONFLICT
+        row = None
+        update_set = ', '.join([f"{c} = %s" for c in set_cols])
+        update_vals = []
+        for c in set_cols:
+            if c == 'price_cents':
+                update_vals.append(price_cents)
+            elif c == 'stock_total':
+                update_vals.append(stock_total)
+            elif c == 'start_date':
+                update_vals.append(start_date)
+            elif c == 'end_date':
+                update_vals.append(end_date)
+            elif c == 'active':
+                update_vals.append(active)
+            elif c == 'display_order':
+                update_vals.append(display_order)
+            elif c == 'updated_at':
+                update_vals.append(now_v)
+            elif c == 'item_name':
+                update_vals.append(name)
+            elif c == 'item_type':
+                update_vals.append(kind)
+
+        if update_set:
+            row = conn.execute(
+                f"""
+                UPDATE sale_items
+                SET {update_set}
+                WHERE tenant = %s AND event_slug = %s AND kind = %s AND name = %s
+                RETURNING {', '.join(returning)}
+                """,
+                tuple(update_vals + [producer, event_slug, kind, name]),
+            ).fetchone()
+
+        if not row:
+            row = conn.execute(
+                f"""
+                INSERT INTO sale_items ({', '.join(cols)})
+                VALUES ({', '.join(['%s'] * len(cols))})
+                RETURNING {', '.join(returning)}
+                """,
+                tuple(vals),
+            ).fetchone()
         conn.commit()
 
     d = dict(row) if not isinstance(row, dict) else row
@@ -3997,7 +4097,7 @@ def api_sale_item_update(
     end_date = (payload.end_date or None)
     active = bool(payload.active) if payload.active is not None else True
     display_order = int(payload.sort_order or 0)
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         row = conn.execute(
@@ -4079,7 +4179,7 @@ def api_sale_items_set_test_price(
     if price_cents <= 0:
         raise HTTPException(status_code=400, detail="invalid_price")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         if payload.include_tickets:
@@ -4327,7 +4427,7 @@ def api_seller_create(
     if not pin:
         raise HTTPException(status_code=400, detail="missing_pin")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         try:
@@ -4406,7 +4506,7 @@ def api_seller_update(
     if not pin:
         raise HTTPException(status_code=400, detail="missing_pin")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         try:
@@ -4661,9 +4761,15 @@ def _build_audience_rows(
     event_owner_col = _has_col(event_cols, "tenant", "producer", "producer_tenant", "producer_id")
 
     joins = ""
+    orders_cols = _table_columns(conn, "orders")
+    email_col = _has_col(orders_cols, "buyer_email", "email", "customer_label")
+    name_col = _has_col(orders_cols, "buyer_name", "name")
+    email_expr = f"o.{email_col}" if email_col else "NULL"
+    name_expr = f"o.{name_col}" if name_col else "NULL"
+
     where_parts: list[str] = [
         _paid_like_where("o"),
-        "NULLIF(TRIM(COALESCE(o.buyer_email, '')), '') IS NOT NULL",
+        f"NULLIF(TRIM(COALESCE({email_expr}, '')), '') IS NOT NULL",
     ]
     params: list[Any] = []
 
@@ -4681,7 +4787,7 @@ def _build_audience_rows(
         where_parts.append("o.created_at < (%s::date + INTERVAL '1 day')")
         params.append(date_to)
     if q:
-        where_parts.append("(LOWER(COALESCE(o.buyer_email,'')) LIKE %s OR LOWER(COALESCE(o.buyer_name,'')) LIKE %s)")
+        where_parts.append(f"(LOWER(COALESCE({email_expr},'')) LIKE %s OR LOWER(COALESCE({name_expr},'')) LIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
 
     base_ticket_type_expr = "NULL::text AS last_ticket_type"
@@ -4712,9 +4818,9 @@ def _build_audience_rows(
         f"""
         WITH base AS (
           SELECT
-            LOWER(TRIM(COALESCE(o.buyer_email,''))) AS email_norm,
-            NULLIF(TRIM(COALESCE(o.buyer_email,'')), '') AS email_original,
-            NULLIF(TRIM(COALESCE(o.buyer_name,'')), '') AS contact_name,
+            LOWER(TRIM(COALESCE({email_expr},''))) AS email_norm,
+            NULLIF(TRIM(COALESCE({email_expr},'')), '') AS email_original,
+            NULLIF(TRIM(COALESCE({name_expr},'')), '') AS contact_name,
             o.id::text AS order_id,
             o.event_slug::text AS event_slug,
             o.created_at AS created_at,

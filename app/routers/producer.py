@@ -685,10 +685,13 @@ async def api_event_upload_flyer(
 
     # Persistimos URL en DB
     with get_conn() as conn:
-        conn.execute(
-            "UPDATE events SET flyer_url = %s WHERE tenant_id = %s AND slug = %s",
-            (public_url, tenant_id, safe_slug),
-        )
+        ev_cols = _table_columns(conn, "events")
+        flyer_col = "flyer_url" if "flyer_url" in ev_cols else ("hero_bg" if "hero_bg" in ev_cols else None)
+        if flyer_col:
+            conn.execute(
+                f"UPDATE events SET {flyer_col} = %s WHERE tenant_id = %s AND slug = %s",
+                (public_url, tenant_id, safe_slug),
+            )
         conn.commit()
 
     return {"ok": True, "url": public_url}
@@ -769,6 +772,13 @@ def _table_column_types(conn, table: str, schema: str = "public") -> dict[str, s
             out[str(name)] = str(dtype or "")
     cache[key] = out
     return out
+
+
+def _select_expr(cols: set[str], col: str, fallback_sql: str, alias: str | None = None) -> str:
+    out = alias or col
+    if col in cols:
+        return col if out == col else f"{col} AS {out}"
+    return f"{fallback_sql} AS {out}"
 
 
 def _ensure_events_columns(conn) -> None:
@@ -1247,7 +1257,16 @@ def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
         _ensure_events_columns(conn)
         _ensure_events_visibility_schema(conn)
         ev_cols = _table_columns(conn, "events")
-        select_cols = ["slug", "title", "date_text", "city", "venue", "flyer_url", "active", "hero_bg"]
+        select_cols = [
+            _select_expr(ev_cols, "slug", "NULL"),
+            _select_expr(ev_cols, "title", "NULL"),
+            _select_expr(ev_cols, "date_text", "NULL"),
+            _select_expr(ev_cols, "city", "NULL"),
+            _select_expr(ev_cols, "venue", "NULL"),
+            _select_expr(ev_cols, "flyer_url", "NULL"),
+            _select_expr(ev_cols, "active", "TRUE"),
+            _select_expr(ev_cols, "hero_bg", "NULL"),
+        ]
         for optional_col in ("visibility", "payout_alias", "cuit", "settlement_mode", "mp_collector_id"):
             if optional_col in ev_cols:
                 select_cols.append(optional_col)

@@ -3950,50 +3950,58 @@ def api_sale_item_create(
     now_s = _now_epoch_s()
 
     with get_conn() as conn:
-        # Upsert por unique constraint real: (tenant, event_slug, kind, name)
+        si_cols = _table_columns(conn, "sale_items")
+
+        cols = ["tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
+        vals = [producer, event_slug, name, kind, price_cents, stock_total, 0]
+
+        if "start_date" in si_cols:
+            cols.append("start_date")
+            vals.append(start_date)
+        if "end_date" in si_cols:
+            cols.append("end_date")
+            vals.append(end_date)
+        if "active" in si_cols:
+            cols.append("active")
+            vals.append(active)
+        if "display_order" in si_cols:
+            cols.append("display_order")
+            vals.append(display_order)
+        if "created_at" in si_cols:
+            cols.append("created_at")
+            vals.append(now_s)
+        if "updated_at" in si_cols:
+            cols.append("updated_at")
+            vals.append(now_s)
+        if "item_name" in si_cols:
+            cols.append("item_name")
+            vals.append(name)
+        if "item_type" in si_cols:
+            cols.append("item_type")
+            vals.append(kind)
+
+        set_cols = ["price_cents", "stock_total"]
+        for c in ("start_date", "end_date", "active", "display_order", "updated_at", "item_name", "item_type"):
+            if c in si_cols:
+                set_cols.append(c)
+
+        returning = ["id", "tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
+        returning.append("start_date" if "start_date" in si_cols else "NULL::text AS start_date")
+        returning.append("end_date" if "end_date" in si_cols else "NULL::text AS end_date")
+        returning.append("active" if "active" in si_cols else "TRUE AS active")
+        returning.append("display_order" if "display_order" in si_cols else "0 AS display_order")
+        returning.append("created_at" if "created_at" in si_cols else "NULL::bigint AS created_at")
+        returning.append("updated_at" if "updated_at" in si_cols else "NULL::bigint AS updated_at")
+
         row = conn.execute(
-            """
-            INSERT INTO sale_items (
-                tenant, event_slug, name, kind,
-                price_cents, stock_total, stock_sold,
-                start_date, end_date,
-                active, display_order,
-                created_at, updated_at,
-                item_name, item_type
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s)
+            f"""
+            INSERT INTO sale_items ({', '.join(cols)})
+            VALUES ({', '.join(['%s'] * len(cols))})
             ON CONFLICT (tenant, event_slug, kind, name)
-            DO UPDATE SET
-                price_cents   = EXCLUDED.price_cents,
-                stock_total   = EXCLUDED.stock_total,
-                start_date    = EXCLUDED.start_date,
-                end_date      = EXCLUDED.end_date,
-                active        = EXCLUDED.active,
-                display_order = EXCLUDED.display_order,
-                updated_at    = EXCLUDED.updated_at,
-                item_name     = EXCLUDED.item_name,
-                item_type     = EXCLUDED.item_type
-            RETURNING
-                id, tenant, event_slug, name, kind, price_cents,
-                stock_total, stock_sold, start_date, end_date,
-                active, display_order, created_at, updated_at
+            DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in set_cols])}
+            RETURNING {', '.join(returning)}
             """,
-            (
-                producer,
-                event_slug,
-                name,
-                kind,
-                price_cents,
-                stock_total,
-                start_date,
-                end_date,
-                active,
-                display_order,
-                now_s,
-                now_s,
-                name,
-                kind,
-            ),
+            tuple(vals),
         ).fetchone()
         conn.commit()
 

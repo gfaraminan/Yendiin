@@ -1228,7 +1228,28 @@ def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
         _ensure_events_columns(conn)
         _ensure_events_visibility_schema(conn)
         ev_cols = _table_columns(conn, "events")
-        select_cols = ["slug", "title", "date_text", "city", "venue", "flyer_url", "active", "hero_bg"]
+        select_cols = ["slug"]
+        if "title" in ev_cols:
+            select_cols.append("title")
+        elif "name" in ev_cols:
+            select_cols.append("name AS title")
+        else:
+            select_cols.append("slug AS title")
+
+        if "date_text" in ev_cols:
+            select_cols.append("date_text")
+        elif "starts_at" in ev_cols:
+            select_cols.append("to_char(starts_at, 'YYYY-MM-DD HH24:MI') AS date_text")
+        else:
+            select_cols.append("NULL::text AS date_text")
+
+        select_cols.extend([
+            "city" if "city" in ev_cols else "NULL::text AS city",
+            "venue" if "venue" in ev_cols else "NULL::text AS venue",
+            "flyer_url" if "flyer_url" in ev_cols else "NULL::text AS flyer_url",
+            "active" if "active" in ev_cols else "TRUE AS active",
+            "hero_bg" if "hero_bg" in ev_cols else "NULL::text AS hero_bg",
+        ])
         for optional_col in ("visibility", "payout_alias", "cuit", "settlement_mode", "mp_collector_id"):
             if optional_col in ev_cols:
                 select_cols.append(optional_col)
@@ -4661,9 +4682,15 @@ def _build_audience_rows(
     event_owner_col = _has_col(event_cols, "tenant", "producer", "producer_tenant", "producer_id")
 
     joins = ""
+    orders_cols = _table_columns(conn, "orders")
+    email_col = _has_col(orders_cols, "buyer_email", "email", "customer_label")
+    name_col = _has_col(orders_cols, "buyer_name", "name")
+    email_expr = f"o.{email_col}" if email_col else "NULL"
+    name_expr = f"o.{name_col}" if name_col else "NULL"
+
     where_parts: list[str] = [
         _paid_like_where("o"),
-        "NULLIF(TRIM(COALESCE(o.buyer_email, '')), '') IS NOT NULL",
+        f"NULLIF(TRIM(COALESCE({email_expr}, '')), '') IS NOT NULL",
     ]
     params: list[Any] = []
 
@@ -4681,7 +4708,7 @@ def _build_audience_rows(
         where_parts.append("o.created_at < (%s::date + INTERVAL '1 day')")
         params.append(date_to)
     if q:
-        where_parts.append("(LOWER(COALESCE(o.buyer_email,'')) LIKE %s OR LOWER(COALESCE(o.buyer_name,'')) LIKE %s)")
+        where_parts.append(f"(LOWER(COALESCE({email_expr},'')) LIKE %s OR LOWER(COALESCE({name_expr},'')) LIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
 
     base_ticket_type_expr = "NULL::text AS last_ticket_type"
@@ -4712,9 +4739,9 @@ def _build_audience_rows(
         f"""
         WITH base AS (
           SELECT
-            LOWER(TRIM(COALESCE(o.buyer_email,''))) AS email_norm,
-            NULLIF(TRIM(COALESCE(o.buyer_email,'')), '') AS email_original,
-            NULLIF(TRIM(COALESCE(o.buyer_name,'')), '') AS contact_name,
+            LOWER(TRIM(COALESCE({email_expr},''))) AS email_norm,
+            NULLIF(TRIM(COALESCE({email_expr},'')), '') AS email_original,
+            NULLIF(TRIM(COALESCE({name_expr},'')), '') AS contact_name,
             o.id::text AS order_id,
             o.event_slug::text AS event_slug,
             o.created_at AS created_at,

@@ -3075,9 +3075,21 @@ def api_producer_dashboard(
         cur = conn.cursor(row_factory=dict_row)
 
         # ---- Load event (no depender de tenant_id=default) ----
+        ev_cols = _table_columns(conn, "events")
+        select_event_bits = [
+            "slug",
+            _select_expr(ev_cols, "title", "NULL"),
+            _select_expr(ev_cols, "date_text", "NULL"),
+            _select_expr(ev_cols, "city", "NULL"),
+            _select_expr(ev_cols, "venue", "NULL"),
+            _select_expr(ev_cols, "flyer_url", "NULL"),
+            _select_expr(ev_cols, "active", "TRUE"),
+            _select_expr(ev_cols, "tenant", "NULL"),
+            _select_expr(ev_cols, "tenant_id", "NULL"),
+        ]
         cur.execute(
-            """
-            SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
+            f"""
+            SELECT {', '.join(select_event_bits)}
             FROM events
             WHERE tenant_id = %s AND slug = %s
             LIMIT 1
@@ -3088,8 +3100,8 @@ def api_producer_dashboard(
 
         if not ev:
             cur.execute(
-                """
-                SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
+                f"""
+                SELECT {', '.join(select_event_bits)}
                 FROM events
                 WHERE slug = %s
                 LIMIT 1
@@ -3868,8 +3880,32 @@ def api_sale_items(
 
     with get_conn() as conn:
         try:
+            ev_cols = _table_columns(conn, "events")
+
+            join_owner_predicates: list[str] = []
+            where_owner_predicates: list[str] = []
+            owner_args: list[Any] = []
+
+            if "tenant" in ev_cols:
+                join_owner_predicates.append("e.tenant = si.tenant")
+                where_owner_predicates.append("e.tenant = %s")
+                owner_args.append(producer)
+            if "producer" in ev_cols:
+                join_owner_predicates.append("e.producer = si.tenant")
+                where_owner_predicates.append("e.producer = %s")
+                owner_args.append(producer)
+            if "producer_id" in ev_cols:
+                join_owner_predicates.append("e.producer_id = si.tenant")
+                where_owner_predicates.append("e.producer_id = %s")
+                owner_args.append(producer)
+
+            if not join_owner_predicates or not where_owner_predicates:
+                return {"ok": True, "items": []}
+
+            si_cols = _table_columns(conn, "sale_items")
+
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     si.id,
                     si.tenant,
@@ -3879,22 +3915,22 @@ def api_sale_items(
                     COALESCE(si.price_cents, 0) AS price_cents,
                     COALESCE(si.stock_total, 0) AS stock_total,
                     COALESCE(si.stock_sold, 0) AS stock_sold,
-                    COALESCE(si.start_date, '') AS start_date,
-                    COALESCE(si.end_date, '') AS end_date,
                     COALESCE(si.active, TRUE) AS active,
                     COALESCE(si.display_order, 0) AS display_order,
                     si.created_at,
-                    si.updated_at
+                    si.updated_at,
+                    {"COALESCE(si.start_date, '') AS start_date" if "start_date" in si_cols else "'' AS start_date"},
+                    {"COALESCE(si.end_date, '') AS end_date" if "end_date" in si_cols else "'' AS end_date"}
                 FROM sale_items si
                 JOIN events e
                   ON e.slug = si.event_slug
-                 AND (e.tenant = si.tenant OR e.producer = si.tenant)
+                 AND ({' OR '.join(join_owner_predicates)})
                 WHERE e.tenant_id = %s
                   AND e.slug = %s
-                  AND (e.tenant = %s OR e.producer = %s)
+                  AND ({' OR '.join(where_owner_predicates)})
                 ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
                 """,
-                (tenant_id, event_slug, producer, producer),
+                (tenant_id, event_slug, *owner_args),
             ).fetchall()
         except pg_errors.UndefinedTable:
             return {"ok": True, "items": []}
@@ -3975,59 +4011,26 @@ def api_sale_item_create(
     active = bool(payload.active) if payload.active is not None else True
     display_order = int(payload.sort_order or 0)
 
-    now_s = _now_epoch_s()
-
     with get_conn() as conn:
-        # Upsert por unique constraint real: (tenant, event_slug, kind, name)
-        sql = """
-            INSERT INTO sale_items (
-                tenant, event_slug, name, kind,
-                price_cents, stock_total, stock_sold,
-                start_date, end_date,
-                active, display_order,
-                created_at, updated_at,
-                item_name, item_type
-            )
-            VALUES (%s,%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s,%s)
-            ON CONFLICT (tenant, event_slug, kind, name)
-            DO UPDATE SET
-                price_cents   = EXCLUDED.price_cents,
-                stock_total   = EXCLUDED.stock_total,
-                start_date    = EXCLUDED.start_date,
-                end_date      = EXCLUDED.end_date,
-                active        = EXCLUDED.active,
-                display_order = EXCLUDED.display_order,
-                updated_at    = EXCLUDED.updated_at,
-                item_name     = EXCLUDED.item_name,
-                item_type     = EXCLUDED.item_type
-            RETURNING
-                id, tenant, event_slug, name, kind, price_cents,
-                stock_total, stock_sold, start_date, end_date,
-                active, display_order, created_at, updated_at
-        """
-        params = (
-            producer,
-            event_slug,
-            name,
-            kind,
-            price_cents,
-            stock_total,
-            start_date,
-            end_date,
-            active,
-            display_order,
-            now_s,
-            now_s,
-            name,
-            kind,
-        )
-        compat_insert_order = [
-            "tenant", "event_slug", "name", "kind",
-            "price_cents", "stock_total", "stock_sold",
-            "start_date", "end_date",
-            "active", "display_order",
-            "created_at", "updated_at",
-            "item_name", "item_type",
+        si_cols = _table_columns(conn, "sale_items")
+
+        def _col_type(col_name: str) -> str:
+            row_t = conn.execute(
+                """
+                SELECT data_type
+                  FROM information_schema.columns
+                 WHERE table_schema='public' AND table_name='sale_items' AND column_name=%s
+                """,
+                (col_name,),
+            ).fetchone()
+            if not row_t:
+                return ""
+            d = dict(row_t) if not isinstance(row_t, dict) else row_t
+            return str(d.get("data_type") or "")
+
+        insert_order = [
+            "tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold",
+            "start_date", "end_date", "active", "display_order", "created_at", "updated_at", "item_name", "item_type",
         ]
         compat_data = {
             "tenant": producer,
@@ -4041,60 +4044,64 @@ def api_sale_item_create(
             "end_date": end_date,
             "active": active,
             "display_order": display_order,
-            "created_at": now_s,
-            "updated_at": now_s,
+            "created_at": _smart_now_for_column(_col_type("created_at")),
+            "updated_at": _smart_now_for_column(_col_type("updated_at")),
             "item_name": name,
             "item_type": kind,
         }
 
-        def _run_compat_upsert():
-            si_cols = _table_columns(conn, "sale_items")
-            insert_cols = [c for c in compat_insert_order if c in si_cols]
-            conflict_cols = [c for c in ("tenant", "event_slug", "kind", "name") if c in si_cols]
-            if len(conflict_cols) < 4:
-                raise HTTPException(status_code=500, detail="sale_items_schema_incompatible")
+        insert_cols = [c for c in insert_order if c in si_cols]
+        if len([c for c in ("tenant", "event_slug", "kind", "name") if c in si_cols]) < 4:
+            raise HTTPException(status_code=500, detail="sale_items_schema_incompatible")
+        placeholders = ", ".join(["%s"] * len(insert_cols))
+        values = [compat_data.get(c) for c in insert_cols]
 
-            update_candidates = [
-                "price_cents", "stock_total", "start_date", "end_date",
-                "active", "display_order", "updated_at", "item_name", "item_type",
-            ]
-            update_cols = [c for c in update_candidates if c in si_cols]
-            set_clause = ",\n                ".join([f"{c} = EXCLUDED.{c}" for c in update_cols]) or "updated_at = EXCLUDED.updated_at"
-            returning_candidates = [
-                "id", "tenant", "event_slug", "name", "kind", "price_cents",
-                "stock_total", "stock_sold", "start_date", "end_date",
-                "active", "display_order", "created_at", "updated_at",
-            ]
-            returning_cols = [c for c in returning_candidates if c in si_cols]
-            if not returning_cols:
-                returning_cols = ["tenant", "event_slug", "name"]
+        update_candidates = ["price_cents", "stock_total", "active", "display_order", "updated_at", "item_name", "item_type", "start_date", "end_date"]
+        update_cols = [c for c in update_candidates if c in si_cols]
+        set_clause = ",\n                ".join([f"{c} = EXCLUDED.{c}" for c in update_cols])
 
-            values = [compat_data[c] for c in insert_cols]
-            placeholders = ", ".join(["%s"] * len(insert_cols))
-            sql_compat = f"""
-                INSERT INTO sale_items ({", ".join(insert_cols)})
-                VALUES ({placeholders})
-                ON CONFLICT ({", ".join(conflict_cols)})
-                DO UPDATE SET
-                    {set_clause}
-                RETURNING {", ".join(returning_cols)}
-            """
-            return conn.execute(sql_compat, tuple(values)).fetchone()
+        returning_candidates = ["id", "tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold", "active", "display_order", "created_at", "updated_at", "start_date", "end_date"]
+        returning_cols = [c for c in returning_candidates if c in si_cols]
+        if "start_date" not in returning_cols:
+            returning_cols.append("NULL::text AS start_date")
+        if "end_date" not in returning_cols:
+            returning_cols.append("NULL::text AS end_date")
+
+        sql_compat = f"""
+            INSERT INTO sale_items ({", ".join(insert_cols)})
+            VALUES ({placeholders})
+            ON CONFLICT (tenant, event_slug, kind, name)
+            DO UPDATE SET
+                {set_clause}
+            RETURNING {", ".join(returning_cols)}
+        """
 
         try:
-            row = conn.execute(sql, params).fetchone()
+            row = conn.execute(sql_compat, tuple(values)).fetchone()
         except pg_errors.UndefinedTable:
             conn.rollback()
             _ensure_sale_items_table_exists(conn)
             _invalidate_table_columns_cache("sale_items")
-            try:
-                row = conn.execute(sql, params).fetchone()
-            except pg_errors.UndefinedColumn:
-                conn.rollback()
-                row = _run_compat_upsert()
-        except pg_errors.UndefinedColumn:
+            row = conn.execute(sql_compat, tuple(values)).fetchone()
+        except pg_errors.InvalidColumnReference:
             conn.rollback()
-            row = _run_compat_upsert()
+            row = conn.execute(
+                """
+                UPDATE sale_items
+                   SET price_cents=%s, stock_total=%s, active=%s, display_order=%s, updated_at=%s
+                 WHERE tenant=%s AND event_slug=%s AND kind=%s AND name=%s
+             RETURNING id, tenant, event_slug, name, kind, price_cents, stock_total, stock_sold, active, display_order, created_at, updated_at
+                """,
+                (price_cents, stock_total, active, display_order, compat_data.get("updated_at"), producer, event_slug, kind, name),
+            ).fetchone()
+            if not row:
+                insert_simple_cols = [c for c in ("tenant","event_slug","name","kind","price_cents","stock_total","stock_sold","active","display_order","created_at","updated_at") if c in si_cols]
+                insert_simple_vals = [compat_data.get(c) for c in insert_simple_cols]
+                row = conn.execute(
+                    f"""INSERT INTO sale_items ({', '.join(insert_simple_cols)}) VALUES ({', '.join(['%s']*len(insert_simple_cols))})
+                    RETURNING id, tenant, event_slug, name, kind, price_cents, stock_total, stock_sold, active, display_order, created_at, updated_at""",
+                    tuple(insert_simple_vals),
+                ).fetchone()
         conn.commit()
 
     d = dict(row) if not isinstance(row, dict) else row
@@ -4815,9 +4822,15 @@ def _build_audience_rows(
     event_owner_col = _has_col(event_cols, "tenant", "producer", "producer_tenant", "producer_id")
 
     joins = ""
+    order_cols = _table_columns(conn, "orders")
+    buyer_email_col = _has_col(order_cols, "buyer_email", "email")
+    buyer_name_col = _has_col(order_cols, "buyer_name", "customer_name", "name")
+    buyer_email_expr = f"o.{buyer_email_col}" if buyer_email_col else "''"
+    buyer_name_expr = f"o.{buyer_name_col}" if buyer_name_col else "''"
+
     where_parts: list[str] = [
         _paid_like_where("o"),
-        "NULLIF(TRIM(COALESCE(o.buyer_email, '')), '') IS NOT NULL",
+        f"NULLIF(TRIM(COALESCE({buyer_email_expr}, '')), '') IS NOT NULL",
     ]
     params: list[Any] = []
 
@@ -4835,7 +4848,7 @@ def _build_audience_rows(
         where_parts.append("o.created_at < (%s::date + INTERVAL '1 day')")
         params.append(date_to)
     if q:
-        where_parts.append("(LOWER(COALESCE(o.buyer_email,'')) LIKE %s OR LOWER(COALESCE(o.buyer_name,'')) LIKE %s)")
+        where_parts.append("(LOWER(COALESCE({buyer_email_expr},'')) LIKE %s OR LOWER(COALESCE({buyer_name_expr},'')) LIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
 
     base_ticket_type_expr = "NULL::text AS last_ticket_type"
@@ -4866,9 +4879,9 @@ def _build_audience_rows(
         f"""
         WITH base AS (
           SELECT
-            LOWER(TRIM(COALESCE(o.buyer_email,''))) AS email_norm,
-            NULLIF(TRIM(COALESCE(o.buyer_email,'')), '') AS email_original,
-            NULLIF(TRIM(COALESCE(o.buyer_name,'')), '') AS contact_name,
+            LOWER(TRIM(COALESCE({buyer_email_expr},''))) AS email_norm,
+            NULLIF(TRIM(COALESCE({buyer_email_expr},'')), '') AS email_original,
+            NULLIF(TRIM(COALESCE({buyer_name_expr},'')), '') AS contact_name,
             o.id::text AS order_id,
             o.event_slug::text AS event_slug,
             o.created_at AS created_at,

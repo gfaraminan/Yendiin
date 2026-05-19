@@ -3578,7 +3578,7 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
             "mp_collector_id": payload.mp_collector_id,
             # opcionales (se insertan solo si existen columnas)
             "description": payload.description,
-            "flyer_url": payload.flyer_url,
+            "flyer_url": (payload.flyer_url if (payload.flyer_url is not None and str(payload.flyer_url).strip() != "") else None),
             "address": payload.address,
             "lat": payload.lat,
             "lng": payload.lng,
@@ -3661,7 +3661,8 @@ def _event_update_impl(request: Request, slug: str, payload: EventUpdateIn, prod
         add("date_text", payload.date_text)
         add("city", payload.city)
         add("venue", payload.venue)
-        add("hero_bg", payload.hero_bg)
+        if payload.hero_bg is not None and str(payload.hero_bg).strip() != "":
+            add("hero_bg", payload.hero_bg)
         if payload.visibility is not None:
             add("visibility", _norm_visibility(payload.visibility))
         settlement_mode_raw = payload.settlement_mode
@@ -3670,7 +3671,8 @@ def _event_update_impl(request: Request, slug: str, payload: EventUpdateIn, prod
 
         # opcionales (solo si existen columnas)
         add("description", payload.description)
-        add("flyer_url", payload.flyer_url)
+        if payload.flyer_url is not None and str(payload.flyer_url).strip() != "":
+            add("flyer_url", payload.flyer_url)
         add("address", payload.address)
         add("lat", payload.lat)
         add("lng", payload.lng)

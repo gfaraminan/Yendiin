@@ -1910,7 +1910,7 @@ def api_issue_courtesy_tickets(
     buyer_email = (payload.buyer_email or "").strip() or None
     buyer_phone = (payload.buyer_phone or "").strip() or None
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
     with get_conn() as conn:
         si_cols = _table_columns(conn, "sale_items")
         tcols = _table_columns(conn, "tickets")
@@ -2207,7 +2207,7 @@ def api_issue_pos_sale(
 
     operator_email = str((user or {}).get("email") or "").strip().lower()
     operator_name = str((user or {}).get("name") or "").strip()
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
     with get_conn() as conn:
         # Evita falsos negativos por cache de columnas entre tests/entornos heterogéneos.
         _invalidate_table_columns_cache("sale_items")
@@ -3484,7 +3484,7 @@ def api_producer_event_create(request: Request, payload: EventCreateIn, user: di
     # Keep session in sync (useful for UI routing), but never trust it for auth.
     request.session["producer"] = producer
     tenant = producer
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     if not getattr(payload, 'accept_terms', False):
         raise HTTPException(status_code=400, detail='terms_required')
@@ -3571,7 +3571,7 @@ def _event_update_impl(request: Request, slug: str, payload: EventUpdateIn, prod
     """
     tenant_id = _tenant_from_request(request)
     tenant = producer
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     if not getattr(payload, 'accept_terms', False):
         raise HTTPException(status_code=400, detail='terms_required')
@@ -3947,7 +3947,7 @@ def api_sale_item_create(
     active = bool(payload.active) if payload.active is not None else True
     display_order = int(payload.sort_order or 0)
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         si_cols = _table_columns(conn, "sale_items")
@@ -3969,10 +3969,10 @@ def api_sale_item_create(
             vals.append(display_order)
         if "created_at" in si_cols:
             cols.append("created_at")
-            vals.append(now_s)
+            vals.append(now_v)
         if "updated_at" in si_cols:
             cols.append("updated_at")
-            vals.append(now_s)
+            vals.append(now_v)
         if "item_name" in si_cols:
             cols.append("item_name")
             vals.append(name)
@@ -4059,7 +4059,7 @@ def api_sale_item_update(
     end_date = (payload.end_date or None)
     active = bool(payload.active) if payload.active is not None else True
     display_order = int(payload.sort_order or 0)
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         row = conn.execute(
@@ -4141,7 +4141,7 @@ def api_sale_items_set_test_price(
     if price_cents <= 0:
         raise HTTPException(status_code=400, detail="invalid_price")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         if payload.include_tickets:
@@ -4389,7 +4389,7 @@ def api_seller_create(
     if not pin:
         raise HTTPException(status_code=400, detail="missing_pin")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         try:
@@ -4468,7 +4468,7 @@ def api_seller_update(
     if not pin:
         raise HTTPException(status_code=400, detail="missing_pin")
 
-    now_s = _now_epoch_s()
+    now_v = datetime.now(timezone.utc)
 
     with get_conn() as conn:
         try:

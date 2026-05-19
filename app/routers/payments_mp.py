@@ -703,10 +703,10 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
             if not order:
                 return False
             if not isinstance(order, dict):
-                # si tu cursor devuelve tuplas, no podemos emitir tickets de manera segura aquí
-                # (porque dependemos de keys como items_json, tenant_id, etc.)
-                # Preferimos fallar limpio.
-                return False
+                order_rows = _rows_to_dicts(cur, [order])
+                order = order_rows[0] if order_rows else None
+                if not isinstance(order, dict):
+                    return False
 
             already_paid = str((order.get("status") or "")).lower() == "paid"
 
@@ -1340,7 +1340,10 @@ async def mp_webhook(request: Request):
             if not order:
                 return {"ok": True, "received": True, "order": "not_found"}
             if not isinstance(order, dict):
-                return {"ok": True, "received": True, "order": "cursor_not_dict"}
+                order_rows = _rows_to_dicts(cur, [order])
+                order = order_rows[0] if order_rows else None
+                if not isinstance(order, dict):
+                    return {"ok": True, "received": True, "order": "cursor_not_dict"}
 
             buyer_email = (order.get("buyer_email") or "").strip()
 

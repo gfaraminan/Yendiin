@@ -13,7 +13,7 @@ from reportlab.lib.utils import ImageReader
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.db import get_conn as db_get_conn
 from app.brand import get_brand_config
@@ -227,14 +227,16 @@ def _send_transfer_notification_email(
 # models
 # -------------------------
 class BuyerIn(BaseModel):
-    full_name: Optional[str] = None
+    model_config = ConfigDict(populate_by_name=True)
+
+    full_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("full_name", "fullName"))
     dni: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     province: Optional[str] = None
-    postal_code: Optional[str] = None
-    birth_date: Optional[str] = None
+    postal_code: Optional[str] = Field(default=None, validation_alias=AliasChoices("postal_code", "postalCode"))
+    birth_date: Optional[str] = Field(default=None, validation_alias=AliasChoices("birth_date", "birthDate"))
 
 
 class OrderItemIn(BaseModel):
@@ -243,8 +245,10 @@ class OrderItemIn(BaseModel):
 
 
 class OrderCreate(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     # compat: algunos front mandan tenant, otros tenant_id
-    tenant_id: str = Field("default", min_length=1)
+    tenant_id: str = Field("default", min_length=1, validation_alias=AliasChoices("tenant_id", "tenant"))
     event_slug: str = Field(..., min_length=1)
 
     # compat: modo simple

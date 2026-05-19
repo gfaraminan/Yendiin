@@ -14,6 +14,7 @@ except Exception:  # pragma: no cover
 
 
 from app.db import get_conn
+from app.user_persistence import upsert_user_with_legacy_fallback
 from app.brand import get_brand_config
 
 router = APIRouter(tags=["public"])
@@ -150,7 +151,7 @@ async def public_login_google(payload: GoogleLoginIn, request: Request):
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            _upsert_user(cur, tenant_id, user)
+            upsert_user_with_legacy_fallback(cur, tenant_id, user)
             conn.commit()
     except Exception:
         # no bloquea el login si falla la persistencia

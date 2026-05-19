@@ -15,6 +15,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.db import get_conn
+from app.user_persistence import upsert_user_with_legacy_fallback
 from app.settings import settings
 from app.mailer import send_magic_link
 
@@ -214,7 +215,7 @@ async def google_login(payload: GoogleLoginIn, request: Request):
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            _upsert_user(cur, tenant_id, user)
+            upsert_user_with_legacy_fallback(cur, tenant_id, user)
             conn.commit()
     except Exception:
         pass

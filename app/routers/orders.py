@@ -558,7 +558,16 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
 
         # campos opcionales por compatibilidad de schema
         t_ticket_type = "t.ticket_type" if "ticket_type" in tickets_cols else "NULL::text"
-        t_qr = "t.qr_payload" if "qr_payload" in tickets_cols else "t.qr_token"
+        if "qr_payload" in tickets_cols:
+            t_qr = "t.qr_payload"
+        elif "qr_token" in tickets_cols:
+            t_qr = "t.qr_token"
+        elif "qr_payload" in orders_cols:
+            t_qr = "o.qr_payload"
+        elif "qr_token" in orders_cols:
+            t_qr = "o.qr_token"
+        else:
+            t_qr = "NULL::text"
 
         # eventos (en distintas versiones lo guardaste con nombres diferentes)
         e_date = (
@@ -685,7 +694,16 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         events_cols = set(_table_columns(cur, "events"))
 
         t_ticket_type = "t.ticket_type" if "ticket_type" in tickets_cols else "NULL::text"
-        t_qr = "t.qr_payload" if "qr_payload" in tickets_cols else "t.qr_token"
+        if "qr_payload" in tickets_cols:
+            t_qr = "t.qr_payload"
+        elif "qr_token" in tickets_cols:
+            t_qr = "t.qr_token"
+        elif "qr_payload" in orders_cols:
+            t_qr = "o.qr_payload"
+        elif "qr_token" in orders_cols:
+            t_qr = "o.qr_token"
+        else:
+            t_qr = "NULL::text"
 
         e_date = (
             "e.event_date" if "event_date" in events_cols else

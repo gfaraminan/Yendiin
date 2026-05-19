@@ -3955,6 +3955,10 @@ def api_sale_item_create(
         cols = ["tenant", "event_slug", "name", "kind", "price_cents", "stock_total", "stock_sold"]
         vals = [producer, event_slug, name, kind, price_cents, stock_total, 0]
 
+        if "id" in si_cols:
+            cols.insert(0, "id")
+            vals.insert(0, str(uuid.uuid4()))
+
         if "start_date" in si_cols:
             cols.append("start_date")
             vals.append(start_date)
@@ -3993,16 +3997,50 @@ def api_sale_item_create(
         returning.append("created_at" if "created_at" in si_cols else "NULL::bigint AS created_at")
         returning.append("updated_at" if "updated_at" in si_cols else "NULL::bigint AS updated_at")
 
-        row = conn.execute(
-            f"""
-            INSERT INTO sale_items ({', '.join(cols)})
-            VALUES ({', '.join(['%s'] * len(cols))})
-            ON CONFLICT (tenant, event_slug, kind, name)
-            DO UPDATE SET {', '.join([f'{c}=EXCLUDED.{c}' for c in set_cols])}
-            RETURNING {', '.join(returning)}
-            """,
-            tuple(vals),
-        ).fetchone()
+        # Compat legacy: algunos esquemas no tienen unique constraint para ON CONFLICT
+        row = None
+        update_set = ', '.join([f"{c} = %s" for c in set_cols])
+        update_vals = []
+        for c in set_cols:
+            if c == 'price_cents':
+                update_vals.append(price_cents)
+            elif c == 'stock_total':
+                update_vals.append(stock_total)
+            elif c == 'start_date':
+                update_vals.append(start_date)
+            elif c == 'end_date':
+                update_vals.append(end_date)
+            elif c == 'active':
+                update_vals.append(active)
+            elif c == 'display_order':
+                update_vals.append(display_order)
+            elif c == 'updated_at':
+                update_vals.append(now_v)
+            elif c == 'item_name':
+                update_vals.append(name)
+            elif c == 'item_type':
+                update_vals.append(kind)
+
+        if update_set:
+            row = conn.execute(
+                f"""
+                UPDATE sale_items
+                SET {update_set}
+                WHERE tenant = %s AND event_slug = %s AND kind = %s AND name = %s
+                RETURNING {', '.join(returning)}
+                """,
+                tuple(update_vals + [producer, event_slug, kind, name]),
+            ).fetchone()
+
+        if not row:
+            row = conn.execute(
+                f"""
+                INSERT INTO sale_items ({', '.join(cols)})
+                VALUES ({', '.join(['%s'] * len(cols))})
+                RETURNING {', '.join(returning)}
+                """,
+                tuple(vals),
+            ).fetchone()
         conn.commit()
 
     d = dict(row) if not isinstance(row, dict) else row

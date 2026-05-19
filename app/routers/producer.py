@@ -4102,10 +4102,17 @@ def api_sale_item_create(
             if not row:
                 insert_simple_cols = [c for c in ("tenant","event_slug","name","kind","price_cents","stock_total","stock_sold","active","display_order","created_at","updated_at") if c in si_cols]
                 if "id" in si_cols:
-                    next_id_row = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items").fetchone()
-                    next_id = _row_get(next_id_row, key="next_id", idx=0, default=1)
+                    id_type = (_col_type("id") or "").lower()
+                    if "int" in id_type or "numeric" in id_type or "double" in id_type or "real" in id_type or "decimal" in id_type:
+                        try:
+                            next_id_row = conn.execute("SELECT COALESCE(MAX(id::bigint), 0) + 1 AS next_id FROM sale_items").fetchone()
+                            next_id = _row_get(next_id_row, key="next_id", idx=0, default=1)
+                            compat_data["id"] = int(next_id or 1)
+                        except Exception:
+                            compat_data["id"] = _now_epoch_s()
+                    else:
+                        compat_data["id"] = uuid.uuid4().hex
                     insert_simple_cols = ["id", *insert_simple_cols]
-                    compat_data["id"] = int(next_id or 1)
                 insert_simple_vals = [compat_data.get(c) for c in insert_simple_cols]
                 row = conn.execute(
                     f"""INSERT INTO sale_items ({', '.join(insert_simple_cols)}) VALUES ({', '.join(['%s']*len(insert_simple_cols))})

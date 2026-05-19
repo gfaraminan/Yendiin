@@ -1228,7 +1228,28 @@ def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
         _ensure_events_columns(conn)
         _ensure_events_visibility_schema(conn)
         ev_cols = _table_columns(conn, "events")
-        select_cols = ["slug", "title", "date_text", "city", "venue", "flyer_url", "active", "hero_bg"]
+        select_cols = ["slug"]
+        if "title" in ev_cols:
+            select_cols.append("title")
+        elif "name" in ev_cols:
+            select_cols.append("name AS title")
+        else:
+            select_cols.append("slug AS title")
+
+        if "date_text" in ev_cols:
+            select_cols.append("date_text")
+        elif "starts_at" in ev_cols:
+            select_cols.append("to_char(starts_at, 'YYYY-MM-DD HH24:MI') AS date_text")
+        else:
+            select_cols.append("NULL::text AS date_text")
+
+        select_cols.extend([
+            "city" if "city" in ev_cols else "NULL::text AS city",
+            "venue" if "venue" in ev_cols else "NULL::text AS venue",
+            "flyer_url" if "flyer_url" in ev_cols else "NULL::text AS flyer_url",
+            "active" if "active" in ev_cols else "TRUE AS active",
+            "hero_bg" if "hero_bg" in ev_cols else "NULL::text AS hero_bg",
+        ])
         for optional_col in ("visibility", "payout_alias", "cuit", "settlement_mode", "mp_collector_id"):
             if optional_col in ev_cols:
                 select_cols.append(optional_col)
@@ -3031,22 +3052,38 @@ def api_producer_dashboard(
     with get_conn() as conn:
         cur = conn.cursor(row_factory=dict_row)
 
-        # ---- Load event (no depender de tenant_id=default) ----
-        cur.execute(
-            """
-            SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
-            FROM events
-            WHERE tenant_id = %s AND slug = %s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        ev = cur.fetchone()
+        # ---- Load event (schema-aware; no depender de tenant_id=default) ----
+        ev_cols = _table_columns(conn, "events")
+        event_select = [
+            "slug",
+            "title" if "title" in ev_cols else ("name AS title" if "name" in ev_cols else "slug AS title"),
+            "date_text" if "date_text" in ev_cols else ("to_char(starts_at, 'YYYY-MM-DD HH24:MI') AS date_text" if "starts_at" in ev_cols else "NULL::text AS date_text"),
+            "city" if "city" in ev_cols else "NULL::text AS city",
+            "venue" if "venue" in ev_cols else "NULL::text AS venue",
+            "flyer_url" if "flyer_url" in ev_cols else "NULL::text AS flyer_url",
+            "active" if "active" in ev_cols else "TRUE AS active",
+            "tenant" if "tenant" in ev_cols else "NULL::text AS tenant",
+            "tenant_id" if "tenant_id" in ev_cols else "NULL::text AS tenant_id",
+        ]
+
+        if "tenant_id" in ev_cols:
+            cur.execute(
+                f"""
+                SELECT {', '.join(event_select)}
+                FROM events
+                WHERE tenant_id = %s AND slug = %s
+                LIMIT 1
+                """,
+                (tenant_id, event_slug),
+            )
+            ev = cur.fetchone()
+        else:
+            ev = None
 
         if not ev:
             cur.execute(
-                """
-                SELECT slug, title, date_text, city, venue, flyer_url, active, tenant, tenant_id
+                f"""
+                SELECT {', '.join(event_select)}
                 FROM events
                 WHERE slug = %s
                 LIMIT 1
@@ -3788,8 +3825,22 @@ def api_sale_items(
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
+        ev_cols = _table_columns(conn, "events")
+        owner_col = _has_col(ev_cols, "tenant", "producer", "producer_id", "owner", "owner_email")
+        tenant_filter = "e.tenant_id = %s AND" if "tenant_id" in ev_cols else ""
+
+        owner_join = f" AND e.{owner_col} = si.tenant" if owner_col else ""
+        owner_where = f"AND e.{owner_col} = %s" if owner_col else ""
+
+        params = []
+        if "tenant_id" in ev_cols:
+            params.append(tenant_id)
+        params.append(event_slug)
+        if owner_col:
+            params.append(producer)
+
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 si.id,
                 si.tenant,
@@ -3808,13 +3859,12 @@ def api_sale_items(
             FROM sale_items si
             JOIN events e
               ON e.slug = si.event_slug
-             AND (e.tenant = si.tenant OR e.producer = si.tenant)
-            WHERE e.tenant_id = %s
-              AND e.slug = %s
-              AND (e.tenant = %s OR e.producer = %s)
+             {owner_join}
+            WHERE {tenant_filter} e.slug = %s
+              {owner_where}
             ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
             """,
-            (tenant_id, event_slug, producer, producer),
+            tuple(params),
         ).fetchall()
 
     items = []
@@ -4661,9 +4711,15 @@ def _build_audience_rows(
     event_owner_col = _has_col(event_cols, "tenant", "producer", "producer_tenant", "producer_id")
 
     joins = ""
+    orders_cols = _table_columns(conn, "orders")
+    email_col = _has_col(orders_cols, "buyer_email", "email", "customer_label")
+    name_col = _has_col(orders_cols, "buyer_name", "name")
+    email_expr = f"o.{email_col}" if email_col else "NULL"
+    name_expr = f"o.{name_col}" if name_col else "NULL"
+
     where_parts: list[str] = [
         _paid_like_where("o"),
-        "NULLIF(TRIM(COALESCE(o.buyer_email, '')), '') IS NOT NULL",
+        f"NULLIF(TRIM(COALESCE({email_expr}, '')), '') IS NOT NULL",
     ]
     params: list[Any] = []
 
@@ -4681,7 +4737,7 @@ def _build_audience_rows(
         where_parts.append("o.created_at < (%s::date + INTERVAL '1 day')")
         params.append(date_to)
     if q:
-        where_parts.append("(LOWER(COALESCE(o.buyer_email,'')) LIKE %s OR LOWER(COALESCE(o.buyer_name,'')) LIKE %s)")
+        where_parts.append(f"(LOWER(COALESCE({email_expr},'')) LIKE %s OR LOWER(COALESCE({name_expr},'')) LIKE %s)")
         params.extend([f"%{q}%", f"%{q}%"])
 
     base_ticket_type_expr = "NULL::text AS last_ticket_type"
@@ -4712,9 +4768,9 @@ def _build_audience_rows(
         f"""
         WITH base AS (
           SELECT
-            LOWER(TRIM(COALESCE(o.buyer_email,''))) AS email_norm,
-            NULLIF(TRIM(COALESCE(o.buyer_email,'')), '') AS email_original,
-            NULLIF(TRIM(COALESCE(o.buyer_name,'')), '') AS contact_name,
+            LOWER(TRIM(COALESCE({email_expr},''))) AS email_norm,
+            NULLIF(TRIM(COALESCE({email_expr},'')), '') AS email_original,
+            NULLIF(TRIM(COALESCE({name_expr},'')), '') AS contact_name,
             o.id::text AS order_id,
             o.event_slug::text AS event_slug,
             o.created_at AS created_at,

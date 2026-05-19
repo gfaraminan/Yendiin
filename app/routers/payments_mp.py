@@ -623,7 +623,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     return buf.getvalue()
 
 
-def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: int):
+def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
     cols = ["id", "order_id", "tenant_id", "producer_tenant", "event_slug", "sale_item_id", "qr_token", "status"]
     vals = ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]
     args = [
@@ -746,7 +746,9 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                     if not isinstance(it, dict):
                         continue
                     try:
-                        sale_item_id = int(it.get("sale_item_id"))
+                        sale_item_id = str(it.get("sale_item_id") or "").strip()
+                        if not sale_item_id:
+                            continue
                         qty = int(it.get("quantity") or it.get("qty") or 1)
                     except Exception:
                         continue
@@ -1373,7 +1375,9 @@ async def mp_webhook(request: Request):
                     if not isinstance(it, dict):
                         continue
                     try:
-                        sale_item_id = int(it.get("sale_item_id"))
+                        sale_item_id = str(it.get("sale_item_id") or "").strip()
+                        if not sale_item_id:
+                            continue
                         qty = int(it.get("quantity") or it.get("qty") or 1)
                     except Exception:
                         continue

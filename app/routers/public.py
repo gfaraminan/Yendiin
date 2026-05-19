@@ -262,8 +262,17 @@ def get_public_events(
         has_visibility = "visibility" in ev_cols
 
         select_cols = [
-            "slug", "title", "category", "date_text", "venue", "city",
-            "flyer_url", "hero_bg", "address", "lat", "lng",
+            _select_expr(ev_cols, "slug", "NULL"),
+            _select_expr(ev_cols, "title", "NULL"),
+            _select_expr(ev_cols, "category", "NULL"),
+            _select_expr(ev_cols, "date_text", "NULL"),
+            _select_expr(ev_cols, "venue", "NULL"),
+            _select_expr(ev_cols, "city", "NULL"),
+            _select_expr(ev_cols, "flyer_url", "NULL"),
+            _select_expr(ev_cols, "hero_bg", "NULL"),
+            _select_expr(ev_cols, "address", "NULL"),
+            _select_expr(ev_cols, "lat", "NULL"),
+            _select_expr(ev_cols, "lng", "NULL"),
         ]
         if "badge" in ev_cols:
             select_cols.append("badge")
@@ -279,6 +288,8 @@ def get_public_events(
 
         try:
             if category and category != "Todos":
+                category_filter = "AND category = %s" if "category" in ev_cols else ""
+                query_params = (tenant_id, category) if "category" in ev_cols else (tenant_id,)
                 cur.execute(
                     f"""
                     SELECT {", ".join(select_cols)}
@@ -287,10 +298,10 @@ def get_public_events(
                       {where_active}
                       AND tenant_id = %s
                       {where_visibility}
-                      AND category = %s
+                      {category_filter}
                     ORDER BY created_at DESC
                     """,
-                    (tenant_id, category),
+                    query_params,
                 )
             else:
                 cur.execute(
@@ -309,17 +320,31 @@ def get_public_events(
             if pg_errors is None or not isinstance(e, pg_errors.UndefinedColumn):
                 raise
             # Fallback defensivo para esquemas legacy sin columnas opcionales.
-            base_cols = ["slug", "title", "category", "date_text", "venue", "city", "flyer_url", "hero_bg", "address", "lat", "lng"]
+            base_cols = [
+                _select_expr(ev_cols, "slug", "NULL"),
+                _select_expr(ev_cols, "title", "NULL"),
+                _select_expr(ev_cols, "category", "NULL"),
+                _select_expr(ev_cols, "date_text", "NULL"),
+                _select_expr(ev_cols, "venue", "NULL"),
+                _select_expr(ev_cols, "city", "NULL"),
+                _select_expr(ev_cols, "flyer_url", "NULL"),
+                _select_expr(ev_cols, "hero_bg", "NULL"),
+                _select_expr(ev_cols, "address", "NULL"),
+                _select_expr(ev_cols, "lat", "NULL"),
+                _select_expr(ev_cols, "lng", "NULL"),
+            ]
             if category and category != "Todos":
+                category_filter = "AND category = %s" if "category" in ev_cols else ""
+                query_params = (tenant_id, category) if "category" in ev_cols else (tenant_id,)
                 cur.execute(
                     f"""
                     SELECT {", ".join(base_cols)}
                     FROM events
                     WHERE tenant_id = %s
-                      AND category = %s
+                      {category_filter}
                     ORDER BY slug DESC
                     """,
-                    (tenant_id, category),
+                    query_params,
                 )
             else:
                 cur.execute(

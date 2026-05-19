@@ -623,7 +623,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     return buf.getvalue()
 
 
-def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: int):
+def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
     cols = ["id", "order_id", "tenant_id", "producer_tenant", "event_slug", "sale_item_id", "qr_token", "status"]
     vals = ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]
     args = [
@@ -746,7 +746,9 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                     if not isinstance(it, dict):
                         continue
                     try:
-                        sale_item_id = int(it.get("sale_item_id"))
+                        sale_item_id = str(it.get("sale_item_id") or "").strip()
+                        if not sale_item_id:
+                            continue
                         qty = int(it.get("quantity") or it.get("qty") or 1)
                     except Exception:
                         continue
@@ -949,10 +951,17 @@ async def mp_create_preference(
             "producer_tenant",
             "status",
             "total_cents",
-            "base_amount",
-            "fee_amount",
-            "total_amount",
         ]
+        has_base_amount = "base_amount" in ocols
+        has_fee_amount = "fee_amount" in ocols
+        has_total_amount = "total_amount" in ocols
+
+        if has_base_amount:
+            base_cols.append("base_amount")
+        if has_fee_amount:
+            base_cols.append("fee_amount")
+        if has_total_amount:
+            base_cols.append("total_amount")
 
         has_items_json = "items_json" in ocols
         has_buyer_email = "buyer_email" in ocols
@@ -991,11 +1000,21 @@ async def mp_create_preference(
             return {"ok": True, "order_id": order_id, "already_paid": True}
 
         total_cents = g(5, "total_cents")
-        base_amount = g(6, "base_amount")
-        fee_amount = g(7, "fee_amount")
-        total_amount = g(8, "total_amount")
+        idx = 6
 
-        idx = 9
+        base_amount = None
+        fee_amount = None
+        total_amount = None
+        if has_base_amount:
+            base_amount = g(idx, "base_amount")
+            idx += 1
+        if has_fee_amount:
+            fee_amount = g(idx, "fee_amount")
+            idx += 1
+        if has_total_amount:
+            total_amount = g(idx, "total_amount")
+            idx += 1
+
         items_json = None
         if has_items_json:
             items_json = g(idx, "items_json")
@@ -1356,7 +1375,9 @@ async def mp_webhook(request: Request):
                     if not isinstance(it, dict):
                         continue
                     try:
-                        sale_item_id = int(it.get("sale_item_id"))
+                        sale_item_id = str(it.get("sale_item_id") or "").strip()
+                        if not sale_item_id:
+                            continue
                         qty = int(it.get("quantity") or it.get("qty") or 1)
                     except Exception:
                         continue

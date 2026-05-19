@@ -3868,8 +3868,30 @@ def api_sale_items(
 
     with get_conn() as conn:
         try:
+            ev_cols = _table_columns(conn, "events")
+
+            join_owner_predicates: list[str] = []
+            where_owner_predicates: list[str] = []
+            owner_args: list[Any] = []
+
+            if "tenant" in ev_cols:
+                join_owner_predicates.append("e.tenant = si.tenant")
+                where_owner_predicates.append("e.tenant = %s")
+                owner_args.append(producer)
+            if "producer" in ev_cols:
+                join_owner_predicates.append("e.producer = si.tenant")
+                where_owner_predicates.append("e.producer = %s")
+                owner_args.append(producer)
+            if "producer_id" in ev_cols:
+                join_owner_predicates.append("e.producer_id = si.tenant")
+                where_owner_predicates.append("e.producer_id = %s")
+                owner_args.append(producer)
+
+            if not join_owner_predicates or not where_owner_predicates:
+                return {"ok": True, "items": []}
+
             rows = conn.execute(
-                """
+                f"""
                 SELECT
                     si.id,
                     si.tenant,
@@ -3888,13 +3910,13 @@ def api_sale_items(
                 FROM sale_items si
                 JOIN events e
                   ON e.slug = si.event_slug
-                 AND (e.tenant = si.tenant OR e.producer = si.tenant)
+                 AND ({' OR '.join(join_owner_predicates)})
                 WHERE e.tenant_id = %s
                   AND e.slug = %s
-                  AND (e.tenant = %s OR e.producer = %s)
+                  AND ({' OR '.join(where_owner_predicates)})
                 ORDER BY COALESCE(si.display_order, 0) ASC, si.id ASC
                 """,
-                (tenant_id, event_slug, producer, producer),
+                (tenant_id, event_slug, *owner_args),
             ).fetchall()
         except pg_errors.UndefinedTable:
             return {"ok": True, "items": []}

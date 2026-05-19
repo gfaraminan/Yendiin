@@ -3839,6 +3839,10 @@ def api_sale_items(
         if owner_col:
             params.append(producer)
 
+        si_cols = _table_columns(conn, "sale_items")
+        start_expr = "COALESCE(si.start_date, '') AS start_date" if "start_date" in si_cols else "''::text AS start_date"
+        end_expr = "COALESCE(si.end_date, '') AS end_date" if "end_date" in si_cols else "''::text AS end_date"
+
         rows = conn.execute(
             f"""
             SELECT
@@ -3850,8 +3854,8 @@ def api_sale_items(
                 COALESCE(si.price_cents, 0) AS price_cents,
                 COALESCE(si.stock_total, 0) AS stock_total,
                 COALESCE(si.stock_sold, 0) AS stock_sold,
-                COALESCE(si.start_date, '') AS start_date,
-                COALESCE(si.end_date, '') AS end_date,
+                {start_expr},
+                {end_expr},
                 COALESCE(si.active, TRUE) AS active,
                 COALESCE(si.display_order, 0) AS display_order,
                 si.created_at,

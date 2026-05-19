@@ -678,12 +678,17 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
         "e.slug",
         "e.title",
         "e.tenant",
-        "e.producer",
         "e.active",
         "e.city",
         "e.venue",
         "e.date_text",
     ]
+    if "producer" in ecols:
+        select_fields.append("e.producer")
+    elif "producer_id" in ecols:
+        select_fields.append("e.producer_id AS producer")
+    else:
+        select_fields.append("e.tenant AS producer")
 
     if "settlement_mode" in ecols:
         select_fields.append("e.settlement_mode")

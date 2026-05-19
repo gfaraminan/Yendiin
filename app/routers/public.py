@@ -19,6 +19,65 @@ from app.brand import get_brand_config
 router = APIRouter(tags=["public"])
 
 
+def _upsert_user(cur, tenant_id: str, user: dict[str, Any]) -> None:
+    try:
+        cur.execute(
+            """
+            INSERT INTO users (
+                tenant_id, auth_provider, auth_subject,
+                email, name, picture_url,
+                last_login_at, last_seen_at, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, now(), now(), now())
+            ON CONFLICT (auth_provider, auth_subject)
+            DO UPDATE SET
+                tenant_id = EXCLUDED.tenant_id,
+                email = EXCLUDED.email,
+                name = EXCLUDED.name,
+                picture_url = EXCLUDED.picture_url,
+                last_login_at = now(),
+                last_seen_at = now(),
+                updated_at = now()
+            """,
+            (
+                tenant_id,
+                user.get("provider"),
+                user.get("sub"),
+                user.get("email"),
+                user.get("name"),
+                user.get("picture"),
+            ),
+        )
+        return
+    except Exception as e:
+        if "tenant_id" not in str(e).lower():
+            raise
+
+    cur.execute(
+        """
+        INSERT INTO users (
+            auth_provider, auth_subject,
+            email, name, picture_url,
+            updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, now())
+        ON CONFLICT (auth_provider, auth_subject)
+        DO UPDATE SET
+            email = EXCLUDED.email,
+            name = EXCLUDED.name,
+            picture_url = EXCLUDED.picture_url,
+            updated_at = now()
+        """,
+        (
+            user.get("provider"),
+            user.get("sub"),
+            user.get("email"),
+            user.get("name"),
+            user.get("picture"),
+        ),
+    )
+
+
 class GoogleLoginIn(BaseModel):
     credential: str
 
@@ -91,33 +150,7 @@ async def public_login_google(payload: GoogleLoginIn, request: Request):
     try:
         with get_conn() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO users (
-                    tenant_id, auth_provider, auth_subject,
-                    email, name, picture_url,
-                    last_login_at, last_seen_at, updated_at
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, now(), now(), now())
-                ON CONFLICT (auth_provider, auth_subject)
-                DO UPDATE SET
-                    tenant_id = EXCLUDED.tenant_id,
-                    email = EXCLUDED.email,
-                    name = EXCLUDED.name,
-                    picture_url = EXCLUDED.picture_url,
-                    last_login_at = now(),
-                    last_seen_at = now(),
-                    updated_at = now()
-                """,
-                (
-                    tenant_id,
-                    user.get("provider"),
-                    user.get("sub"),
-                    user.get("email"),
-                    user.get("name"),
-                    user.get("picture"),
-                ),
-            )
+            _upsert_user(cur, tenant_id, user)
             conn.commit()
     except Exception:
         # no bloquea el login si falla la persistencia

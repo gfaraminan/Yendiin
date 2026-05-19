@@ -16,8 +16,10 @@ from fastapi.responses import HTMLResponse
 from itsdangerous import URLSafeTimedSerializer, BadSignature, BadTimeSignature, SignatureExpired
 
 from app.db import get_conn
+from app.brand import get_brand_config
 from app.mailer import send_email
 from app.settings import SESSION_SECRET
+from app.storage import resolve_upload_dir
 
 import io
 import qrcode
@@ -105,11 +107,14 @@ def _oauth_state_serializer(secret: str) -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(secret, salt="mp-oauth-state")
 
 
-def _build_oauth_state(tenant_id: str) -> str:
+def _build_oauth_state(tenant_id: str, opener_origin: Optional[str] = None) -> str:
     payload = {
         "nonce": uuid.uuid4().hex,
         "tenant": _norm_tenant_id(tenant_id),
     }
+    safe_opener = _safe_origin(str(opener_origin or ""))
+    if safe_opener:
+        payload["opener_origin"] = safe_opener
     signer_secret = _oauth_state_secret_candidates()[0]
     return _oauth_state_serializer(signer_secret).dumps(payload)
 
@@ -215,37 +220,6 @@ def _safe_session(request: Request) -> Dict[str, Any]:
         logger.exception("Unexpected error while reading request session")
         return {}
     return sess or {}
-
-
-def _oauth_state_serializer() -> URLSafeTimedSerializer:
-    return URLSafeTimedSerializer(SESSION_SECRET, salt="mp-oauth-state")
-
-
-def _build_oauth_state(tenant_id: str, opener_origin: Optional[str] = None) -> str:
-    payload: Dict[str, Any] = {
-        "nonce": uuid.uuid4().hex,
-        "tenant": _norm_tenant_id(tenant_id),
-    }
-    if opener_origin:
-        payload["opener_origin"] = opener_origin
-    return _oauth_state_serializer().dumps(payload)
-
-
-def _parse_oauth_state(token: str) -> Optional[Dict[str, Any]]:
-    raw = str(token or "").strip()
-    if not raw:
-        return None
-    try:
-        payload = _oauth_state_serializer().loads(raw, max_age=MP_OAUTH_STATE_MAX_AGE_SECONDS)
-    except (BadSignature, BadTimeSignature, SignatureExpired):
-        return None
-
-    if not isinstance(payload, dict):
-        return None
-
-    tenant_id = _norm_tenant_id(str(payload.get("tenant") or "default"))
-    opener_origin = str(payload.get("opener_origin") or "").strip() or None
-    return {"tenant": tenant_id, "opener_origin": opener_origin}
 
 
 def _ensure_oauth_sellers_table(cur) -> None:
@@ -378,26 +352,43 @@ def _split_config_status() -> Dict[str, Any]:
     }
 
 
+def _safe_rollback_from_cursor(cur) -> None:
+    try:
+        conn = getattr(cur, "connection", None)
+        if conn:
+            conn.rollback()
+    except Exception:
+        pass
+
+
 def _table_columns(cur, table: str) -> set[str]:
-    cur.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = %s
-        """,
-        (table,),
-    )
-    rows = cur.fetchall() or []
     out = set()
-    for r in rows:
-        if not r:
-            continue
-        if isinstance(r, dict):
-            v = r.get("column_name") or (next(iter(r.values())) if len(r) else None)
-        else:
-            v = r[0] if len(r) else None
-        if v:
-            out.add(str(v))
+    try:
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = %s
+            """,
+            (table,),
+        )
+        rows = cur.fetchall() or []
+        for r in rows:
+            if not r:
+                continue
+            if isinstance(r, dict):
+                v = r.get("column_name") or (next(iter(r.values())) if len(r) else None)
+            else:
+                try:
+                    v = r[0]
+                except Exception:
+                    v = getattr(r, "column_name", None)
+            if v:
+                out.add(str(v))
+    except Exception:
+        _safe_rollback_from_cursor(cur)
+        out = set()
+
     return out
 
 
@@ -553,6 +544,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
     logo_path = os.path.join("static", "favicon-192.png")
+    brand = get_brand_config()
 
     def _fmt_date(v: Any) -> str:
         if v is None:
@@ -582,7 +574,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
         if os.path.exists(logo_path):
             c.drawImage(ImageReader(logo_path), 40, height - 88, width=36, height=36, mask="auto")
         c.setFont("Helvetica-Bold", 18)
-        c.drawString(84, height - 64, "TicketPro")
+        c.drawString(84, height - 64, brand.name)
         c.setFont("Helvetica", 10)
         c.drawString(84, height - 80, "Entrada confirmada")
 
@@ -685,7 +677,7 @@ def _mark_order_paid(cur, *, ocols: set[str], order_id: str, payment_id: str | N
 
 def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
     """Marca la orden como paid y emite tickets si faltan (idempotente)."""
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    UPLOAD_DIR = resolve_upload_dir()
     os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
 
     try:
@@ -942,23 +934,28 @@ async def mp_create_preference(
         if "id" not in ocols or "tenant_id" not in ocols:
             raise HTTPException(status_code=500, detail="Schema inválido: orders missing id/tenant_id")
 
-        base_cols = [
+        def optional_order_col(col: str, fallback_sql: str) -> str:
+            return col if col in ocols else f"{fallback_sql} AS {col}"
+
+        # Keep a stable output shape without selecting columns that may be absent
+        # in older deployments. Missing monetary columns fall back to NULL so
+        # _choose_charge_amount can calculate from items_json/total_cents.
+        select_cols = [
             "id",
             "tenant_id",
-            "event_slug",
-            "producer_tenant",
-            "status",
-            "total_cents",
-            "base_amount",
-            "fee_amount",
-            "total_amount",
+            optional_order_col("event_slug", "NULL::text"),
+            optional_order_col("producer_tenant", "NULL::text"),
+            optional_order_col("status", "'pending'::text"),
+            optional_order_col("total_cents", "NULL::bigint"),
+            optional_order_col("base_amount", "NULL::numeric"),
+            optional_order_col("fee_amount", "NULL::numeric"),
+            optional_order_col("total_amount", "NULL::numeric"),
         ]
 
         has_items_json = "items_json" in ocols
         has_buyer_email = "buyer_email" in ocols
         has_buyer_name = "buyer_name" in ocols
 
-        select_cols = base_cols[:]
         if has_items_json:
             select_cols.append("items_json")
         if has_buyer_email:
@@ -1101,7 +1098,7 @@ async def mp_create_preference(
             },
         }
 
-        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", True)
+        use_seller_token_for_split = _env_bool("MP_USE_SELLER_ACCESS_TOKEN", False)
         request_access_token = MP_ACCESS_TOKEN
         split_auth_mode = "platform_token"
 
@@ -1303,7 +1300,7 @@ async def mp_webhook(request: Request):
     if not order_id:
         return {"ok": True, "received": True, "payment_status": status}
 
-    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    UPLOAD_DIR = resolve_upload_dir()
     os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
 
     try:
@@ -1435,6 +1432,7 @@ async def mp_webhook(request: Request):
         allow_resend = os.getenv("MP_WEBHOOK_RESEND_EMAIL", "0").strip() == "1"
         if buyer_email and (allow_resend or not already_paid):
             base = _request_base_url(request)
+            brand = get_brand_config(base)
             mis_path = os.getenv("MIS_TICKETS_PATH", "/#/mis-tickets").strip() or "/#/mis-tickets"
             if not mis_path.startswith("/"):
                 mis_path = "/" + mis_path
@@ -1454,9 +1452,9 @@ async def mp_webhook(request: Request):
             event_address = first_ticket.get("event_address") or "-"
             qty = len(ticket_rows or [])
 
-            subject = "✅ Compra confirmada en TicketPro — tus QRs y entradas"
+            subject = f"✅ Compra confirmada en {brand.name} — tus QRs y entradas"
             text_msg = (
-                "TicketPro\n"
+                f"{brand.name}\n"
                 "Compra confirmada\n\n"
                 f"Evento: {event_title}\n"
                 f"Titular: {buyer_label}\n"
@@ -1468,13 +1466,12 @@ async def mp_webhook(request: Request):
                 f"• Ver Mis Tickets: {mis_url}\n\n"
                 "Adjuntamos el PDF con el resumen y tus QRs para ingresar.\n"
                 + (f"\n(Nota: se adjuntaron {len(qr_atts)} QRs de {len(ticket_rows)} por límite de adjuntos.)\n" if extra else "")
-                + "\nContacto TicketPro:\n"
-                + "• Soporte: soporte@ticketpro.com.ar\n"
-                + "• Comercial: hola@ticketpro.com.ar\n"
-                + "• Web: https://ticketpro.com.ar\n"
+                + f"\nContacto {brand.name}:\n"
+                + f"• Soporte: {brand.support_email}\n"
+                + f"• Web: {brand.web_url}\n"
                 + f"• Términos y Condiciones: {terms_url}\n"
                 + f"• Política de Privacidad: {privacy_url}\n\n"
-                + "TicketPro es una marca operada por The Brain Lab SAS.\n"
+                + f"{brand.name} es una marca operada por {brand.legal_name}.\n"
             )
 
             extra_html = ""
@@ -1487,7 +1484,7 @@ async def mp_webhook(request: Request):
               <div style="max-width:620px; margin:0 auto; background:#ffffff;
                           border-radius:18px; padding:0; border:1px solid #e5e7eb; overflow:hidden;">
                 <div style="background:#0f172a; padding:18px 24px;">
-                  <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">TICKET<span style='color:#818cf8;'>PRO</span></div>
+                  <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">{brand.name}</div>
                   <div style="color:#cbd5e1; font-size:12px; margin-top:4px;">Confirmación de compra</div>
                 </div>
 
@@ -1527,10 +1524,10 @@ async def mp_webhook(request: Request):
                 </div>
 
                 <div style="padding:16px 24px; border-top:1px solid #e5e7eb; background:#f8fafc; color:#475569; font-size:12px; line-height:1.6;">
-                  <div><strong>Contacto TicketPro</strong></div>
-                  <div>Soporte: <a href="mailto:soporte@ticketpro.com.ar" style="color:#334155;">soporte@ticketpro.com.ar</a> · Comercial: <a href="mailto:hola@ticketpro.com.ar" style="color:#334155;">hola@ticketpro.com.ar</a></div>
-                  <div>Web: <a href="https://ticketpro.com.ar" style="color:#334155;">ticketpro.com.ar</a></div>
-                  <div style="margin-top:8px; color:#64748b;">TicketPro es una marca operada por <strong>The Brain Lab SAS</strong>.</div>
+                  <div><strong>Contacto {brand.name}</strong></div>
+                  <div>Soporte: <a href="mailto:{brand.support_email}" style="color:#334155;">{brand.support_email}</a></div>
+                  <div>Web: <a href="{brand.web_url}" style="color:#334155;">{brand.web_url}</a></div>
+                  <div style="margin-top:8px; color:#64748b;">{brand.name} es una marca operada por <strong>{brand.legal_name}</strong>.</div>
                   <div style="margin-top:6px;">
                     <a href="{terms_url}" style="color:#334155;">Términos y Condiciones</a>
                     <span style="color:#94a3b8;"> · </span>

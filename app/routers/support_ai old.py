@@ -260,6 +260,32 @@ def _users_columns() -> set[str]:
         return {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
 
 
+def _event_owner_row(cur, tenant_id: str, event_slug: str) -> dict:
+    """Fetch only event owner columns that exist in the current schema."""
+    ecols = _events_columns()
+    select_cols = [c for c in ("tenant", "producer", "producer_id") if c in ecols]
+    if not select_cols:
+        return {}
+    cur.execute(
+        f"""
+        SELECT {', '.join(select_cols)}
+        FROM events
+        WHERE tenant_id=%s AND slug=%s
+        LIMIT 1
+        """,
+        (tenant_id, event_slug),
+    )
+    return cur.fetchone() or {}
+
+
+def _sale_item_order_column(cols: set[str]) -> str | None:
+    if "display_order" in cols:
+        return "display_order"
+    if "sort_order" in cols:
+        return "sort_order"
+    return None
+
+
 def _event_owner_from_row(event_row: dict | None) -> str:
     """Resuelve el owner/productor de un evento de forma compatible con esquemas legacy."""
     if not isinstance(event_row, dict):
@@ -475,8 +501,12 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
     has_bar_slug = "bar_slug" in order_cols
     has_order_kind = "order_kind" in order_cols
     has_kind = "kind" in order_cols
+    has_orders_table = len(order_cols) > 0
+    total_cents_expr = _orders_total_cents_expr(order_cols, "o")
 
     ecols = _events_columns()
+    tcols = _tickets_columns()
+    has_tickets_table = len(tcols) > 0
     has_sold_out = "sold_out" in ecols
 
     with get_conn() as conn:
@@ -497,59 +527,68 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
         where_filter = "AND o.event_slug=%s" if ev_slug else ""
         args_filter = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
 
-        cur.execute(
-            f"""
-            SELECT
-              COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS paid_orders,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-            """,
-            args_filter,
-        )
-        orders_row = cur.fetchone() or {}
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS paid_orders,
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS revenue_cents
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                """,
+                args_filter,
+            )
+            orders_row = cur.fetchone() or {}
+        else:
+            orders_row = {}
 
         ticket_filter = "AND t.event_slug=%s" if ev_slug else ""
         ticket_args = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
-        cur.execute(
-            f"""
-            SELECT COUNT(*)::bigint AS total_tickets_sold
-            FROM tickets t
-            WHERE t.tenant_id=%s
-              AND COALESCE(t.status,'') NOT ILIKE 'revoked'
-              {ticket_filter}
-            """,
-            ticket_args,
-        )
-        tickets_row = cur.fetchone() or {}
+        if has_tickets_table:
+            cur.execute(
+                f"""
+                SELECT COUNT(*)::bigint AS total_tickets_sold
+                FROM tickets t
+                WHERE t.tenant_id=%s
+                  AND COALESCE(t.status,'') NOT ILIKE 'revoked'
+                  {ticket_filter}
+                """,
+                ticket_args,
+            )
+            tickets_row = cur.fetchone() or {}
+        else:
+            tickets_row = {}
 
         bar_predicates = []
         if has_source:
-            bar_predicates.append("COALESCE(source,'')='bar' OR COALESCE(source,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.source,'')='bar' OR COALESCE(o.source,'') ILIKE 'barra'")
         if has_bar_slug:
-            bar_predicates.append("bar_slug IS NOT NULL")
+            bar_predicates.append("o.bar_slug IS NOT NULL")
         if has_order_kind:
-            bar_predicates.append("COALESCE(order_kind,'') ILIKE 'bar' OR COALESCE(order_kind,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.order_kind,'') ILIKE 'bar' OR COALESCE(o.order_kind,'') ILIKE 'barra'")
         if has_kind:
-            bar_predicates.append("COALESCE(kind,'') ILIKE 'bar' OR COALESCE(kind,'') ILIKE 'barra'")
+            bar_predicates.append("COALESCE(o.kind,'') ILIKE 'bar' OR COALESCE(o.kind,'') ILIKE 'barra'")
         bar_where = " OR ".join(bar_predicates) if bar_predicates else "FALSE"
 
-        cur.execute(
-            f"""
-            SELECT
-              COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS total_bar_orders,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-              AND ({bar_where})
-            """,
-            args_filter,
-        )
-        bar_row = cur.fetchone() or {}
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  COUNT(*) FILTER (WHERE o.status ILIKE 'PAID')::bigint AS total_bar_orders,
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS bar_revenue_cents
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                  AND ({bar_where})
+                """,
+                args_filter,
+            )
+            bar_row = cur.fetchone() or {}
+        else:
+            bar_row = {}
 
-        if has_buyer_email:
+        if has_orders_table and has_buyer_email:
             cur.execute(
                 f"""
                 SELECT COUNT(DISTINCT lower(o.buyer_email))::bigint AS unique_buyers
@@ -569,17 +608,19 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
 
         event_where = "AND e.slug=%s" if ev_slug else ""
         event_args = (tenant_id, ev_slug) if ev_slug else (tenant_id,)
-        sold_out_select = "COALESCE(e.sold_out, FALSE) AS sold_out_manual," if has_sold_out else "FALSE AS sold_out_manual,"
+        sold_out_select = "COALESCE(BOOL_OR(COALESCE(e.sold_out, FALSE)), FALSE) AS sold_out_manual," if has_sold_out else "FALSE AS sold_out_manual,"
+        tickets_sold_select = "COUNT(t.id)::bigint AS tickets_sold," if has_tickets_table else "0::bigint AS tickets_sold,"
+        tickets_join = "LEFT JOIN tickets t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug AND COALESCE(t.status,'') NOT ILIKE 'revoked'" if has_tickets_table else ""
         cur.execute(
             f"""
             SELECT
               e.slug,
               e.title,
               {sold_out_select}
-              COUNT(t.id)::bigint AS tickets_sold,
+              {tickets_sold_select}
               COALESCE(SUM(CASE WHEN COALESCE(si.kind,'') ILIKE 'barra' THEN 0 ELSE COALESCE(si.stock_total,0) END),0)::bigint AS ticket_stock_total
             FROM events e
-            LEFT JOIN tickets t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug AND COALESCE(t.status,'') NOT ILIKE 'revoked'
+            {tickets_join}
             LEFT JOIN sale_items si ON si.event_slug=e.slug AND si.tenant=e.tenant AND COALESCE(si.active, TRUE)=TRUE
             WHERE e.tenant_id=%s
               {event_where}
@@ -606,20 +647,25 @@ def support_ai_admin_dashboard(request: Request, tenant_id: str = "default", eve
                 "bar_revenue_cents": 0,
             }
 
-        cur.execute(
-            f"""
-            SELECT
-              o.event_slug,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
-              COALESCE(SUM(COALESCE(o.total_cents, ROUND(o.total_amount * 100)::bigint)) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
-            FROM orders o
-            WHERE o.tenant_id=%s
-              {where_filter}
-            GROUP BY o.event_slug
-            """,
-            args_filter,
-        )
-        for rr in (cur.fetchall() or []):
+        if has_orders_table:
+            cur.execute(
+                f"""
+                SELECT
+                  o.event_slug,
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID'),0)::bigint AS total_revenue,
+                  COALESCE(SUM({total_cents_expr}) FILTER (WHERE o.status ILIKE 'PAID' AND ({bar_where})),0)::bigint AS bar_revenue
+                FROM orders o
+                WHERE o.tenant_id=%s
+                  {where_filter}
+                GROUP BY o.event_slug
+                """,
+                args_filter,
+            )
+            revenue_rows = cur.fetchall() or []
+        else:
+            revenue_rows = []
+
+        for rr in revenue_rows:
             slug = str((rr or {}).get("event_slug") or "")
             if not slug:
                 continue
@@ -709,18 +755,28 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
         ]
     )
 
+    tcols = _tickets_columns()
+    has_tickets_table = len(tcols) > 0
+
     with get_conn() as conn:
         cur = conn.cursor()
+        order_by_sql = "e.created_at DESC NULLS LAST, e.slug ASC" if "created_at" in ecols else "e.slug ASC"
+        tickets_subquery = """
+              SELECT tenant_id, event_slug, COUNT(*)::bigint AS sold
+              FROM tickets
+              WHERE COALESCE(status,'') NOT ILIKE 'revoked'
+              GROUP BY tenant_id, event_slug
+            """ if has_tickets_table else """
+              SELECT NULL::text AS tenant_id, NULL::text AS event_slug, 0::bigint AS sold
+              WHERE FALSE
+            """
         cur.execute(
             f"""
             SELECT
               {', '.join(select_fields)}
             FROM events e
             LEFT JOIN (
-              SELECT tenant_id, event_slug, COUNT(*)::bigint AS sold
-              FROM tickets
-              WHERE COALESCE(status,'') NOT ILIKE 'revoked'
-              GROUP BY tenant_id, event_slug
+              {tickets_subquery}
             ) t ON t.tenant_id=e.tenant_id AND t.event_slug=e.slug
             LEFT JOIN (
               SELECT tenant, event_slug,
@@ -730,7 +786,7 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
               GROUP BY tenant, event_slug
             ) si ON si.tenant=e.tenant AND si.event_slug=e.slug
             WHERE e.tenant_id=%s
-            ORDER BY e.created_at DESC NULLS LAST, e.slug ASC
+            ORDER BY {order_by_sql}
             LIMIT 300
             """,
             (tenant_id,),
@@ -1065,6 +1121,8 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
     def _sel(col: str, fallback_sql: str) -> str:
         return col if col in cols else f"{fallback_sql} AS {col}"
 
+    order_col = _sale_item_order_column(cols)
+    order_select = f"{order_col} AS display_order" if order_col else "0 AS display_order"
     select_sql = ", ".join(
         [
             _sel("id", "0"),
@@ -1077,22 +1135,14 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
             _sel("stock_total", "0"),
             _sel("stock_sold", "0"),
             _sel("active", "TRUE"),
-            _sel("display_order", "0"),
+            order_select,
+            f"{order_col} AS sort_order" if order_col else "0 AS sort_order",
         ]
     )
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             return {"ok": True, "items": []}
@@ -1102,7 +1152,7 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
             SELECT {select_sql}
             FROM sale_items
             WHERE tenant=%s AND event_slug=%s
-            ORDER BY COALESCE(display_order, 0) ASC, id ASC
+            ORDER BY COALESCE({order_col or '0'}, 0) ASC, id ASC
             """,
             (owner, event_slug),
         )
@@ -1127,20 +1177,12 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
     cols = _sale_items_columns()
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, payload.event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
+        order_col = _sale_item_order_column(cols)
         data = {
             "tenant": owner,
             "event_slug": payload.event_slug,
@@ -1149,9 +1191,10 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
             "price_cents": int(payload.price_cents),
             "currency": payload.currency or "ARS",
             "stock_total": payload.stock_total,
-            "display_order": payload.sort_order if payload.sort_order is not None else 0,
             "active": True,
         }
+        if order_col:
+            data[order_col] = payload.sort_order if payload.sort_order is not None else 0
         use_cols = [c for c in data.keys() if c in cols and data.get(c) is not None]
         values = [data[c] for c in use_cols]
         placeholders = ", ".join(["%s"] * len(use_cols))
@@ -1173,16 +1216,7 @@ def support_ai_admin_toggle_sale_item(payload: SupportAIAdminSaleItemToggleIn, r
     tenant_id = (payload.tenant_id or "default").strip() or "default"
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, payload.event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
@@ -1229,45 +1263,36 @@ def support_ai_admin_update_sale_item(
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (owner_tenant, owner_event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, owner_tenant, owner_event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
+        item_cols = _sale_items_columns()
+        updates = {
+            "name": item_name,
+            "kind": (payload.kind or "ticket").strip() or "ticket",
+            "price_cents": int(payload.price_cents),
+            "currency": payload.currency or "ARS",
+            "stock_total": payload.stock_total,
+            "active": bool(payload.active) if payload.active is not None else True,
+        }
+        order_col = _sale_item_order_column(item_cols)
+        if order_col:
+            updates[order_col] = payload.sort_order if payload.sort_order is not None else 0
+
+        set_cols = [c for c in updates if c in item_cols]
+        if not set_cols:
+            raise HTTPException(status_code=500, detail="Schema inválido: sale_items sin columnas editables")
+        set_sql = ", ".join(f"{c}=%s" for c in set_cols)
         cur.execute(
-            """
+            f"""
             UPDATE sale_items
-               SET name=%s,
-                   kind=%s,
-                   price_cents=%s,
-                   currency=%s,
-                   stock_total=%s,
-                   active=%s,
-                   display_order=%s
+               SET {set_sql}
              WHERE id=%s AND tenant=%s AND event_slug=%s
              RETURNING id
             """,
-            (
-                item_name,
-                (payload.kind or "ticket").strip() or "ticket",
-                int(payload.price_cents),
-                payload.currency or "ARS",
-                payload.stock_total,
-                bool(payload.active) if payload.active is not None else True,
-                payload.sort_order if payload.sort_order is not None else 0,
-                int(sale_item_id),
-                owner,
-                owner_event_slug,
-            ),
+            [*(updates[c] for c in set_cols), int(sale_item_id), owner, owner_event_slug],
         )
         row = cur.fetchone() or {}
 
@@ -1292,16 +1317,7 @@ def support_ai_admin_delete_sale_item(sale_item_id: int, request: Request, tenan
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
+        event = _event_owner_row(cur, tenant_id, event_slug)
         owner = _event_owner_from_row(event)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")

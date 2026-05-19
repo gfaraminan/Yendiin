@@ -2,9 +2,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 import os
 
+from app.storage import resolve_upload_dir
+
 router = APIRouter()
 
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+UPLOAD_DIR = resolve_upload_dir()
 os.makedirs(f"{UPLOAD_DIR}/tickets", exist_ok=True)
 
 @router.get("/api/tickets/{ticket_id}/pdf")

@@ -4,6 +4,24 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.db import get_conn
 
+
+def _table_columns(conn, table_name: str) -> set[str]:
+    rows = conn.execute(
+        """
+        SELECT column_name
+          FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = %s
+        """,
+        (table_name,),
+    ).fetchall()
+    out: set[str] = set()
+    for r in rows:
+        d = dict(r) if not isinstance(r, dict) else r
+        c = d.get("column_name")
+        if c:
+            out.add(c)
+    return out
+
 router = APIRouter()
 
 
@@ -20,12 +38,28 @@ def owner_summary(
     owner_norm = (owner or "").strip().lower() or None
 
     with get_conn() as conn:
+        ev_cols = _table_columns(conn, "events")
+        flyer_col = "flyer_url" if "flyer_url" in ev_cols else ("hero_bg" if "hero_bg" in ev_cols else None)
+
+        select_bits = ["slug", "title", "tenant", "tenant_id", "active"]
+        if flyer_col:
+            select_bits.append(f"{flyer_col} AS flyer_url")
+        else:
+            select_bits.append("NULL AS flyer_url")
+
+        order_bits = []
+        if "updated_at" in ev_cols:
+            order_bits.append("updated_at DESC NULLS LAST")
+        if "created_at" in ev_cols:
+            order_bits.append("created_at DESC NULLS LAST")
+        order_clause = f" ORDER BY {', '.join(order_bits)}" if order_bits else ""
+
         row = conn.execute(
-            """
-            SELECT slug, title, tenant, tenant_id, flyer_url, active
+            f"""
+            SELECT {', '.join(select_bits)}
             FROM events
             WHERE slug = %s
-            ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+            {order_clause}
             LIMIT 1
             """,
             (slug,),

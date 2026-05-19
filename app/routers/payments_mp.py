@@ -624,17 +624,29 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
 
 
 def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
-    cols = ["id", "order_id", "tenant_id", "producer_tenant", "event_slug", "qr_token", "status"]
-    vals = ["%s", "%s", "%s", "%s", "%s", "%s", "%s"]
+    cols = ["id", "order_id", "qr_token", "status"]
+    vals = ["%s", "%s", "%s", "%s"]
     args = [
         str(uuid.uuid4()),
         order_id,
-        order.get("tenant_id") if isinstance(order, dict) else None,
-        order.get("producer_tenant") if isinstance(order, dict) else None,
-        order.get("event_slug") if isinstance(order, dict) else None,
         uuid.uuid4().hex,
         "valid",
     ]
+
+    if "tenant_id" in tcols:
+        cols.append("tenant_id")
+        vals.append("%s")
+        args.append(order.get("tenant_id") if isinstance(order, dict) else None)
+
+    if "producer_tenant" in tcols:
+        cols.append("producer_tenant")
+        vals.append("%s")
+        args.append(order.get("producer_tenant") if isinstance(order, dict) else None)
+
+    if "event_slug" in tcols:
+        cols.append("event_slug")
+        vals.append("%s")
+        args.append(order.get("event_slug") if isinstance(order, dict) else None)
 
     if "sale_item_id" in tcols:
         cols.append("sale_item_id")
@@ -734,9 +746,6 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                 required = {
                     "id",
                     "order_id",
-                    "tenant_id",
-                    "producer_tenant",
-                    "event_slug",
                     "qr_token",
                     "status",
                 }
@@ -1372,7 +1381,7 @@ async def mp_webhook(request: Request):
                     conn.commit()
                     return {"ok": True, "received": True, "order": order_id, "tickets": "missing_items_json"}
 
-                required = {"id", "order_id", "tenant_id", "producer_tenant", "event_slug", "qr_token", "status"}
+                required = {"id", "order_id", "qr_token", "status"}
                 if not required.issubset(set(tcols)):
                     conn.commit()
                     return {"ok": True, "received": True, "tickets": "schema_missing_columns"}

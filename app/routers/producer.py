@@ -686,16 +686,24 @@ async def api_event_upload_flyer(
     # Persistimos URL en DB
     with get_conn() as conn:
         ev_cols = _table_columns(conn, "events")
-        flyer_col = "flyer_url" if "flyer_url" in ev_cols else ("hero_bg" if "hero_bg" in ev_cols else None)
-        if flyer_col:
+        set_fields: list[str] = []
+        set_params: list[Any] = []
+        if "flyer_url" in ev_cols:
+            set_fields.append("flyer_url = %s")
+            set_params.append(public_url)
+        if "hero_bg" in ev_cols:
+            set_fields.append("hero_bg = %s")
+            set_params.append(public_url)
+
+        if set_fields:
             cur = conn.execute(
-                f"UPDATE events SET {flyer_col} = %s WHERE tenant_id = %s AND slug = %s",
-                (public_url, tenant_id, safe_slug),
+                f"UPDATE events SET {', '.join(set_fields)} WHERE tenant_id = %s AND slug = %s",
+                (*set_params, tenant_id, safe_slug),
             )
             if getattr(cur, "rowcount", 0) == 0:
                 conn.execute(
-                    f"UPDATE events SET {flyer_col} = %s WHERE slug = %s",
-                    (public_url, safe_slug),
+                    f"UPDATE events SET {', '.join(set_fields)} WHERE slug = %s",
+                    (*set_params, safe_slug),
                 )
         conn.commit()
 

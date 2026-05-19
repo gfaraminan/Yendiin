@@ -39,11 +39,13 @@ def owner_summary(
 
     with get_conn() as conn:
         ev_cols = _table_columns(conn, "events")
-        flyer_col = "flyer_url" if "flyer_url" in ev_cols else ("hero_bg" if "hero_bg" in ev_cols else None)
-
         select_bits = ["slug", "title", "tenant", "tenant_id", "active"]
-        if flyer_col:
-            select_bits.append(f"{flyer_col} AS flyer_url")
+        if "flyer_url" in ev_cols and "hero_bg" in ev_cols:
+            select_bits.append("COALESCE(NULLIF(flyer_url, ''), NULLIF(hero_bg, '')) AS flyer_url")
+        elif "flyer_url" in ev_cols:
+            select_bits.append("NULLIF(flyer_url, '') AS flyer_url")
+        elif "hero_bg" in ev_cols:
+            select_bits.append("NULLIF(hero_bg, '') AS flyer_url")
         else:
             select_bits.append("NULL AS flyer_url")
 

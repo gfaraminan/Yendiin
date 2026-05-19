@@ -165,7 +165,7 @@ class BuyerIn(BaseModel):
 
 
 class OrderItemIn(BaseModel):
-    sale_item_id: int = Field(..., description="ID del item/entrada a comprar")
+    sale_item_id: str = Field(..., description="ID del item/entrada a comprar")
     quantity: int = Field(1, ge=1, le=20, description="Cantidad")
 
 
@@ -175,7 +175,7 @@ class OrderCreate(BaseModel):
     event_slug: str = Field(..., min_length=1)
 
     # compat: modo simple
-    sale_item_id: Optional[int] = None
+    sale_item_id: Optional[str] = None
     quantity: int = Field(1, ge=1, le=20)
 
     # modo múltiple
@@ -294,7 +294,8 @@ def create_order(
                 if qty <= 0:
                     continue
 
-                params = [owner_tenant, event_slug, int(it.sale_item_id)]
+                sale_item_id_input = str(it.sale_item_id).strip()
+                params = [owner_tenant, event_slug, sale_item_id_input]
                 where_kind = "AND kind='ticket'" if has_kind else ""
                 cur.execute(
                     f"""
@@ -318,10 +319,10 @@ def create_order(
                     name = si.get("name") or "Ticket"
                     stock_total = si.get("stock_total") if has_stock_total else None
                     stock_sold = si.get("stock_sold") if has_stock_sold else None
-                    sale_item_id = int(si["id"])
+                    sale_item_id = str(si["id"])
                 else:
                     # fallback por si no viene dict
-                    sale_item_id = int(si[0])
+                    sale_item_id = str(si[0])
                     name = si[1]
                     unit_cents = int(si[2] or 0)
                     stock_total = si[4] if has_stock_total else None

@@ -624,18 +624,22 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
 
 
 def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
-    cols = ["id", "order_id", "tenant_id", "producer_tenant", "event_slug", "sale_item_id", "qr_token", "status"]
-    vals = ["%s", "%s", "%s", "%s", "%s", "%s", "%s", "%s"]
+    cols = ["id", "order_id", "tenant_id", "producer_tenant", "event_slug", "qr_token", "status"]
+    vals = ["%s", "%s", "%s", "%s", "%s", "%s", "%s"]
     args = [
         str(uuid.uuid4()),
         order_id,
         order.get("tenant_id") if isinstance(order, dict) else None,
         order.get("producer_tenant") if isinstance(order, dict) else None,
         order.get("event_slug") if isinstance(order, dict) else None,
-        sale_item_id,
         uuid.uuid4().hex,
         "valid",
     ]
+
+    if "sale_item_id" in tcols:
+        cols.append("sale_item_id")
+        vals.append("%s")
+        args.append(sale_item_id)
 
     buyer_phone = ""
     buyer_dni = ""
@@ -733,7 +737,6 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                     "tenant_id",
                     "producer_tenant",
                     "event_slug",
-                    "sale_item_id",
                     "qr_token",
                     "status",
                 }
@@ -1366,7 +1369,7 @@ async def mp_webhook(request: Request):
                     conn.commit()
                     return {"ok": True, "received": True, "order": order_id, "tickets": "missing_items_json"}
 
-                required = {"id", "order_id", "tenant_id", "producer_tenant", "event_slug", "sale_item_id", "qr_token", "status"}
+                required = {"id", "order_id", "tenant_id", "producer_tenant", "event_slug", "qr_token", "status"}
                 if not required.issubset(set(tcols)):
                     conn.commit()
                     return {"ok": True, "received": True, "tickets": "schema_missing_columns"}

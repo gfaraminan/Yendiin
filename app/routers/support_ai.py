@@ -679,10 +679,10 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
         "e.title",
         "e.tenant",
         "e.active",
-        "e.city",
-        "e.venue",
-        "e.date_text",
     ]
+    select_fields.append("e.city" if "city" in ecols else "NULL::text AS city")
+    select_fields.append("e.venue" if "venue" in ecols else "NULL::text AS venue")
+    select_fields.append("e.date_text" if "date_text" in ecols else "NULL::text AS date_text")
     if "producer" in ecols:
         select_fields.append("e.producer")
     elif "producer_id" in ecols:

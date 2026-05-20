@@ -105,7 +105,57 @@ def download_order_pdf(order_id: str):
                 )
                 rows = cur.fetchall() or []
                 if not rows:
-                    raise HTTPException(status_code=404, detail="PDF no encontrado")
+                    # Fallback final: reconstruir desde orders.items_json cuando aún no hay filas en tickets.
+                    o_buyer_email2 = "o.buyer_email" if "buyer_email" in ocols else ("o.customer_label" if "customer_label" in ocols else "'-'::text")
+                    o_buyer_name2 = "o.buyer_name" if "buyer_name" in ocols else "'-'::text"
+                    cur.execute(
+                        """
+                        SELECT o.id AS order_id, o.event_slug, o.items_json,
+                               COALESCE({o_buyer_name2}, '-') AS buyer_name,
+                               COALESCE({o_buyer_email2}, '-') AS buyer_email
+                        FROM orders o
+                        WHERE o.id=%s
+                        LIMIT 1
+                        """.format(o_buyer_name2=o_buyer_name2, o_buyer_email2=o_buyer_email2),
+                        (order_id,),
+                    )
+                    o = cur.fetchone()
+                    if not o:
+                        raise HTTPException(status_code=404, detail="PDF no encontrado")
+                    if not isinstance(o, dict):
+                        cols = [d[0] for d in (cur.description or [])]
+                        o = dict(zip(cols, o))
+                    import json
+                    items_raw = o.get("items_json")
+                    try:
+                        items = json.loads(items_raw) if isinstance(items_raw, str) else (items_raw or [])
+                    except Exception:
+                        items = []
+                    if not isinstance(items, list) or not items:
+                        raise HTTPException(status_code=404, detail="PDF no encontrado")
+                    rows = []
+                    seq = 0
+                    for it in items:
+                        if not isinstance(it, dict):
+                            continue
+                        qty = int(it.get("qty") or it.get("quantity") or 1)
+                        for _ in range(max(0, qty)):
+                            seq += 1
+                            rows.append(
+                                {
+                                    "ticket_id": f"virtual-{order_id}-{seq}",
+                                    "qr_payload": f"ORD:{order_id}:{seq}",
+                                    "event_slug": o.get("event_slug"),
+                                    "event_title": o.get("event_slug") or "Evento",
+                                    "event_date": "-",
+                                    "event_time": "-",
+                                    "venue": "-",
+                                    "city": "-",
+                                    "event_address": "-",
+                                    "buyer_name": o.get("buyer_name") or "-",
+                                    "buyer_email": o.get("buyer_email") or "-",
+                                }
+                            )
 
                 # tuple/dict compatibility
                 if not isinstance(rows[0], dict):

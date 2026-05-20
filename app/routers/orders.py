@@ -734,10 +734,12 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
                 paid_where = "1=0"
 
             o_buyer_name = "o.buyer_name" if "buyer_name" in orders_cols else "NULL::text"
+            o_date_text = "o.date_text" if "date_text" in orders_cols else "NULL::text"
             sql_orders = f"""
                 SELECT o.id AS order_id, o.event_slug, o.items_json, {o_buyer_name} AS buyer_name,
                        {e_title} AS event_title, {e_venue} AS venue, {e_city} AS city,
-                       {e_address} AS event_address, {e_date} AS event_date, {e_time} AS event_time
+                       {e_address} AS event_address, {e_date} AS event_date, {e_time} AS event_time,
+                       {o_date_text} AS order_date_text
                 FROM orders o
                 LEFT JOIN events e ON e.slug = o.event_slug
                 WHERE {where_owner}{filter_order} AND {paid_where}
@@ -776,7 +778,7 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
                             "venue": o.get("venue"),
                             "city": o.get("city"),
                             "event_address": o.get("event_address"),
-                            "event_date": o.get("event_date"),
+                            "event_date": o.get("event_date") or o.get("order_date_text"),
                             "event_time": o.get("event_time"),
                             "buyer_name": o.get("buyer_name"),
                         })

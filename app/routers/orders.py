@@ -722,6 +722,66 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
         # ✅ Normalizar siempre a dict-like (evita KeyError: 0 cuando el cursor devuelve filas dict)
         data = _rows_to_dicts(cur, rows)
 
+        # Fallback: si no hay filas en tickets pero sí órdenes pagadas,
+        # construimos assets virtuales desde orders.items_json para no dejar al cliente en loop.
+        if not data:
+            if "status" in orders_cols:
+                paid_where = "lower(COALESCE(o.status,'')) = 'paid'"
+            elif "paid_at" in orders_cols:
+                paid_where = "o.paid_at IS NOT NULL"
+            else:
+                paid_where = "1=0"
+
+            o_buyer_name = "o.buyer_name" if "buyer_name" in orders_cols else "NULL::text"
+            sql_orders = f"""
+                SELECT o.id AS order_id, o.event_slug, o.items_json, {o_buyer_name} AS buyer_name,
+                       {e_title} AS event_title, {e_venue} AS venue, {e_city} AS city,
+                       {e_address} AS event_address, {e_date} AS event_date, {e_time} AS event_time
+                FROM orders o
+                LEFT JOIN events e ON e.slug = o.event_slug
+                WHERE {where_owner}{filter_order} AND {paid_where}
+                ORDER BY o.created_at DESC NULLS LAST
+                LIMIT 50
+            """
+            cur.execute(sql_orders, params2)
+            order_rows = _rows_to_dicts(cur, cur.fetchall() or [])
+            virtual_assets = []
+            for o in order_rows:
+                items_raw = o.get("items_json")
+                try:
+                    items = json.loads(items_raw) if isinstance(items_raw, str) else (items_raw or [])
+                except Exception:
+                    items = []
+                if not isinstance(items, list):
+                    items = []
+                seq = 0
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    qty = int(it.get("qty") or it.get("quantity") or 1)
+                    sale_item_id = str(it.get("sale_item_id") or "item")
+                    for _ in range(max(0, qty)):
+                        seq += 1
+                        qr_payload = f"ORD:{o.get('order_id')}:{sale_item_id}:{seq}"
+                        virtual_assets.append({
+                            "ticket_id": f"virtual-{o.get('order_id')}-{seq}",
+                            "order_id": o.get("order_id"),
+                            "status": "issued",
+                            "ticket_type": "entrada",
+                            "qr_payload": qr_payload,
+                            "created_at": None,
+                            "event_slug": o.get("event_slug"),
+                            "event_title": o.get("event_title"),
+                            "venue": o.get("venue"),
+                            "city": o.get("city"),
+                            "event_address": o.get("event_address"),
+                            "event_date": o.get("event_date"),
+                            "event_time": o.get("event_time"),
+                            "buyer_name": o.get("buyer_name"),
+                        })
+            if virtual_assets:
+                return {"ok": True, "assets": virtual_assets}
+
     assets = []
     for r in data:
         assets.append(

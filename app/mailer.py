@@ -4,6 +4,9 @@ from __future__ import annotations
 import os
 import ssl
 import smtplib
+import json
+import base64
+import urllib.request
 from email.message import EmailMessage
 from email.utils import parseaddr
 
@@ -123,6 +126,57 @@ def _send_via_smtp(
     except Exception as e:
         print(f"SMTP send failed host={smtp_host} port={smtp_port}: {e}")
         raise
+
+
+def _send_via_resend(
+    *,
+    to_email: str,
+    subject: str,
+    text: str,
+    html: str | None,
+    attachments: list[tuple[str, bytes, str]] | None,
+) -> None:
+    api_key = (os.getenv("RESEND_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY missing")
+
+    email_from = _get_email_from() or (os.getenv("RESEND_FROM") or "").strip()
+    if not email_from:
+        raise RuntimeError("MAIL_FROM/RESEND_FROM missing for Resend sender")
+
+    payload: dict = {
+        "from": email_from,
+        "to": [to_email],
+        "subject": subject,
+        "text": text,
+    }
+    if html:
+        payload["html"] = html
+    if attachments:
+        payload["attachments"] = [
+            {
+                "filename": filename,
+                "content": base64.b64encode(content).decode("ascii"),
+            }
+            for filename, content, _mimetype in attachments
+        ]
+
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        status = int(getattr(resp, "status", 0) or 0)
+        if status < 200 or status >= 300:
+            raise RuntimeError(f"Resend send failed status={status}")
+
+
 def send_email(
     *,
     to_email: str,
@@ -133,10 +187,14 @@ def send_email(
 ) -> None:
     """
     Primary send function used across the app.
-    En TicketPro, eliminamos Resend: enviamos SIEMPRE por SMTP (ej: SendGrid SMTP).
+    Si RESEND_API_KEY está configurado, usa Resend API.
+    Si no, hace fallback a SMTP.
 
     Raises on failure (callers convert to 502).
     """
+    if (os.getenv("RESEND_API_KEY") or "").strip():
+        _send_via_resend(to_email=to_email, subject=subject, text=text, html=html, attachments=attachments)
+        return
     _send_via_smtp(to_email=to_email, subject=subject, text=text, html=html, attachments=attachments)
 
 

@@ -646,6 +646,7 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
         e_date = (
             "e.event_date" if "event_date" in events_cols else
             "e.date" if "date" in events_cols else
+            "e.date_text" if "date_text" in events_cols else
             "NULL::text"
         )
         e_time = (
@@ -733,10 +734,16 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
                 paid_where = "1=0"
 
             o_buyer_name = "o.buyer_name" if "buyer_name" in orders_cols else "NULL::text"
+            o_date_text = "o.date_text" if "date_text" in orders_cols else "NULL::text"
+            o_venue = "o.venue" if "venue" in orders_cols else "NULL::text"
+            o_city = "o.city" if "city" in orders_cols else "NULL::text"
+            o_addr = "o.event_address" if "event_address" in orders_cols else ("o.address" if "address" in orders_cols else "NULL::text")
             sql_orders = f"""
                 SELECT o.id AS order_id, o.event_slug, o.items_json, {o_buyer_name} AS buyer_name,
                        {e_title} AS event_title, {e_venue} AS venue, {e_city} AS city,
-                       {e_address} AS event_address, {e_date} AS event_date, {e_time} AS event_time
+                       {e_address} AS event_address, {e_date} AS event_date, {e_time} AS event_time,
+                       {o_date_text} AS order_date_text, {o_venue} AS order_venue,
+                       {o_city} AS order_city, {o_addr} AS order_address
                 FROM orders o
                 LEFT JOIN events e ON e.slug = o.event_slug
                 WHERE {where_owner}{filter_order} AND {paid_where}
@@ -772,10 +779,10 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
                             "created_at": None,
                             "event_slug": o.get("event_slug"),
                             "event_title": o.get("event_title"),
-                            "venue": o.get("venue"),
-                            "city": o.get("city"),
-                            "event_address": o.get("event_address"),
-                            "event_date": o.get("event_date"),
+                            "venue": o.get("venue") or o.get("order_venue"),
+                            "city": o.get("city") or o.get("order_city"),
+                            "event_address": o.get("event_address") or o.get("order_address"),
+                            "event_date": o.get("event_date") or o.get("order_date_text"),
                             "event_time": o.get("event_time"),
                             "buyer_name": o.get("buyer_name"),
                         })
@@ -841,7 +848,8 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         e_date = (
             "e.event_date" if "event_date" in events_cols else
             "e.date" if "date" in events_cols else
-            "NULL::date"
+            "e.date_text" if "date_text" in events_cols else
+            "NULL::text"
         )
         e_time = (
             "e.event_time" if "event_time" in events_cols else
@@ -867,8 +875,9 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         if auth_subject and ("auth_subject" in orders_cols):
             owner_predicates.append("o.auth_subject = %s")
             params.append(auth_subject)
-        if (email_sess or guest_email) and ("buyer_email" in orders_cols):
-            owner_predicates.append("lower(o.buyer_email) = lower(%s)")
+        owner_email_col = "buyer_email" if "buyer_email" in orders_cols else ("customer_label" if "customer_label" in orders_cols else None)
+        if (email_sess or guest_email) and owner_email_col:
+            owner_predicates.append(f"lower(COALESCE(o.{owner_email_col},'')) = lower(%s)")
             params.append(email_sess or guest_email)
 
         if not owner_predicates:
@@ -1254,7 +1263,16 @@ def transfer_order(
                 transferred_ticket = True
 
         if not transferred_ticket:
-            sets = ["buyer_email=%s"]
+            if "buyer_email" in ocols:
+                email_set_col = "buyer_email"
+            elif "customer_label" in ocols:
+                email_set_col = "customer_label"
+            else:
+                email_set_col = None
+            if not email_set_col:
+                raise HTTPException(status_code=500, detail="schema_missing_transfer_email_column")
+
+            sets = [f"{email_set_col}=%s"]
             params_upd: list[Any] = [to_email]
             if "auth_subject" in ocols:
                 sets.append("auth_subject=NULL")

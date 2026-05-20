@@ -489,6 +489,52 @@ def _subtotal_from_items_json(items_json: Any) -> Optional[Decimal]:
     return _q2(subtotal)
 
 
+
+
+def _normalize_order_items(items_raw: Any) -> list[dict[str, Any]]:
+    """Normaliza orders.items_json a lista de items con sale_item_id + qty.
+
+    Soporta:
+    - lista de dicts (formato actual)
+    - dict con claves arbitrarias que contienen qty/quantity + sale_item_id
+    - dict tipo {"items": [...]}
+    """
+    if not items_raw:
+        return []
+
+    data = items_raw
+    if isinstance(items_raw, str):
+        try:
+            data = json.loads(items_raw)
+        except Exception:
+            return []
+
+    if isinstance(data, dict):
+        if isinstance(data.get("items"), list):
+            data = data.get("items")
+        else:
+            normalized: list[dict[str, Any]] = []
+            for k, v in data.items():
+                if not isinstance(v, dict):
+                    continue
+                sid = str(v.get("sale_item_id") or k or "").strip()
+                if not sid:
+                    continue
+                qty = v.get("quantity", v.get("qty", 1))
+                try:
+                    qty_i = int(qty)
+                except Exception:
+                    qty_i = 1
+                out = dict(v)
+                out["sale_item_id"] = sid
+                out["qty"] = qty_i
+                normalized.append(out)
+            return normalized
+
+    if not isinstance(data, list):
+        return []
+
+    return [it for it in data if isinstance(it, dict)]
 def _choose_charge_amount(
     *,
     total_amount,
@@ -670,8 +716,7 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
 
         if not buyer_dni:
             try:
-                items_raw = order.get("items_json")
-                items = json.loads(items_raw) if isinstance(items_raw, str) else (items_raw or [])
+                items = _normalize_order_items(order.get("items_json"))
                 if isinstance(items, list) and items:
                     buyer_dni = str((items[0] or {}).get("buyer_dni") or "").strip()
             except Exception:
@@ -744,13 +789,7 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                 existing = 0
 
             if existing == 0:
-                items_raw = order.get("items_json")
-                items = []
-                if items_raw:
-                    try:
-                        items = json.loads(items_raw) if isinstance(items_raw, str) else list(items_raw)
-                    except Exception:
-                        items = []
+                items = _normalize_order_items(order.get("items_json"))
 
                 required = {
                     "id",
@@ -1391,13 +1430,7 @@ async def mp_webhook(request: Request):
                 existing = 0
 
             if existing == 0:
-                items_raw = order.get("items_json")
-                items = []
-                if items_raw:
-                    try:
-                        items = json.loads(items_raw) if isinstance(items_raw, str) else list(items_raw)
-                    except Exception:
-                        items = []
+                items = _normalize_order_items(order.get("items_json"))
 
                 if not items:
                     conn.commit()

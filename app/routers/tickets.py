@@ -93,6 +93,10 @@ def download_order_pdf(order_id: str):
                 e_addr = "e.address" if "address" in ecols else "'-'::text"
                 o_buyer_name = "o.buyer_name" if "buyer_name" in ocols else "'-'::text"
                 o_buyer_email = "o.buyer_email" if "buyer_email" in ocols else ("o.customer_label" if "customer_label" in ocols else "'-'::text")
+                o_date = "o.date_text" if "date_text" in ocols else "'-'::text"
+                o_venue = "o.venue" if "venue" in ocols else "'-'::text"
+                o_city = "o.city" if "city" in ocols else "'-'::text"
+                o_addr = "o.event_address" if "event_address" in ocols else ("o.address" if "address" in ocols else "'-'::text")
                 cur.execute(
                     f"""
                     SELECT
@@ -100,11 +104,11 @@ def download_order_pdf(order_id: str):
                         COALESCE({t_qr}, t.id::text) AS qr_payload,
                         o.event_slug,
                         COALESCE({e_title}, o.event_slug, 'Evento') AS event_title,
-                        COALESCE({e_date}, '-') AS event_date,
+                        COALESCE({e_date}, {o_date}, '-') AS event_date,
                         COALESCE({e_time}, '-') AS event_time,
-                        COALESCE({e_venue}, '-') AS venue,
-                        COALESCE({e_city}, '-') AS city,
-                        COALESCE({e_addr}, '-') AS event_address,
+                        COALESCE({e_venue}, {o_venue}, '-') AS venue,
+                        COALESCE({e_city}, {o_city}, '-') AS city,
+                        COALESCE({e_addr}, {o_addr}, '-') AS event_address,
                         COALESCE({o_buyer_name}, '-') AS buyer_name,
                         COALESCE({o_buyer_email}, '-') AS buyer_email
                     FROM tickets t
@@ -120,15 +124,30 @@ def download_order_pdf(order_id: str):
                     # Fallback final: reconstruir desde orders.items_json cuando aún no hay filas en tickets.
                     o_buyer_email2 = "o.buyer_email" if "buyer_email" in ocols else ("o.customer_label" if "customer_label" in ocols else "'-'::text")
                     o_buyer_name2 = "o.buyer_name" if "buyer_name" in ocols else "'-'::text"
+                    o_date2 = "o.date_text" if "date_text" in ocols else "'-'::text"
+                    o_venue2 = "o.venue" if "venue" in ocols else "'-'::text"
+                    o_city2 = "o.city" if "city" in ocols else "'-'::text"
+                    o_addr2 = "o.event_address" if "event_address" in ocols else ("o.address" if "address" in ocols else "'-'::text")
                     cur.execute(
                         """
                         SELECT o.id AS order_id, o.event_slug, o.items_json,
                                COALESCE({o_buyer_name2}, '-') AS buyer_name,
-                               COALESCE({o_buyer_email2}, '-') AS buyer_email
+                               COALESCE({o_buyer_email2}, '-') AS buyer_email,
+                               COALESCE({o_date2}, '-') AS order_date_text,
+                               COALESCE({o_venue2}, '-') AS order_venue,
+                               COALESCE({o_city2}, '-') AS order_city,
+                               COALESCE({o_addr2}, '-') AS order_address
                         FROM orders o
                         WHERE o.id=%s
                         LIMIT 1
-                        """.format(o_buyer_name2=o_buyer_name2, o_buyer_email2=o_buyer_email2),
+                        """.format(
+                            o_buyer_name2=o_buyer_name2,
+                            o_buyer_email2=o_buyer_email2,
+                            o_date2=o_date2,
+                            o_venue2=o_venue2,
+                            o_city2=o_city2,
+                            o_addr2=o_addr2,
+                        ),
                         (order_id,),
                     )
                     o = cur.fetchone()
@@ -199,11 +218,11 @@ def download_order_pdf(order_id: str):
                                     "qr_payload": f"ORD:{order_id}:{seq}",
                                     "event_slug": event_slug,
                                     "event_title": event_meta.get("event_title"),
-                                    "event_date": event_meta.get("event_date"),
+                                    "event_date": event_meta.get("event_date") or o.get("order_date_text"),
                                     "event_time": event_meta.get("event_time"),
-                                    "venue": event_meta.get("venue"),
-                                    "city": event_meta.get("city"),
-                                    "event_address": event_meta.get("event_address"),
+                                    "venue": event_meta.get("venue") if str(event_meta.get("venue") or "").strip() not in {"", "-"} else o.get("order_venue"),
+                                    "city": event_meta.get("city") if str(event_meta.get("city") or "").strip() not in {"", "-"} else o.get("order_city"),
+                                    "event_address": event_meta.get("event_address") if str(event_meta.get("event_address") or "").strip() not in {"", "-"} else o.get("order_address"),
                                     "buyer_name": o.get("buyer_name") or buyer_name_from_items or "-",
                                     "buyer_email": o.get("buyer_email") or "-",
                                 }

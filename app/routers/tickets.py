@@ -63,9 +63,8 @@ def download_order_pdf(order_id: str):
     # payments_mp stores PDFs as order-<order_id>.pdf
     pdf_path = f"{UPLOAD_DIR}/tickets/order-{order_id}.pdf"
 
-    if not os.path.exists(pdf_path):
-        # Fallback: reconstruir PDF on-demand desde DB para no depender solo del archivo persistido.
-        try:
+    # Regenerar siempre desde DB para evitar servir PDFs viejos sin metadata.
+    try:
             with db_get_conn() as conn:
                 cur = conn.cursor()
                 tcols = _table_columns(cur, "tickets")
@@ -244,13 +243,7 @@ def download_order_pdf(order_id: str):
             with open(pdf_path, "wb") as f:
                 f.write(pdf_bytes)
             return Response(content=pdf_bytes, media_type="application/pdf")
-        except HTTPException:
-            raise
-        except Exception:
-            raise HTTPException(status_code=404, detail="PDF no encontrado")
-
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename=f"order-{order_id}.pdf"
-    )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="PDF no encontrado")

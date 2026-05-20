@@ -188,6 +188,50 @@ class OrderCreate(BaseModel):
 
 
 
+
+
+def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
+    ticket_id = str(uuid.uuid4())
+    qr_token = str(uuid.uuid4())
+
+    cols = []
+    vals = []
+    args = []
+
+    def add(col: str, val):
+        if col in tcols:
+            cols.append(col)
+            vals.append("%s")
+            args.append(val)
+
+    add("id", ticket_id)
+    add("order_id", order_id)
+    add("sale_item_id", sale_item_id)
+    add("status", "issued")
+    if "qr_token" in tcols:
+        add("qr_token", qr_token)
+    elif "qr_payload" in tcols:
+        add("qr_payload", qr_token)
+    add("used", False)
+    add("checked_in", False)
+
+    buyer_name = (order.get("buyer_name") or "").strip()
+    buyer_email = (order.get("buyer_email") or "").strip()
+    if buyer_name:
+        add("buyer_name", buyer_name)
+    if buyer_email:
+        add("buyer_email", buyer_email)
+
+    if "created_at" in tcols:
+        cols.append("created_at")
+        vals.append("NOW()")
+
+    if not ({"id", "order_id", "status"}.issubset(set(cols)) and cols):
+        return
+
+    cur.execute(f"INSERT INTO tickets ({', '.join(cols)}) VALUES ({', '.join(vals)})", tuple(args))
+
+
 class TransferOrderIn(BaseModel):
     order_id: str
     to_email: str
@@ -424,6 +468,34 @@ def create_order(
 
             sql = f"INSERT INTO orders ({', '.join(cols)}) VALUES ({', '.join(vals)})"
             cur.execute(sql, tuple(args))
+
+            method_norm = str(payload.payment_method or "").strip().lower()
+            is_demo_auto_pay = method_norm in {"cash", "card", "transfer", "debit", "credit", "mp_point", "other", "reserve", "demo"}
+
+            if is_demo_auto_pay:
+                if "status" in orders_cols:
+                    cur.execute("UPDATE orders SET status='paid' WHERE id=%s", (order_id,))
+                if "paid_at" in orders_cols:
+                    cur.execute("UPDATE orders SET paid_at=COALESCE(paid_at, NOW()) WHERE id=%s", (order_id,))
+
+                tcols = set(_table_columns(cur, "tickets"))
+                if {"id", "order_id", "status"}.issubset(tcols) and ({"qr_token", "qr_payload"} & tcols):
+                    for it in order_items:
+                        sale_item_id = str(it.get("sale_item_id") or "").strip()
+                        qty = int(it.get("qty") or 1)
+                        if not sale_item_id:
+                            continue
+                        for _ in range(max(0, qty)):
+                            _insert_ticket_from_order(
+                                cur,
+                                tcols=tcols,
+                                order={
+                                    "buyer_name": (payload.buyer.full_name if payload.buyer else None),
+                                    "buyer_email": (payload.buyer.email if payload.buyer else None),
+                                },
+                                order_id=order_id,
+                                sale_item_id=sale_item_id,
+                            )
             conn.commit()
 
         resp = {

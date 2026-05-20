@@ -64,6 +64,19 @@ def _table_columns(conn, table: str, schema: str = "public") -> set[str]:
 
 
 
+def _table_exists(conn, table: str, schema: str = "public") -> bool:
+    cur = conn.execute(
+        """
+        SELECT 1
+          FROM information_schema.tables
+         WHERE table_schema = %s AND table_name = %s
+         LIMIT 1
+        """,
+        (schema, table),
+    )
+    return bool(cur.fetchone())
+
+
 def _invalidate_table_columns_cache(table: str, schema: str = "public") -> None:
     key = f"{schema}.{table}"
     if hasattr(_table_columns, "_cache") and key in _table_columns._cache:
@@ -1677,9 +1690,14 @@ def api_event_sold_tickets(
         qr_token_expr = "COALESCE(t.qr_token, '')" if "qr_token" in tickets_cols else "''"
         used_at_expr = "t.used_at" if "used_at" in tickets_cols else "NULL::timestamp"
 
-        sale_item_join = "LEFT JOIN sale_items si ON si.id::text = t.sale_item_id::text"
-        if "id" not in sale_items_cols:
-            sale_item_join = "LEFT JOIN sale_items si ON FALSE"
+        sale_items_table_exists = _table_exists(conn, "sale_items")
+        item_name_expr = "''"
+        sale_item_join = ""
+        if sale_items_table_exists:
+            sale_item_join = "LEFT JOIN sale_items si ON si.id::text = t.sale_item_id::text"
+            if "id" not in sale_items_cols:
+                sale_item_join = "LEFT JOIN sale_items si ON FALSE"
+            item_name_expr = "COALESCE(si.name, '')"
 
         where_t, args_scope_t = _scope_where_for_tickets(conn, producer, tenant_id)
         rows = conn.execute(
@@ -1692,7 +1710,7 @@ def api_event_sold_tickets(
               {qr_token_expr} AS qr_token,
               {qr_payload_expr} AS qr_payload,
               {used_at_expr} AS used_at,
-              COALESCE(si.name, '') AS item_name,
+              {item_name_expr} AS item_name,
               {buyer_name_expr} AS buyer_name,
               {buyer_email_expr} AS buyer_email,
               {buyer_phone_expr} AS buyer_phone,

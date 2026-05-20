@@ -1660,11 +1660,22 @@ def api_event_sold_tickets(
         buyer_province_expr = f"COALESCE({', '.join(province_candidates)}, '')" if province_candidates else "''"
         buyer_postal_code_expr = f"COALESCE({', '.join(postal_code_candidates)}, '')" if postal_code_candidates else "''"
         buyer_birth_date_expr = f"COALESCE({', '.join(birth_date_candidates)}, '')" if birth_date_candidates else "''"
-        order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
-        order_by_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
+        if "created_at" in orders_cols and "created_at" in tickets_cols:
+            order_created_expr = "COALESCE(o.created_at, t.created_at)"
+            order_by_expr = "COALESCE(o.created_at, t.created_at)"
+        elif "created_at" in orders_cols:
+            order_created_expr = "o.created_at"
+            order_by_expr = "o.created_at"
+        elif "created_at" in tickets_cols:
+            order_created_expr = "t.created_at"
+            order_by_expr = "t.created_at"
+        else:
+            order_created_expr = "NULL::timestamp"
+            order_by_expr = "t.id"
         items_json_expr = "o.items_json" if "items_json" in orders_cols else "NULL::text"
         qr_payload_expr = "COALESCE(t.qr_payload, '')" if "qr_payload" in tickets_cols else "''"
         qr_token_expr = "COALESCE(t.qr_token, '')" if "qr_token" in tickets_cols else "''"
+        used_at_expr = "t.used_at" if "used_at" in tickets_cols else "NULL::timestamp"
 
         sale_item_join = "LEFT JOIN sale_items si ON si.id::text = t.sale_item_id::text"
         if "id" not in sale_items_cols:
@@ -1680,7 +1691,7 @@ def api_event_sold_tickets(
               COALESCE(t.status, '') AS status,
               {qr_token_expr} AS qr_token,
               {qr_payload_expr} AS qr_payload,
-              t.used_at,
+              {used_at_expr} AS used_at,
               COALESCE(si.name, '') AS item_name,
               {buyer_name_expr} AS buyer_name,
               {buyer_email_expr} AS buyer_email,

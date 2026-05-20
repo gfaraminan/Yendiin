@@ -32,6 +32,19 @@ def _table_columns(cur, table: str) -> set[str]:
             out.add(str(r[0]))
     return {c for c in out if c}
 
+
+def _extract_buyer_name_from_items(items: object) -> str:
+    if not isinstance(items, list):
+        return ""
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        for k in ("buyer_name", "full_name", "name", "holder_name"):
+            v = str(it.get(k) or "").strip()
+            if v:
+                return v
+    return ""
+
 @router.get("/api/tickets/{ticket_id}/pdf")
 def download_ticket_pdf(ticket_id: str):
     pdf_path = f"{UPLOAD_DIR}/tickets/{ticket_id}.pdf"
@@ -133,6 +146,46 @@ def download_order_pdf(order_id: str):
                         items = []
                     if not isinstance(items, list) or not items:
                         raise HTTPException(status_code=404, detail="PDF no encontrado")
+
+                    # enriquecer con metadata del evento cargada por productor
+                    event_slug = str(o.get("event_slug") or "").strip()
+                    event_meta = {
+                        "event_title": event_slug or "Evento",
+                        "event_date": "-",
+                        "event_time": "-",
+                        "venue": "-",
+                        "city": "-",
+                        "event_address": "-",
+                    }
+                    if event_slug:
+                        e_title2 = "title" if "title" in ecols else "slug"
+                        e_date2 = "event_date::text" if "event_date" in ecols else ("date::text" if "date" in ecols else ("date_text::text" if "date_text" in ecols else "'-'::text"))
+                        e_time2 = "event_time::text" if "event_time" in ecols else ("time::text" if "time" in ecols else "'-'::text")
+                        e_venue2 = "venue" if "venue" in ecols else "'-'::text"
+                        e_city2 = "city" if "city" in ecols else "'-'::text"
+                        e_addr2 = "address" if "address" in ecols else "'-'::text"
+                        cur.execute(
+                            f"""
+                            SELECT COALESCE({e_title2}, %s) AS event_title,
+                                   COALESCE({e_date2}, '-') AS event_date,
+                                   COALESCE({e_time2}, '-') AS event_time,
+                                   COALESCE({e_venue2}, '-') AS venue,
+                                   COALESCE({e_city2}, '-') AS city,
+                                   COALESCE({e_addr2}, '-') AS event_address
+                            FROM events
+                            WHERE slug=%s
+                            LIMIT 1
+                            """,
+                            (event_slug, event_slug),
+                        )
+                        em = cur.fetchone()
+                        if em:
+                            if not isinstance(em, dict):
+                                cols = [d[0] for d in (cur.description or [])]
+                                em = dict(zip(cols, em))
+                            event_meta.update({k: em.get(k) for k in event_meta.keys()})
+
+                    buyer_name_from_items = _extract_buyer_name_from_items(items)
                     rows = []
                     seq = 0
                     for it in items:
@@ -145,14 +198,14 @@ def download_order_pdf(order_id: str):
                                 {
                                     "ticket_id": f"virtual-{order_id}-{seq}",
                                     "qr_payload": f"ORD:{order_id}:{seq}",
-                                    "event_slug": o.get("event_slug"),
-                                    "event_title": o.get("event_slug") or "Evento",
-                                    "event_date": "-",
-                                    "event_time": "-",
-                                    "venue": "-",
-                                    "city": "-",
-                                    "event_address": "-",
-                                    "buyer_name": o.get("buyer_name") or "-",
+                                    "event_slug": event_slug,
+                                    "event_title": event_meta.get("event_title"),
+                                    "event_date": event_meta.get("event_date"),
+                                    "event_time": event_meta.get("event_time"),
+                                    "venue": event_meta.get("venue"),
+                                    "city": event_meta.get("city"),
+                                    "event_address": event_meta.get("event_address"),
+                                    "buyer_name": o.get("buyer_name") or buyer_name_from_items or "-",
                                     "buyer_email": o.get("buyer_email") or "-",
                                 }
                             )

@@ -111,8 +111,9 @@ export default function MyTicketsView({
                           }`}>{badgeStatus}</div>
                         </div>
                         <div className="mt-3 text-xl font-black leading-tight truncate">{eventTitle}</div>
-                        <div className="mt-2 text-[11px] text-white/60">{(a.date_text || "Fecha a confirmar")} · {(a.venue || "Venue")} · {(a.city || "Ciudad")}</div>
+                        <div className="mt-2 text-[11px] text-white/60">{(a.event_date || a.date_text || "Fecha a confirmar")} · {(a.venue || "Venue")} · {(a.city || "Ciudad")}</div>
                         <div className="mt-2 text-[10px] text-white/40 font-black uppercase tracking-widest">Orden #{a.order_id}</div>
+                        {a.buyer_name ? <div className="mt-1 text-[10px] text-white/50 uppercase tracking-widest">Titular: {a.buyer_name}</div> : null}
                       </div>
                     </div>
 
@@ -124,14 +125,14 @@ export default function MyTicketsView({
                           </div>
                           <div className="space-y-2">
                             <button onClick={() => a.order_id && window.open(`/api/tickets/orders/${encodeURIComponent(a.order_id)}/pdf`, "_blank", "noopener,noreferrer")} disabled={!a.order_id} className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white disabled:opacity-40">Descargar PDF</button>
-                            <button onClick={async () => { try { const to = prompt("Transferir compra a este email:", ""); if (!to) return; await transferOrder({ order_id: a.order_id, ticket_id: a.id, to_email: to }); alert("Transferencia solicitada. El nuevo titular verá la compra en Mis Tickets."); await loadMyAssets(); } catch (e) { alert(e?.message || "No se pudo transferir."); } }} className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white">Transferir compra</button>
-                            <button onClick={async () => { try { const ok = confirm("Arrepentimiento: enviaremos tu solicitud a soporte para revisión manual. ¿Continuar?"); if (!ok) return; const reason = prompt("Motivo (opcional):", ""); await requestCancel({ kind, id: a.id, order_id: a.order_id, reason: reason || "" }); alert("Listo. Tu solicitud fue enviada a soporte para evaluación y posible devolución."); await loadMyAssets(); } catch (e) { alert(e?.message || "No se pudo solicitar arrepentimiento."); } }} className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-amber-500/10 hover:bg-amber-500/15 transition-all border border-amber-500/20 text-amber-200">Arrepentimiento</button>
+                            <button onClick={async () => { try { const to = prompt("Transferir compra a este email:", ""); if (!to) return; await transferOrder({ order_id: a.order_id, ticket_id: a.ticket_id, to_email: to }); const msg = "Transferencia realizada."; alert(msg); await loadMyAssets(); } catch (e) { alert(e?.message || "No se pudo transferir."); } }} className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/10 text-white">Transferir compra</button>
+                            <button onClick={async () => { try { const ok = confirm("Arrepentimiento: enviaremos tu solicitud a soporte para revisión manual. ¿Continuar?"); if (!ok) return; const reason = prompt("Motivo (opcional):", ""); await requestCancel({ kind, id: a.ticket_id || a.id, order_id: a.order_id, reason: reason || "" }); alert("Listo. Tu solicitud fue enviada a soporte para evaluación y posible devolución."); await loadMyAssets(); } catch (e) { alert(e?.message || "No se pudo solicitar arrepentimiento."); } }} className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase tracking-widest bg-amber-500/10 hover:bg-amber-500/15 transition-all border border-amber-500/20 text-amber-200">Arrepentimiento</button>
                           </div>
                         </div>
                         <div className="w-full md:w-auto">
                           <div className="p-4 rounded-3xl bg-black/30 border border-white/10 text-[11px] text-white/60 leading-relaxed">
                             <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500 mb-2">Detalle</div>
-                            <div>• ID: <span className="text-white/80 font-black">{a.id}</span></div>
+                            <div>• ID: <span className="text-white/80 font-black">{a.ticket_id || a.id}</span></div>
                             <div>• Tipo: <span className="text-white/80 font-black">{badgeKind}</span></div>
                             <div>• Estado: <span className="text-white/80 font-black">{badgeStatus}</span></div>
                             {a.used_at ? <div>• Usado: <span className="text-white/80 font-black">{String(a.used_at)}</span></div> : null}

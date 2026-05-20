@@ -3701,9 +3701,10 @@ const refreshMe = async () => {
   };
 
   const filteredSoldTicketRows = useMemo(() => {
+    const baseRows = Array.isArray(soldTicketsModal.rows) ? soldTicketsModal.rows : [];
     const q = (soldTicketsSearch || "").trim().toLowerCase();
-    if (!q) return soldTicketsModal.rows || [];
-    return (soldTicketsModal.rows || []).filter((row) => {
+    if (!q) return baseRows;
+    return baseRows.filter((row) => {
       const n = normalizeSoldTicketRow(row);
       const haystack = `${n.fullName} ${n.email} ${n.phone} ${n.dni} ${n.address} ${n.province} ${n.postalCode} ${n.birthDate} ${n.orderId} ${n.ticketId}`.toLowerCase();
       return haystack.includes(q);
@@ -3793,7 +3794,8 @@ const refreshMe = async () => {
         throw new Error(err || `No se pudo obtener el listado (${res.status})`);
       }
       const data = await res.json();
-      const rows = Array.isArray(data?.tickets) ? data.tickets : [];
+      const rowsRaw = data?.tickets ?? data?.rows ?? data?.items ?? data?.orders ?? [];
+      const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
       setSoldTicketsModal({ open: true, event: ev, rows, loading: false, error: "" });
     } catch (e) {
       setSoldTicketsModal({

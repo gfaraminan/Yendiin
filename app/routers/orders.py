@@ -646,6 +646,7 @@ def my_assets(request: Request, tenant: str = Query("default"), order_id: Option
         e_date = (
             "e.event_date" if "event_date" in events_cols else
             "e.date" if "date" in events_cols else
+            "e.date_text" if "date_text" in events_cols else
             "NULL::text"
         )
         e_time = (
@@ -841,7 +842,8 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         e_date = (
             "e.event_date" if "event_date" in events_cols else
             "e.date" if "date" in events_cols else
-            "NULL::date"
+            "e.date_text" if "date_text" in events_cols else
+            "NULL::text"
         )
         e_time = (
             "e.event_time" if "event_time" in events_cols else
@@ -867,8 +869,9 @@ def tickets_pdf(request: Request, tenant: str = Query("default"), ids: str = Que
         if auth_subject and ("auth_subject" in orders_cols):
             owner_predicates.append("o.auth_subject = %s")
             params.append(auth_subject)
-        if (email_sess or guest_email) and ("buyer_email" in orders_cols):
-            owner_predicates.append("lower(o.buyer_email) = lower(%s)")
+        owner_email_col = "buyer_email" if "buyer_email" in orders_cols else ("customer_label" if "customer_label" in orders_cols else None)
+        if (email_sess or guest_email) and owner_email_col:
+            owner_predicates.append(f"lower(COALESCE(o.{owner_email_col},'')) = lower(%s)")
             params.append(email_sess or guest_email)
 
         if not owner_predicates:
@@ -1254,7 +1257,16 @@ def transfer_order(
                 transferred_ticket = True
 
         if not transferred_ticket:
-            sets = ["buyer_email=%s"]
+            if "buyer_email" in ocols:
+                email_set_col = "buyer_email"
+            elif "customer_label" in ocols:
+                email_set_col = "customer_label"
+            else:
+                email_set_col = None
+            if not email_set_col:
+                raise HTTPException(status_code=500, detail="schema_missing_transfer_email_column")
+
+            sets = [f"{email_set_col}=%s"]
             params_upd: list[Any] = [to_email]
             if "auth_subject" in ocols:
                 sets.append("auth_subject=NULL")

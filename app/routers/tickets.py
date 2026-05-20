@@ -13,6 +13,25 @@ router = APIRouter()
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
 os.makedirs(f"{UPLOAD_DIR}/tickets", exist_ok=True)
 
+
+def _table_columns(cur, table: str) -> set[str]:
+    cur.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema='public' AND table_name=%s
+        """,
+        (table,),
+    )
+    rows = cur.fetchall() or []
+    out = set()
+    for r in rows:
+        if isinstance(r, dict):
+            out.add(str(r.get("column_name") or ""))
+        elif r:
+            out.add(str(r[0]))
+    return {c for c in out if c}
+
 @router.get("/api/tickets/{ticket_id}/pdf")
 def download_ticket_pdf(ticket_id: str):
     pdf_path = f"{UPLOAD_DIR}/tickets/{ticket_id}.pdf"
@@ -36,20 +55,46 @@ def download_order_pdf(order_id: str):
         try:
             with db_get_conn() as conn:
                 cur = conn.cursor()
+                tcols = _table_columns(cur, "tickets")
+                ocols = _table_columns(cur, "orders")
+                ecols = _table_columns(cur, "events")
+
+                t_qr = (
+                    "t.qr_payload" if "qr_payload" in tcols else
+                    "t.qr_token" if "qr_token" in tcols else
+                    "t.id::text"
+                )
+                e_title = "e.title" if "title" in ecols else "o.event_slug"
+                e_date = (
+                    "e.event_date::text" if "event_date" in ecols else
+                    "e.date::text" if "date" in ecols else
+                    "e.date_text::text" if "date_text" in ecols else
+                    "'-'::text"
+                )
+                e_time = (
+                    "e.event_time::text" if "event_time" in ecols else
+                    "e.time::text" if "time" in ecols else
+                    "'-'::text"
+                )
+                e_venue = "e.venue" if "venue" in ecols else "'-'::text"
+                e_city = "e.city" if "city" in ecols else "'-'::text"
+                e_addr = "e.address" if "address" in ecols else "'-'::text"
+                o_buyer_name = "o.buyer_name" if "buyer_name" in ocols else "'-'::text"
+                o_buyer_email = "o.buyer_email" if "buyer_email" in ocols else ("o.customer_label" if "customer_label" in ocols else "'-'::text")
                 cur.execute(
-                    """
+                    f"""
                     SELECT
                         t.id AS ticket_id,
-                        COALESCE(t.qr_payload, t.qr_token, t.id::text) AS qr_payload,
+                        COALESCE({t_qr}, t.id::text) AS qr_payload,
                         o.event_slug,
-                        COALESCE(e.title, o.event_slug, 'Evento') AS event_title,
-                        COALESCE(e.event_date::text, e.date::text, '-') AS event_date,
-                        COALESCE(e.event_time::text, e.time::text, '-') AS event_time,
-                        COALESCE(e.venue, '-') AS venue,
-                        COALESCE(e.city, '-') AS city,
-                        COALESCE(e.address, '-') AS event_address,
-                        COALESCE(o.buyer_name, '-') AS buyer_name,
-                        COALESCE(o.buyer_email, '-') AS buyer_email
+                        COALESCE({e_title}, o.event_slug, 'Evento') AS event_title,
+                        COALESCE({e_date}, '-') AS event_date,
+                        COALESCE({e_time}, '-') AS event_time,
+                        COALESCE({e_venue}, '-') AS venue,
+                        COALESCE({e_city}, '-') AS city,
+                        COALESCE({e_addr}, '-') AS event_address,
+                        COALESCE({o_buyer_name}, '-') AS buyer_name,
+                        COALESCE({o_buyer_email}, '-') AS buyer_email
                     FROM tickets t
                     JOIN orders o ON o.id = t.order_id
                     LEFT JOIN events e ON e.slug = o.event_slug

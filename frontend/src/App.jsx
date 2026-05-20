@@ -3705,6 +3705,7 @@ const refreshMe = async () => {
     const q = (soldTicketsSearch || "").trim().toLowerCase();
     if (!q) return baseRows;
     return baseRows.filter((row) => {
+      if (!row || typeof row !== "object") return false;
       const n = normalizeSoldTicketRow(row);
       const haystack = `${n.fullName} ${n.email} ${n.phone} ${n.dni} ${n.address} ${n.province} ${n.postalCode} ${n.birthDate} ${n.orderId} ${n.ticketId}`.toLowerCase();
       return haystack.includes(q);
@@ -3795,7 +3796,7 @@ const refreshMe = async () => {
       }
       const data = await res.json();
       const rowsRaw = data?.tickets ?? data?.rows ?? data?.items ?? data?.orders ?? [];
-      const rows = Array.isArray(rowsRaw) ? rowsRaw : [];
+      const rows = Array.isArray(rowsRaw) ? rowsRaw.filter((row) => row && typeof row === 'object') : [];
       setSoldTicketsModal({ open: true, event: ev, rows, loading: false, error: "" });
     } catch (e) {
       setSoldTicketsModal({
@@ -6173,7 +6174,7 @@ if (closeOnSuccess) {
                       {filteredSoldTicketRows.map((t, idx) => {
                         const normalized = normalizeSoldTicketRow(t);
                         return (
-                          <tr key={`${t.ticket_id || idx}-${idx}`} className="border-t border-white/10">
+                          <tr key={`${t?.ticket_id || t?.id || idx}-${idx}`} className="border-t border-white/10">
                             <td className="px-4 py-3 font-bold">{normalized.fullName}</td>
                             <td className="px-4 py-3">{normalized.dni}</td>
                             <td className="px-4 py-3">{normalized.email}</td>

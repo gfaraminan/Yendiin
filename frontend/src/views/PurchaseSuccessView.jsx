@@ -37,7 +37,7 @@ export default function PurchaseSuccessView({
             <div className="flex-1 space-y-4 text-center md:text-left">
               <div>
                 <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Titular de Entrada</div>
-                <div className="text-xl font-black uppercase">{purchaseData?.user?.fullName || purchaseData?.tickets?.[0]?.buyer_name || me?.fullName || "Titular"}</div>
+                <div className="text-xl font-black uppercase">{purchaseData?.tickets?.[0]?.buyer_name || purchaseData?.user?.fullName || me?.fullName || "Titular"}</div>
               </div>
               <div>
                 <div className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Tickets x{purchaseData?.quantity || purchaseData?.tickets?.length || 1}</div>
@@ -74,6 +74,9 @@ export default function PurchaseSuccessView({
                   <div className="flex-1 min-w-0">
                     <div className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Ticket #{idx + 1}</div>
                     <div className="text-[12px] font-mono text-white truncate">{t.ticket_id}</div>
+                    <div className="text-[10px] text-neutral-400 truncate">
+                      {t.event_title || t.event_slug || "Ticket emitido"}
+                    </div>
                     <div className="text-[10px] text-neutral-500 truncate">{t.qr_payload || t.ticket_id}</div>
                   </div>
                   <button onClick={() => navigator.clipboard?.writeText(t.qr_payload || t.ticket_id || "")} className="px-3 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-[10px] font-black uppercase tracking-widest">

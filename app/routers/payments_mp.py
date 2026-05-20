@@ -1317,8 +1317,20 @@ async def mp_webhook(request: Request):
     except Exception:
         payment_id = None
 
+    # Mercado Pago puede enviar notifications con data.id en querystring
+    # (ej: /mp/webhook?data.id=123&type=payment) y body vacío.
     if not payment_id:
-        return {"ok": True, "received": True}
+        try:
+            q = request.query_params
+            payment_id = (
+                (q.get("data.id") or q.get("data_id") or q.get("id") or "").strip()
+                or None
+            )
+        except Exception:
+            payment_id = None
+
+    if not payment_id:
+        return {"ok": True, "received": True, "ignored": True, "reason": "missing_payment_id"}
 
     if not MP_ACCESS_TOKEN:
         return {"ok": True, "received": True, "warning": "MP_ACCESS_TOKEN_not_configured"}

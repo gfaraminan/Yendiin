@@ -624,14 +624,23 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
 
 
 def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
-    cols = ["id", "order_id", "qr_token", "status"]
-    vals = ["%s", "%s", "%s", "%s"]
+    cols = ["id", "order_id", "status"]
+    vals = ["%s", "%s", "%s"]
     args = [
         str(uuid.uuid4()),
         order_id,
-        uuid.uuid4().hex,
         "valid",
     ]
+
+    qr_value = uuid.uuid4().hex
+    if "qr_token" in tcols:
+        cols.append("qr_token")
+        vals.append("%s")
+        args.append(qr_value)
+    elif "qr_payload" in tcols:
+        cols.append("qr_payload")
+        vals.append("%s")
+        args.append(qr_value)
 
     if "tenant_id" in tcols:
         cols.append("tenant_id")
@@ -746,10 +755,11 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                 required = {
                     "id",
                     "order_id",
-                    "qr_token",
                     "status",
                 }
                 if not required.issubset(set(tcols)):
+                    return False
+                if not ({"qr_token", "qr_payload"} & set(tcols)):
                     return False
                 if not items:
                     return False
@@ -1381,10 +1391,13 @@ async def mp_webhook(request: Request):
                     conn.commit()
                     return {"ok": True, "received": True, "order": order_id, "tickets": "missing_items_json"}
 
-                required = {"id", "order_id", "qr_token", "status"}
+                required = {"id", "order_id", "status"}
                 if not required.issubset(set(tcols)):
                     conn.commit()
                     return {"ok": True, "received": True, "tickets": "schema_missing_columns"}
+                if not ({"qr_token", "qr_payload"} & set(tcols)):
+                    conn.commit()
+                    return {"ok": True, "received": True, "tickets": "schema_missing_qr_column"}
 
                 for it in items:
                     if not isinstance(it, dict):

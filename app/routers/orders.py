@@ -206,6 +206,9 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
 
     add("id", ticket_id)
     add("order_id", order_id)
+    add("tenant_id", order.get("tenant_id"))
+    add("producer_tenant", order.get("producer_tenant"))
+    add("event_slug", order.get("event_slug"))
     add("sale_item_id", sale_item_id)
     add("status", "issued")
     if "qr_token" in tcols:

@@ -1761,7 +1761,7 @@ def api_event_sold_tickets(
                 SELECT
                   o.id::text AS order_id,
                   COALESCE(o.items_json, '[]') AS items_json,
-                  {buyer_name_orders_expr} AS buyer_name,
+                  {buyer_name_expr} AS buyer_name,
                   {buyer_email_orders_expr} AS buyer_email,
                   {buyer_phone_orders_expr} AS buyer_phone,
                   {buyer_dni_orders_expr} AS buyer_dni,

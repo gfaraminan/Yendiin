@@ -1115,7 +1115,7 @@ class StaffLinkCreateIn(BaseModel):
 
 class CourtesyIssueIn(BaseModel):
     tenant_id: Optional[str] = "default"
-    sale_item_id: int = Field(..., ge=1)
+    sale_item_id: Optional[int] = Field(default=None, ge=1)
     quantity: int = Field(default=1, ge=1, le=50)
     buyer_name: Optional[str] = None
     buyer_email: Optional[str] = None
@@ -1197,7 +1197,7 @@ def api_me(request: Request):
 # Events
 # -------------------------------------------------------------------
 @router.get("/events")
-def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
+def api_producer_events(request: Request, include_paused: bool = Query(True), user: dict = Depends(_require_auth)):
     """Devuelve SOLO eventos del productor autenticado + métricas resumidas por evento."""
     tenant_id = _tenant_from_request(request)
 
@@ -1681,8 +1681,9 @@ def api_event_sold_tickets(
         buyer_province_expr = f"COALESCE({', '.join(province_candidates)}, '')" if province_candidates else "''"
         buyer_postal_code_expr = f"COALESCE({', '.join(postal_code_candidates)}, '')" if postal_code_candidates else "''"
         buyer_birth_date_expr = f"COALESCE({', '.join(birth_date_candidates)}, '')" if birth_date_candidates else "''"
-        order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
-        order_by_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
+        t_created_expr = "t.created_at" if "created_at" in tickets_cols else "NULL::timestamp"
+        order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols and "created_at" in tickets_cols else ("o.created_at" if "created_at" in orders_cols else t_created_expr)
+        order_by_expr = order_created_expr
         items_json_expr = "o.items_json" if "items_json" in orders_cols else "NULL::text"
         qr_payload_expr = "COALESCE(t.qr_payload, '')" if "qr_payload" in tickets_cols else "''"
         qr_token_expr = "COALESCE(t.qr_token, '')" if "qr_token" in tickets_cols else "''"
@@ -1691,7 +1692,13 @@ def api_event_sold_tickets(
         if "id" not in sale_items_cols:
             sale_item_join = "LEFT JOIN sale_items si ON FALSE"
 
-        where_t, args_scope_t = _scope_where_for_tickets(conn, producer, tenant_id)
+        used_at_expr = "t.used_at" if "used_at" in tickets_cols else "NULL::timestamp"
+        ticket_where = ["t.event_slug = %s", "COALESCE(t.status, '') NOT ILIKE 'revoked'"]
+        ticket_args: list[Any] = [event_slug]
+        if "tenant_id" in tickets_cols:
+            ticket_where.append("t.tenant_id = %s")
+            ticket_args.append(tenant_id)
+
         rows = conn.execute(
             f"""
             SELECT
@@ -1701,7 +1708,7 @@ def api_event_sold_tickets(
               COALESCE(t.status, '') AS status,
               {qr_token_expr} AS qr_token,
               {qr_payload_expr} AS qr_payload,
-              t.used_at,
+              {used_at_expr} AS used_at,
               COALESCE(si.name, '') AS item_name,
               {buyer_name_expr} AS buyer_name,
               {buyer_email_expr} AS buyer_email,
@@ -1716,14 +1723,92 @@ def api_event_sold_tickets(
             FROM tickets t
             LEFT JOIN orders o ON o.id::text = t.order_id::text
             {sale_item_join}
-            WHERE {where_t}
-              AND t.event_slug = %s
-              AND COALESCE(t.status, '') NOT ILIKE 'revoked'
+            WHERE {' AND '.join(ticket_where)}
             ORDER BY {order_by_expr} DESC, t.id DESC
             LIMIT 5000
             """,
-            (*args_scope_t, event_slug),
+            tuple(ticket_args),
         ).fetchall() or []
+
+
+        # Fallback legacy: si no hay filas en tickets, reconstruir desde orders.items_json
+        # (algunas compras históricas/pasarelas no insertaron tickets físicos).
+        if not rows:
+            paid_pred, _ = _paid_order_predicate(conn, "o")
+            owner_col = "producer_tenant" if "producer_tenant" in orders_cols else ("tenant" if "tenant" in orders_cols else None)
+            where_orders = ["o.event_slug = %s", f"({paid_pred})"]
+            args_orders: list[Any] = [event_slug]
+            if "tenant_id" in orders_cols:
+                where_orders.append("o.tenant_id = %s")
+                args_orders.append(tenant_id)
+            if owner_col:
+                where_orders.append(f"o.{owner_col}::text = %s")
+                args_orders.append(producer)
+
+            order_created_fallback = "o.created_at" if "created_at" in orders_cols else "NULL::timestamp"
+            order_rows = conn.execute(
+                f"""
+                SELECT
+                  o.id::text AS order_id,
+                  COALESCE(o.items_json, '[]') AS items_json,
+                  {buyer_name_expr} AS buyer_name,
+                  {buyer_email_expr} AS buyer_email,
+                  {buyer_phone_expr} AS buyer_phone,
+                  {buyer_dni_expr} AS buyer_dni,
+                  {buyer_address_expr} AS buyer_address,
+                  {buyer_province_expr} AS buyer_province,
+                  {buyer_postal_code_expr} AS buyer_postal_code,
+                  {buyer_birth_date_expr} AS buyer_birth_date,
+                  {order_created_fallback} AS sold_at
+                FROM orders o
+                WHERE {' AND '.join(where_orders)}
+                ORDER BY {order_created_fallback} DESC, o.id DESC
+                LIMIT 1000
+                """,
+                tuple(args_orders),
+            ).fetchall() or []
+
+            virtual_rows: list[dict[str, Any]] = []
+            for o in order_rows:
+                raw_items = o.get("items_json")
+                try:
+                    items = json.loads(raw_items) if isinstance(raw_items, str) else (raw_items or [])
+                except Exception:
+                    items = []
+                if isinstance(items, dict):
+                    items = [items]
+                if not isinstance(items, list):
+                    items = []
+                seq = 0
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    qty = int(it.get("qty") or it.get("quantity") or 1)
+                    sale_item = str(it.get("sale_item_id") or "")
+                    item_name = str(it.get("name") or it.get("title") or "Ticket")
+                    for _ in range(max(0, qty)):
+                        seq += 1
+                        virtual_rows.append({
+                            "ticket_id": f"virtual-{o.get('order_id')}-{seq}",
+                            "order_id": o.get("order_id"),
+                            "sale_item_id": sale_item,
+                            "status": "issued",
+                            "qr_token": "",
+                            "qr_payload": f"ORD:{o.get('order_id')}:{sale_item}:{seq}",
+                            "used_at": None,
+                            "item_name": item_name,
+                            "buyer_name": o.get("buyer_name"),
+                            "buyer_email": o.get("buyer_email"),
+                            "buyer_phone": o.get("buyer_phone"),
+                            "buyer_dni": o.get("buyer_dni"),
+                            "buyer_address": o.get("buyer_address"),
+                            "buyer_province": o.get("buyer_province"),
+                            "buyer_postal_code": o.get("buyer_postal_code"),
+                            "buyer_birth_date": o.get("buyer_birth_date"),
+                            "items_json": raw_items,
+                            "sold_at": o.get("sold_at"),
+                        })
+            rows = virtual_rows
 
     extract_buyer_fields = globals().get("_extract_buyer_fields_from_items_json")
     if not callable(extract_buyer_fields):
@@ -1917,16 +2002,30 @@ def api_issue_courtesy_tickets(
         ocols = _table_columns(conn, "orders")
 
         kind_expr = "COALESCE(si.kind, 'ticket')" if "kind" in si_cols else "'ticket'"
-        item = conn.execute(
-            f"""
-            SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
-                   COALESCE(si.stock_sold, 0) AS stock_sold
-            FROM sale_items si
-            WHERE si.id=%s AND si.tenant=%s AND si.event_slug=%s
-            LIMIT 1
-            """,
-            (int(payload.sale_item_id), producer, event_slug),
-        ).fetchone()
+        sale_item_id = int(payload.sale_item_id) if payload.sale_item_id else None
+        if sale_item_id:
+            item = conn.execute(
+                f"""
+                SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
+                       COALESCE(si.stock_sold, 0) AS stock_sold
+                FROM sale_items si
+                WHERE si.id=%s AND si.tenant=%s AND si.event_slug=%s
+                LIMIT 1
+                """,
+                (sale_item_id, producer, event_slug),
+            ).fetchone()
+        else:
+            item = conn.execute(
+                f"""
+                SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
+                       COALESCE(si.stock_sold, 0) AS stock_sold
+                FROM sale_items si
+                WHERE si.tenant=%s AND si.event_slug=%s
+                ORDER BY CASE WHEN {kind_expr}='ticket' THEN 0 ELSE 1 END, si.id ASC
+                LIMIT 1
+                """,
+                (producer, event_slug),
+            ).fetchone()
         if not item:
             raise HTTPException(status_code=404, detail="sale_item_not_found")
 
@@ -1945,7 +2044,7 @@ def api_issue_courtesy_tickets(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": str(item.get("id") or ""),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": 0,
@@ -2061,7 +2160,7 @@ def api_issue_courtesy_tickets(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": str(item.get("id") or ""),
                     "ticket_type": item.get("name") or "Cortesía",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2135,7 +2234,7 @@ def api_issue_courtesy_tickets(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(payload.sale_item_id),
+        "sale_item_id": str(item.get("id") or ""),
         "quantity": qty,
         "ticket_ids": ticket_ids,
         "tickets": issued_tickets,
@@ -2249,7 +2348,7 @@ def api_issue_pos_sale(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": str(item.get("id") or ""),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": unit_price_cents,
@@ -2382,7 +2481,7 @@ def api_issue_pos_sale(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": str(item.get("id") or ""),
                     "ticket_type": item.get("name") or "Taquilla",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2456,7 +2555,7 @@ def api_issue_pos_sale(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(payload.sale_item_id),
+        "sale_item_id": str(item.get("id") or ""),
         "quantity": qty,
         "payment_method": payment_method,
         "seller_code": seller_code,
@@ -3728,11 +3827,11 @@ def api_producer_event_toggle(request: Request, payload: EventToggleIn, user: di
         row = conn.execute(
             """
             UPDATE events
-            SET is_active = %s
-            WHERE tenant_id = %s AND (tenant = %s OR producer = %s) AND slug = %s
+            SET active = %s
+            WHERE tenant_id = %s AND tenant = %s AND slug = %s
             RETURNING slug
             """,
-            (bool(payload.is_active), tenant_id, producer, producer, payload.event_slug),
+            (bool(payload.is_active), tenant_id, producer, payload.event_slug),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="event_not_found")
@@ -3754,11 +3853,11 @@ def api_producer_event_sold_out_toggle(request: Request, payload: EventSoldOutTo
             UPDATE events
                SET sold_out = %s
              WHERE tenant_id = %s
-               AND (tenant = %s OR producer = %s)
+               AND tenant = %s
                AND slug = %s
             RETURNING slug, sold_out
             """,
-            (bool(payload.sold_out), tenant_id, producer, producer, payload.event_slug),
+            (bool(payload.sold_out), tenant_id, producer, payload.event_slug),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="event_not_found")
@@ -3787,7 +3886,7 @@ def api_producer_event_delete_request(request: Request, payload: EventDeleteRequ
             """
             UPDATE events
                SET active = %s, updated_at = %s
-             WHERE tenant_id = %s AND (tenant = %s OR producer = %s) AND slug = %s
+             WHERE tenant_id = %s AND tenant = %s AND slug = %s
             RETURNING slug
             """,
             (active, now_v, tenant, producer, slug),

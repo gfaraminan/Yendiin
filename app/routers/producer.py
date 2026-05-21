@@ -1512,6 +1512,8 @@ def api_producer_events(request: Request, include_paused: bool = Query(True), us
 
     events = []
     for r in rows:
+        if not include_paused and not bool(r.get("active", True)):
+            continue
         # Compat defensiva: algunos despliegues históricos exponen campos
         # opcionales de settlement/collector en distintos nombres.
         settlement_mode = None

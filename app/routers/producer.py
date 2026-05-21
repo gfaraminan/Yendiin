@@ -1197,7 +1197,7 @@ def api_me(request: Request):
 # Events
 # -------------------------------------------------------------------
 @router.get("/events")
-def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
+def api_producer_events(request: Request, include_paused: bool = Query(False), user: dict = Depends(_require_auth)):
     """Devuelve SOLO eventos del productor autenticado + métricas resumidas por evento."""
     tenant_id = _tenant_from_request(request)
 
@@ -1512,6 +1512,8 @@ def api_producer_events(request: Request, user: dict = Depends(_require_auth)):
 
     events = []
     for r in rows:
+        if not include_paused and not bool(r.get("active", True)):
+            continue
         # Compat defensiva: algunos despliegues históricos exponen campos
         # opcionales de settlement/collector en distintos nombres.
         settlement_mode = None
@@ -1681,8 +1683,9 @@ def api_event_sold_tickets(
         buyer_province_expr = f"COALESCE({', '.join(province_candidates)}, '')" if province_candidates else "''"
         buyer_postal_code_expr = f"COALESCE({', '.join(postal_code_candidates)}, '')" if postal_code_candidates else "''"
         buyer_birth_date_expr = f"COALESCE({', '.join(birth_date_candidates)}, '')" if birth_date_candidates else "''"
-        order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
-        order_by_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols else "t.created_at"
+        t_created_expr = "t.created_at" if "created_at" in tickets_cols else "NULL::timestamp"
+        order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols and "created_at" in tickets_cols else ("o.created_at" if "created_at" in orders_cols else t_created_expr)
+        order_by_expr = order_created_expr
         items_json_expr = "o.items_json" if "items_json" in orders_cols else "NULL::text"
         qr_payload_expr = "COALESCE(t.qr_payload, '')" if "qr_payload" in tickets_cols else "''"
         qr_token_expr = "COALESCE(t.qr_token, '')" if "qr_token" in tickets_cols else "''"
@@ -1692,6 +1695,7 @@ def api_event_sold_tickets(
             sale_item_join = "LEFT JOIN sale_items si ON FALSE"
 
         where_t, args_scope_t = _scope_where_for_tickets(conn, producer, tenant_id)
+        used_at_expr = "t.used_at" if "used_at" in tickets_cols else "NULL::timestamp"
         rows = conn.execute(
             f"""
             SELECT
@@ -1701,7 +1705,7 @@ def api_event_sold_tickets(
               COALESCE(t.status, '') AS status,
               {qr_token_expr} AS qr_token,
               {qr_payload_expr} AS qr_payload,
-              t.used_at,
+              {used_at_expr} AS used_at,
               COALESCE(si.name, '') AS item_name,
               {buyer_name_expr} AS buyer_name,
               {buyer_email_expr} AS buyer_email,
@@ -1959,7 +1963,7 @@ def api_issue_courtesy_tickets(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(item.get("id") or 0),
+                    "sale_item_id": str(item.get("id") or ""),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": 0,
@@ -2075,7 +2079,7 @@ def api_issue_courtesy_tickets(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(item.get("id") or 0),
+                    "sale_item_id": str(item.get("id") or ""),
                     "ticket_type": item.get("name") or "Cortesía",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2149,7 +2153,7 @@ def api_issue_courtesy_tickets(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(item.get("id") or 0),
+        "sale_item_id": str(item.get("id") or ""),
         "quantity": qty,
         "ticket_ids": ticket_ids,
         "tickets": issued_tickets,
@@ -2263,7 +2267,7 @@ def api_issue_pos_sale(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(item.get("id") or 0),
+                    "sale_item_id": str(item.get("id") or ""),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": unit_price_cents,
@@ -2396,7 +2400,7 @@ def api_issue_pos_sale(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(item.get("id") or 0),
+                    "sale_item_id": str(item.get("id") or ""),
                     "ticket_type": item.get("name") or "Taquilla",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2470,7 +2474,7 @@ def api_issue_pos_sale(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(item.get("id") or 0),
+        "sale_item_id": str(item.get("id") or ""),
         "quantity": qty,
         "payment_method": payment_method,
         "seller_code": seller_code,

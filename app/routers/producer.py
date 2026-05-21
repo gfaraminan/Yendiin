@@ -1683,6 +1683,15 @@ def api_event_sold_tickets(
         buyer_province_expr = f"COALESCE({', '.join(province_candidates)}, '')" if province_candidates else "''"
         buyer_postal_code_expr = f"COALESCE({', '.join(postal_code_candidates)}, '')" if postal_code_candidates else "''"
         buyer_birth_date_expr = f"COALESCE({', '.join(birth_date_candidates)}, '')" if birth_date_candidates else "''"
+        # Keep fallback aliases defined to avoid runtime NameError/UnboundLocalError
+        buyer_name_orders_expr = buyer_name_expr
+        buyer_email_orders_expr = buyer_email_expr
+        buyer_phone_orders_expr = buyer_phone_expr
+        buyer_dni_orders_expr = buyer_dni_expr
+        buyer_address_orders_expr = buyer_address_expr
+        buyer_province_orders_expr = buyer_province_expr
+        buyer_postal_code_orders_expr = buyer_postal_code_expr
+        buyer_birth_date_orders_expr = buyer_birth_date_expr
         t_created_expr = "t.created_at" if "created_at" in tickets_cols else "NULL::timestamp"
         order_created_expr = "COALESCE(o.created_at, t.created_at)" if "created_at" in orders_cols and "created_at" in tickets_cols else ("o.created_at" if "created_at" in orders_cols else t_created_expr)
         order_by_expr = order_created_expr

@@ -50,6 +50,7 @@ import PublicHomeView from "./views/PublicHomeView";
 import EventDetailView from "./views/EventDetailView";
 import PurchaseSuccessView from "./views/PurchaseSuccessView";
 import MyTicketsView from "./views/MyTicketsView";
+import ModalErrorBoundary from "./components/ModalErrorBoundary";
 import { makeBrandPageTitle, resolveBrandConfig } from "./config/brand";
 import { resolveFeatureFlags } from "./config/features";
 import { resolveLegalConfig } from "./config/legal";

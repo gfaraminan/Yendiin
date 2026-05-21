@@ -532,8 +532,8 @@ def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
         payload = None
 
     targets = {
-        "buyer_name": ("buyer_name", "full_name", "name"),
-        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email"),
+        "buyer_name": ("buyer_name", "full_name"),
+        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email", "owner_email"),
         "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
         "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
         "buyer_address": ("buyer_address", "address"),
@@ -553,12 +553,23 @@ def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
     def _walk(node: object):
         if isinstance(node, dict):
             buyer_node = node.get("buyer")
+            holder_node = node.get("holder")
+            customer_node = node.get("customer")
+            user_node = node.get("user")
             for field, keys in targets.items():
                 for key in keys:
                     if key in node:
                         _store(field, node.get(key))
-                    if isinstance(buyer_node, dict) and key in buyer_node:
-                        _store(field, buyer_node.get(key))
+                    for nested in (buyer_node, holder_node, customer_node, user_node):
+                        if isinstance(nested, dict) and key in nested:
+                            _store(field, nested.get(key))
+            # Avoid taking sale-item name as buyer name from top-level "name"
+            for nested in (buyer_node, holder_node, customer_node, user_node):
+                if isinstance(nested, dict):
+                    if "name" in nested:
+                        _store("buyer_name", nested.get("name"))
+                    if "email" in nested:
+                        _store("buyer_email", nested.get("email"))
             for v in node.values():
                 _walk(v)
         elif isinstance(node, list):

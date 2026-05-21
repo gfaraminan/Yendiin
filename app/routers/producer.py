@@ -1197,7 +1197,7 @@ def api_me(request: Request):
 # Events
 # -------------------------------------------------------------------
 @router.get("/events")
-def api_producer_events(request: Request, include_paused: bool = Query(False), user: dict = Depends(_require_auth)):
+def api_producer_events(request: Request, include_paused: bool = Query(True), user: dict = Depends(_require_auth)):
     """Devuelve SOLO eventos del productor autenticado + métricas resumidas por evento."""
     tenant_id = _tenant_from_request(request)
 

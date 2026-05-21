@@ -1567,6 +1567,8 @@ def api_producer_events(request: Request, include_paused: bool = Query(True), us
 
     events = []
     for r in rows:
+        if not include_paused and not bool(r.get("active", True)):
+            continue
         # Compat defensiva: algunos despliegues históricos exponen campos
         # opcionales de settlement/collector en distintos nombres.
         settlement_mode = None
@@ -1791,14 +1793,14 @@ def api_event_sold_tickets(
               {qr_payload_expr} AS qr_payload,
               {used_at_expr} AS used_at,
               COALESCE(si.name, '') AS item_name,
-              {buyer_name_expr} AS buyer_name,
-              {buyer_email_expr} AS buyer_email,
-              {buyer_phone_expr} AS buyer_phone,
-              {buyer_dni_expr} AS buyer_dni,
-              {buyer_address_expr} AS buyer_address,
-              {buyer_province_expr} AS buyer_province,
-              {buyer_postal_code_expr} AS buyer_postal_code,
-              {buyer_birth_date_expr} AS buyer_birth_date,
+              {buyer_name_orders_expr} AS buyer_name,
+              {buyer_email_orders_expr} AS buyer_email,
+              {buyer_phone_orders_expr} AS buyer_phone,
+              {buyer_dni_orders_expr} AS buyer_dni,
+              {buyer_address_orders_expr} AS buyer_address,
+              {buyer_province_orders_expr} AS buyer_province,
+              {buyer_postal_code_orders_expr} AS buyer_postal_code,
+              {buyer_birth_date_orders_expr} AS buyer_birth_date,
               {items_json_expr} AS items_json,
               {order_created_expr} AS sold_at
             FROM tickets t
@@ -2855,7 +2857,7 @@ def api_send_order_pdf(
         rows = conn.execute(
             f"""
             SELECT o.id::text AS order_id,
-                   {buyer_name_expr} AS buyer_name,
+                   {buyer_name_orders_expr} AS buyer_name,
                    {buyer_email_expr} AS buyer_email
             FROM orders o
             WHERE o.id::text=%s

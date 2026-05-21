@@ -545,8 +545,8 @@ def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
         payload = None
 
     targets = {
-        "buyer_name": ("buyer_name", "full_name"),
-        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email", "owner_email"),
+        "buyer_name": ("buyer_name", "full_name", "fullName", "nombre", "buyer_full_name"),
+        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email", "owner_email", "customer_label", "contact_email"),
         "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
         "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
         "buyer_address": ("buyer_address", "address"),
@@ -1695,6 +1695,10 @@ def api_event_sold_tickets(
             email_candidates.append("NULLIF(TRIM(o.email), '')")
         if "mail" in orders_cols:
             email_candidates.append("NULLIF(TRIM(o.mail), '')")
+        if "customer_label" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.customer_label), '')")
+        if "contact_email" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.contact_email), '')")
         if "buyer_email" in tickets_cols:
             email_candidates.append("NULLIF(TRIM(t.buyer_email), '')")
         if "email" in tickets_cols:

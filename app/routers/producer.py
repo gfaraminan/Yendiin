@@ -1115,7 +1115,7 @@ class StaffLinkCreateIn(BaseModel):
 
 class CourtesyIssueIn(BaseModel):
     tenant_id: Optional[str] = "default"
-    sale_item_id: int = Field(..., ge=1)
+    sale_item_id: Optional[int] = Field(default=None, ge=1)
     quantity: int = Field(default=1, ge=1, le=50)
     buyer_name: Optional[str] = None
     buyer_email: Optional[str] = None
@@ -1917,16 +1917,30 @@ def api_issue_courtesy_tickets(
         ocols = _table_columns(conn, "orders")
 
         kind_expr = "COALESCE(si.kind, 'ticket')" if "kind" in si_cols else "'ticket'"
-        item = conn.execute(
-            f"""
-            SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
-                   COALESCE(si.stock_sold, 0) AS stock_sold
-            FROM sale_items si
-            WHERE si.id=%s AND si.tenant=%s AND si.event_slug=%s
-            LIMIT 1
-            """,
-            (int(payload.sale_item_id), producer, event_slug),
-        ).fetchone()
+        sale_item_id = int(payload.sale_item_id) if payload.sale_item_id else None
+        if sale_item_id:
+            item = conn.execute(
+                f"""
+                SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
+                       COALESCE(si.stock_sold, 0) AS stock_sold
+                FROM sale_items si
+                WHERE si.id=%s AND si.tenant=%s AND si.event_slug=%s
+                LIMIT 1
+                """,
+                (sale_item_id, producer, event_slug),
+            ).fetchone()
+        else:
+            item = conn.execute(
+                f"""
+                SELECT si.id, si.name, {kind_expr} AS kind, COALESCE(si.stock_total, 0) AS stock_total,
+                       COALESCE(si.stock_sold, 0) AS stock_sold
+                FROM sale_items si
+                WHERE si.tenant=%s AND si.event_slug=%s
+                ORDER BY CASE WHEN {kind_expr}='ticket' THEN 0 ELSE 1 END, si.id ASC
+                LIMIT 1
+                """,
+                (producer, event_slug),
+            ).fetchone()
         if not item:
             raise HTTPException(status_code=404, detail="sale_item_not_found")
 
@@ -1945,7 +1959,7 @@ def api_issue_courtesy_tickets(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": int(item.get("id") or 0),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": 0,
@@ -2061,7 +2075,7 @@ def api_issue_courtesy_tickets(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": int(item.get("id") or 0),
                     "ticket_type": item.get("name") or "Cortesía",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2135,7 +2149,7 @@ def api_issue_courtesy_tickets(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(payload.sale_item_id),
+        "sale_item_id": int(item.get("id") or 0),
         "quantity": qty,
         "ticket_ids": ticket_ids,
         "tickets": issued_tickets,
@@ -2249,7 +2263,7 @@ def api_issue_pos_sale(
         items_json = json.dumps(
             [
                 {
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": int(item.get("id") or 0),
                     "name": item.get("name") or "Ticket",
                     "qty": qty,
                     "unit_price_cents": unit_price_cents,
@@ -2382,7 +2396,7 @@ def api_issue_pos_sale(
             issued_tickets.append(
                 {
                     "ticket_id": ticket_id,
-                    "sale_item_id": int(payload.sale_item_id),
+                    "sale_item_id": int(item.get("id") or 0),
                     "ticket_type": item.get("name") or "Taquilla",
                     "qr_payload": qr_payload_out,
                     "qr_token": qr_token,
@@ -2456,7 +2470,7 @@ def api_issue_pos_sale(
         "ok": True,
         "event_slug": event_slug,
         "order_id": order_id,
-        "sale_item_id": int(payload.sale_item_id),
+        "sale_item_id": int(item.get("id") or 0),
         "quantity": qty,
         "payment_method": payment_method,
         "seller_code": seller_code,
@@ -3728,11 +3742,11 @@ def api_producer_event_toggle(request: Request, payload: EventToggleIn, user: di
         row = conn.execute(
             """
             UPDATE events
-            SET is_active = %s
-            WHERE tenant_id = %s AND (tenant = %s OR producer = %s) AND slug = %s
+            SET active = %s
+            WHERE tenant_id = %s AND tenant = %s AND slug = %s
             RETURNING slug
             """,
-            (bool(payload.is_active), tenant_id, producer, producer, payload.event_slug),
+            (bool(payload.is_active), tenant_id, producer, payload.event_slug),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="event_not_found")
@@ -3754,11 +3768,11 @@ def api_producer_event_sold_out_toggle(request: Request, payload: EventSoldOutTo
             UPDATE events
                SET sold_out = %s
              WHERE tenant_id = %s
-               AND (tenant = %s OR producer = %s)
+               AND tenant = %s
                AND slug = %s
             RETURNING slug, sold_out
             """,
-            (bool(payload.sold_out), tenant_id, producer, producer, payload.event_slug),
+            (bool(payload.sold_out), tenant_id, producer, payload.event_slug),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="event_not_found")
@@ -3787,7 +3801,7 @@ def api_producer_event_delete_request(request: Request, payload: EventDeleteRequ
             """
             UPDATE events
                SET active = %s, updated_at = %s
-             WHERE tenant_id = %s AND (tenant = %s OR producer = %s) AND slug = %s
+             WHERE tenant_id = %s AND tenant = %s AND slug = %s
             RETURNING slug
             """,
             (active, now_v, tenant, producer, slug),

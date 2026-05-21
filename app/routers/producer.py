@@ -1732,6 +1732,86 @@ def api_event_sold_tickets(
             tuple(ticket_args),
         ).fetchall() or []
 
+
+        # Fallback legacy: si no hay filas en tickets, reconstruir desde orders.items_json
+        # (algunas compras históricas/pasarelas no insertaron tickets físicos).
+        if not rows:
+            paid_pred, _ = _paid_order_predicate(conn, "o")
+            owner_col = "producer_tenant" if "producer_tenant" in orders_cols else ("tenant" if "tenant" in orders_cols else None)
+            where_orders = ["o.event_slug = %s", f"({paid_pred})"]
+            args_orders: list[Any] = [event_slug]
+            if "tenant_id" in orders_cols:
+                where_orders.append("o.tenant_id = %s")
+                args_orders.append(tenant_id)
+            if owner_col:
+                where_orders.append(f"o.{owner_col}::text = %s")
+                args_orders.append(producer)
+
+            order_created_fallback = "o.created_at" if "created_at" in orders_cols else "NULL::timestamp"
+            order_rows = conn.execute(
+                f"""
+                SELECT
+                  o.id::text AS order_id,
+                  COALESCE(o.items_json, '[]') AS items_json,
+                  {buyer_name_expr} AS buyer_name,
+                  {buyer_email_expr} AS buyer_email,
+                  {buyer_phone_expr} AS buyer_phone,
+                  {buyer_dni_expr} AS buyer_dni,
+                  {buyer_address_expr} AS buyer_address,
+                  {buyer_province_expr} AS buyer_province,
+                  {buyer_postal_code_expr} AS buyer_postal_code,
+                  {buyer_birth_date_expr} AS buyer_birth_date,
+                  {order_created_fallback} AS sold_at
+                FROM orders o
+                WHERE {' AND '.join(where_orders)}
+                ORDER BY {order_created_fallback} DESC, o.id DESC
+                LIMIT 1000
+                """,
+                tuple(args_orders),
+            ).fetchall() or []
+
+            virtual_rows: list[dict[str, Any]] = []
+            for o in order_rows:
+                raw_items = o.get("items_json")
+                try:
+                    items = json.loads(raw_items) if isinstance(raw_items, str) else (raw_items or [])
+                except Exception:
+                    items = []
+                if isinstance(items, dict):
+                    items = [items]
+                if not isinstance(items, list):
+                    items = []
+                seq = 0
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    qty = int(it.get("qty") or it.get("quantity") or 1)
+                    sale_item = str(it.get("sale_item_id") or "")
+                    item_name = str(it.get("name") or it.get("title") or "Ticket")
+                    for _ in range(max(0, qty)):
+                        seq += 1
+                        virtual_rows.append({
+                            "ticket_id": f"virtual-{o.get('order_id')}-{seq}",
+                            "order_id": o.get("order_id"),
+                            "sale_item_id": sale_item,
+                            "status": "issued",
+                            "qr_token": "",
+                            "qr_payload": f"ORD:{o.get('order_id')}:{sale_item}:{seq}",
+                            "used_at": None,
+                            "item_name": item_name,
+                            "buyer_name": o.get("buyer_name"),
+                            "buyer_email": o.get("buyer_email"),
+                            "buyer_phone": o.get("buyer_phone"),
+                            "buyer_dni": o.get("buyer_dni"),
+                            "buyer_address": o.get("buyer_address"),
+                            "buyer_province": o.get("buyer_province"),
+                            "buyer_postal_code": o.get("buyer_postal_code"),
+                            "buyer_birth_date": o.get("buyer_birth_date"),
+                            "items_json": raw_items,
+                            "sold_at": o.get("sold_at"),
+                        })
+            rows = virtual_rows
+
     extract_buyer_fields = globals().get("_extract_buyer_fields_from_items_json")
     if not callable(extract_buyer_fields):
         def extract_buyer_fields(_: Any) -> dict[str, str]:

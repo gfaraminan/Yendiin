@@ -537,6 +537,50 @@ def _require_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="admin_only")
     return user
 
+
+def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        payload = None
+
+    targets = {
+        "buyer_name": ("buyer_name", "full_name", "name"),
+        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email"),
+        "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
+        "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
+        "buyer_address": ("buyer_address", "address"),
+        "buyer_province": ("buyer_province", "province"),
+        "buyer_postal_code": ("buyer_postal_code", "postal_code", "zip_code"),
+        "buyer_birth_date": ("buyer_birth_date", "birth_date", "date_of_birth"),
+    }
+    out = {k: "" for k in targets}
+
+    def _store(field: str, value: object):
+        if out[field]:
+            return
+        v = str(value or "").strip()
+        if v:
+            out[field] = v
+
+    def _walk(node: object):
+        if isinstance(node, dict):
+            buyer_node = node.get("buyer")
+            for field, keys in targets.items():
+                for key in keys:
+                    if key in node:
+                        _store(field, node.get(key))
+                    if isinstance(buyer_node, dict) and key in buyer_node:
+                        _store(field, buyer_node.get(key))
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(payload)
+    return out
+
 def _can_edit_event(tenant_id: str, event_slug: str, producer: str) -> bool:
     """True si el producer es dueño del evento.
 
@@ -1633,7 +1677,20 @@ def api_event_sold_tickets(
 
         buyer_dni_expr = f"COALESCE({', '.join(dni_candidates)}, '')" if dni_candidates else "''"
         buyer_phone_expr = f"COALESCE({', '.join(phone_candidates)}, '')" if phone_candidates else "''"
-        buyer_email_expr = "COALESCE(o.buyer_email, '')" if "buyer_email" in orders_cols else "''"
+        email_candidates = []
+        if "buyer_email" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.buyer_email), '')")
+        if "email" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.email), '')")
+        if "mail" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.mail), '')")
+        if "buyer_email" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.buyer_email), '')")
+        if "email" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.email), '')")
+        if "mail" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.mail), '')")
+        buyer_email_expr = f"COALESCE({', '.join(email_candidates)}, '')" if email_candidates else "''"
         buyer_name_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in orders_cols else "''"
         address_candidates = []
         if "buyer_address" in orders_cols:
@@ -1673,6 +1730,15 @@ def api_event_sold_tickets(
         buyer_province_expr = f"COALESCE({', '.join(province_candidates)}, '')" if province_candidates else "''"
         buyer_postal_code_expr = f"COALESCE({', '.join(postal_code_candidates)}, '')" if postal_code_candidates else "''"
         buyer_birth_date_expr = f"COALESCE({', '.join(birth_date_candidates)}, '')" if birth_date_candidates else "''"
+        # Keep fallback aliases defined to avoid runtime NameError/UnboundLocalError
+        buyer_name_orders_expr = buyer_name_expr
+        buyer_email_orders_expr = buyer_email_expr
+        buyer_phone_orders_expr = buyer_phone_expr
+        buyer_dni_orders_expr = buyer_dni_expr
+        buyer_address_orders_expr = buyer_address_expr
+        buyer_province_orders_expr = buyer_province_expr
+        buyer_postal_code_orders_expr = buyer_postal_code_expr
+        buyer_birth_date_orders_expr = buyer_birth_date_expr
         if "created_at" in orders_cols and "created_at" in tickets_cols:
             order_created_expr = "COALESCE(o.created_at, t.created_at)"
             order_by_expr = "COALESCE(o.created_at, t.created_at)"

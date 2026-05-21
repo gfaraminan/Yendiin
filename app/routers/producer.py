@@ -533,7 +533,7 @@ def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
 
     targets = {
         "buyer_name": ("buyer_name", "full_name", "name"),
-        "buyer_email": ("buyer_email", "email", "mail"),
+        "buyer_email": ("buyer_email", "email", "mail", "user_email", "account_email", "login_email"),
         "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
         "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
         "buyer_address": ("buyer_address", "address"),
@@ -1687,7 +1687,20 @@ def api_event_sold_tickets(
 
         buyer_dni_expr = f"COALESCE({', '.join(dni_candidates)}, '')" if dni_candidates else "''"
         buyer_phone_expr = f"COALESCE({', '.join(phone_candidates)}, '')" if phone_candidates else "''"
-        buyer_email_expr = "COALESCE(o.buyer_email, '')" if "buyer_email" in orders_cols else "''"
+        email_candidates = []
+        if "buyer_email" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.buyer_email), '')")
+        if "email" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.email), '')")
+        if "mail" in orders_cols:
+            email_candidates.append("NULLIF(TRIM(o.mail), '')")
+        if "buyer_email" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.buyer_email), '')")
+        if "email" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.email), '')")
+        if "mail" in tickets_cols:
+            email_candidates.append("NULLIF(TRIM(t.mail), '')")
+        buyer_email_expr = f"COALESCE({', '.join(email_candidates)}, '')" if email_candidates else "''"
         buyer_name_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in orders_cols else "''"
         address_candidates = []
         if "buyer_address" in orders_cols:

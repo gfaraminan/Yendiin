@@ -524,6 +524,50 @@ def _require_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="admin_only")
     return user
 
+
+def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
+    try:
+        payload = json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        payload = None
+
+    targets = {
+        "buyer_name": ("buyer_name", "full_name", "name"),
+        "buyer_email": ("buyer_email", "email", "mail"),
+        "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
+        "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
+        "buyer_address": ("buyer_address", "address"),
+        "buyer_province": ("buyer_province", "province"),
+        "buyer_postal_code": ("buyer_postal_code", "postal_code", "zip_code"),
+        "buyer_birth_date": ("buyer_birth_date", "birth_date", "date_of_birth"),
+    }
+    out = {k: "" for k in targets}
+
+    def _store(field: str, value: object):
+        if out[field]:
+            return
+        v = str(value or "").strip()
+        if v:
+            out[field] = v
+
+    def _walk(node: object):
+        if isinstance(node, dict):
+            buyer_node = node.get("buyer")
+            for field, keys in targets.items():
+                for key in keys:
+                    if key in node:
+                        _store(field, node.get(key))
+                    if isinstance(buyer_node, dict) and key in buyer_node:
+                        _store(field, buyer_node.get(key))
+            for v in node.values():
+                _walk(v)
+        elif isinstance(node, list):
+            for item in node:
+                _walk(item)
+
+    _walk(payload)
+    return out
+
 def _can_edit_event(tenant_id: str, event_slug: str, producer: str) -> bool:
     """True si el producer es dueño del evento.
 

@@ -84,4 +84,52 @@ def owner_summary(
         "active": bool(row.get("active") if isinstance(row, dict) else row[5]),
         "kpis": {"total": 0, "bar": 0, "tickets": 0, "avg": 0},
     }
+
+    with get_conn() as conn:
+        ord_cols = _table_columns(conn, "orders")
+        t_cols = _table_columns(conn, "tickets")
+
+        total_cents = 0
+        tickets = 0
+
+        if ord_cols:
+            total_col = "total_cents" if "total_cents" in ord_cols else ("amount_total_cents" if "amount_total_cents" in ord_cols else None)
+            paid_col = "paid" if "paid" in ord_cols else None
+            status_col = "status" if "status" in ord_cols else None
+            tenant_filter = " AND tenant_id = %s" if "tenant_id" in ord_cols and payload.get("tenant_id") else ""
+            params = [slug]
+            if "tenant_id" in ord_cols and payload.get("tenant_id"):
+                params.append(payload.get("tenant_id"))
+            paid_where = []
+            if paid_col:
+                paid_where.append("COALESCE(paid, false) = true")
+            if status_col:
+                paid_where.append("LOWER(COALESCE(status,'')) IN ('paid','approved','completed')")
+            paid_pred = "(" + " OR ".join(paid_where) + ")" if paid_where else "TRUE"
+            if total_col:
+                q = f"SELECT COALESCE(SUM({total_col}),0) AS total_cents FROM orders WHERE event_slug = %s{tenant_filter} AND {paid_pred}"
+                r = conn.execute(q, tuple(params)).fetchone()
+                if r:
+                    total_cents = int((r.get("total_cents") if isinstance(r, dict) else r[0]) or 0)
+
+        if t_cols:
+            where = ["event_slug = %s"]
+            params = [slug]
+            if "tenant_id" in t_cols and payload.get("tenant_id"):
+                where.append("tenant_id = %s")
+                params.append(payload.get("tenant_id"))
+            if "status" in t_cols:
+                where.append("LOWER(COALESCE(status,'')) NOT IN ('cancelled','refunded')")
+            q = f"SELECT COUNT(*) AS c FROM tickets WHERE {' AND '.join(where)}"
+            r = conn.execute(q, tuple(params)).fetchone()
+            if r:
+                tickets = int((r.get("c") if isinstance(r, dict) else r[0]) or 0)
+
+    payload["kpis"] = {
+        "total": round(total_cents / 100.0, 2),
+        "bar": 0,
+        "tickets": tickets,
+        "avg": round((total_cents / tickets) / 100.0, 2) if tickets > 0 else 0,
+    }
+
     return payload

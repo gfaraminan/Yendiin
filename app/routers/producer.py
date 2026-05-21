@@ -1712,14 +1712,14 @@ def api_event_sold_tickets(
               {qr_payload_expr} AS qr_payload,
               {used_at_expr} AS used_at,
               COALESCE(si.name, '') AS item_name,
-              {buyer_name_expr} AS buyer_name,
-              {buyer_email_expr} AS buyer_email,
-              {buyer_phone_expr} AS buyer_phone,
-              {buyer_dni_expr} AS buyer_dni,
-              {buyer_address_expr} AS buyer_address,
-              {buyer_province_expr} AS buyer_province,
-              {buyer_postal_code_expr} AS buyer_postal_code,
-              {buyer_birth_date_expr} AS buyer_birth_date,
+              {buyer_name_orders_expr} AS buyer_name,
+              {buyer_email_orders_expr} AS buyer_email,
+              {buyer_phone_orders_expr} AS buyer_phone,
+              {buyer_dni_orders_expr} AS buyer_dni,
+              {buyer_address_orders_expr} AS buyer_address,
+              {buyer_province_orders_expr} AS buyer_province,
+              {buyer_postal_code_orders_expr} AS buyer_postal_code,
+              {buyer_birth_date_orders_expr} AS buyer_birth_date,
               {items_json_expr} AS items_json,
               {order_created_expr} AS sold_at
             FROM tickets t
@@ -1748,19 +1748,27 @@ def api_event_sold_tickets(
                 args_orders.append(producer)
 
             order_created_fallback = "o.created_at" if "created_at" in orders_cols else "NULL::timestamp"
+            buyer_name_orders_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in orders_cols else "''"
+            buyer_email_orders_expr = "COALESCE(o.buyer_email, '')" if "buyer_email" in orders_cols else "''"
+            buyer_phone_orders_expr = "COALESCE(o.buyer_phone, '')" if "buyer_phone" in orders_cols else "''"
+            buyer_dni_orders_expr = "COALESCE(o.buyer_dni, '')" if "buyer_dni" in orders_cols else "''"
+            buyer_address_orders_expr = "COALESCE(o.buyer_address, '')" if "buyer_address" in orders_cols else "''"
+            buyer_province_orders_expr = "COALESCE(o.buyer_province, '')" if "buyer_province" in orders_cols else "''"
+            buyer_postal_code_orders_expr = "COALESCE(o.buyer_postal_code, '')" if "buyer_postal_code" in orders_cols else "''"
+            buyer_birth_date_orders_expr = "COALESCE(o.buyer_birth_date::text, '')" if "buyer_birth_date" in orders_cols else "''"
             order_rows = conn.execute(
                 f"""
                 SELECT
                   o.id::text AS order_id,
                   COALESCE(o.items_json, '[]') AS items_json,
-                  {buyer_name_expr} AS buyer_name,
-                  {buyer_email_expr} AS buyer_email,
-                  {buyer_phone_expr} AS buyer_phone,
-                  {buyer_dni_expr} AS buyer_dni,
-                  {buyer_address_expr} AS buyer_address,
-                  {buyer_province_expr} AS buyer_province,
-                  {buyer_postal_code_expr} AS buyer_postal_code,
-                  {buyer_birth_date_expr} AS buyer_birth_date,
+                  {buyer_name_orders_expr} AS buyer_name,
+                  {buyer_email_orders_expr} AS buyer_email,
+                  {buyer_phone_orders_expr} AS buyer_phone,
+                  {buyer_dni_orders_expr} AS buyer_dni,
+                  {buyer_address_orders_expr} AS buyer_address,
+                  {buyer_province_orders_expr} AS buyer_province,
+                  {buyer_postal_code_orders_expr} AS buyer_postal_code,
+                  {buyer_birth_date_orders_expr} AS buyer_birth_date,
                   {order_created_fallback} AS sold_at
                 FROM orders o
                 WHERE {' AND '.join(where_orders)}
@@ -2750,7 +2758,7 @@ def api_send_order_pdf(
         rows = conn.execute(
             f"""
             SELECT o.id::text AS order_id,
-                   {buyer_name_expr} AS buyer_name,
+                   {buyer_name_orders_expr} AS buyer_name,
                    {buyer_email_expr} AS buyer_email
             FROM orders o
             WHERE o.id::text=%s

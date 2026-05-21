@@ -1829,8 +1829,26 @@ def api_event_sold_tickets(
                 args_orders.append(producer)
 
             order_created_fallback = "o.created_at" if "created_at" in orders_cols else "NULL::timestamp"
-            buyer_name_orders_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in orders_cols else "''"
-            buyer_email_orders_expr = "COALESCE(o.buyer_email, '')" if "buyer_email" in orders_cols else "''"
+            buyer_name_orders_candidates = []
+            if "buyer_name" in orders_cols:
+                buyer_name_orders_candidates.append("NULLIF(TRIM(o.buyer_name), '')")
+            if "full_name" in orders_cols:
+                buyer_name_orders_candidates.append("NULLIF(TRIM(o.full_name), '')")
+            if "customer_name" in orders_cols:
+                buyer_name_orders_candidates.append("NULLIF(TRIM(o.customer_name), '')")
+            buyer_name_orders_expr = f"COALESCE({', '.join(buyer_name_orders_candidates)}, '')" if buyer_name_orders_candidates else "''"
+            buyer_email_orders_candidates = []
+            if "buyer_email" in orders_cols:
+                buyer_email_orders_candidates.append("NULLIF(TRIM(o.buyer_email), '')")
+            if "email" in orders_cols:
+                buyer_email_orders_candidates.append("NULLIF(TRIM(o.email), '')")
+            if "mail" in orders_cols:
+                buyer_email_orders_candidates.append("NULLIF(TRIM(o.mail), '')")
+            if "customer_label" in orders_cols:
+                buyer_email_orders_candidates.append("NULLIF(TRIM(o.customer_label), '')")
+            if "contact_email" in orders_cols:
+                buyer_email_orders_candidates.append("NULLIF(TRIM(o.contact_email), '')")
+            buyer_email_orders_expr = f"COALESCE({', '.join(buyer_email_orders_candidates)}, '')" if buyer_email_orders_candidates else "''"
             buyer_phone_orders_expr = "COALESCE(o.buyer_phone, '')" if "buyer_phone" in orders_cols else "''"
             buyer_dni_orders_expr = "COALESCE(o.buyer_dni, '')" if "buyer_dni" in orders_cols else "''"
             buyer_address_orders_expr = "COALESCE(o.buyer_address, '')" if "buyer_address" in orders_cols else "''"

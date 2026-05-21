@@ -1694,8 +1694,13 @@ def api_event_sold_tickets(
         if "id" not in sale_items_cols:
             sale_item_join = "LEFT JOIN sale_items si ON FALSE"
 
-        where_t, args_scope_t = _scope_where_for_tickets(conn, producer, tenant_id)
         used_at_expr = "t.used_at" if "used_at" in tickets_cols else "NULL::timestamp"
+        ticket_where = ["t.event_slug = %s", "COALESCE(t.status, '') NOT ILIKE 'revoked'"]
+        ticket_args: list[Any] = [event_slug]
+        if "tenant_id" in tickets_cols:
+            ticket_where.append("t.tenant_id = %s")
+            ticket_args.append(tenant_id)
+
         rows = conn.execute(
             f"""
             SELECT
@@ -1720,13 +1725,11 @@ def api_event_sold_tickets(
             FROM tickets t
             LEFT JOIN orders o ON o.id::text = t.order_id::text
             {sale_item_join}
-            WHERE {where_t}
-              AND t.event_slug = %s
-              AND COALESCE(t.status, '') NOT ILIKE 'revoked'
+            WHERE {' AND '.join(ticket_where)}
             ORDER BY {order_by_expr} DESC, t.id DESC
             LIMIT 5000
             """,
-            (*args_scope_t, event_slug),
+            tuple(ticket_args),
         ).fetchall() or []
 
     extract_buyer_fields = globals().get("_extract_buyer_fields_from_items_json")

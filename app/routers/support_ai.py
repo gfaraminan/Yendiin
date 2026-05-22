@@ -917,15 +917,24 @@ def support_ai_admin_transfer_event(payload: SupportAIAdminTransferEventIn, requ
     owner = _normalize_owner(payload.new_owner_tenant)
     tenant_id = (payload.tenant_id or "default").strip() or "default"
 
+    cols = _events_columns()
+    owner_targets = [c for c in ("tenant", "producer", "producer_id") if c in cols]
+    if not owner_targets:
+        raise HTTPException(status_code=500, detail="No hay columnas de owner configuradas en events")
+
+    set_fields = owner_targets
+    set_expr = ", ".join([f"{field}=%s" for field in set_fields])
+    set_values = [owner for _ in set_fields]
+
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             UPDATE events
-            SET tenant=%s, producer=%s
+            SET {set_expr}
             WHERE tenant_id=%s AND slug=%s
             """,
-            (owner, owner, tenant_id, payload.event_slug),
+            (*set_values, tenant_id, payload.event_slug),
         )
         updated = cur.rowcount
 

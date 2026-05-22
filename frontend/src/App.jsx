@@ -3784,11 +3784,12 @@ const refreshMe = async () => {
     if (!slug) return;
 
     const isAdminMode = !!opts?.adminMode || view === "supportAI";
+    const modalTenantId = String(ev?.tenant_id || tenantId || "").trim() || tenantId;
     setSoldTicketsSearch("");
     setSoldTicketsModal({ open: true, event: ev, rows: [], loading: true, error: "" });
     try {
       const url = isAdminMode
-        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&event_slug=${encodeURIComponent(slug)}`
+        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(modalTenantId)}&event_slug=${encodeURIComponent(slug)}`
         : `/api/producer/events/${encodeURIComponent(slug)}/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&format=json`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
@@ -4412,6 +4413,7 @@ setLoading(true);
       const copy = JSON.parse(JSON.stringify(ev));
       copy._is_new = false;
       if (!copy.slug) copy.slug = copy.event_slug || copy.eventSlug || "";
+      if (!copy.tenant_id && copy.tenant) copy.tenant_id = copy.tenant;
 
       if (!copy.start_date && typeof copy.date_text === "string") {
         const m = copy.date_text.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);
@@ -5105,8 +5107,9 @@ if (closeOnSuccess) {
       return;
     }
     const eventMeta = adminEventsBySlug.get(slug) || { slug, title: slug };
+    const normalizedMeta = { ...eventMeta, tenant_id: eventMeta?.tenant_id || "" };
     setAdminOpsError(null);
-    openEditor(eventMeta, initialTab);
+    openEditor(normalizedMeta, initialTab);
   };
 
   const requestDeleteEventAsProducer = async (eventSlug) => {

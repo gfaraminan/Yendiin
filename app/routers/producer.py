@@ -4585,8 +4585,10 @@ def api_list_sellers(
         try:
             _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
+            ev_cols = _table_columns(conn, "events")
         except Exception:
             cols = set()
+            ev_cols = set()
 
         if not cols:
             return {"ok": True, "sellers": []}
@@ -4613,6 +4615,20 @@ def api_list_sellers(
             where.append("es.tenant = %s")
             params.append(producer)
 
+        event_owner_predicates: list[str] = []
+        event_owner_params: list[Any] = []
+        if "tenant" in ev_cols:
+            event_owner_predicates.append("e.tenant = %s")
+            event_owner_params.append(producer)
+        if "producer" in ev_cols:
+            event_owner_predicates.append("e.producer = %s")
+            event_owner_params.append(producer)
+        if "producer_id" in ev_cols:
+            event_owner_predicates.append("e.producer_id = %s")
+            event_owner_params.append(producer)
+        if not event_owner_predicates:
+            event_owner_predicates.append("FALSE")
+
         query = f"""
             SELECT {", ".join(sel)}
               FROM event_sellers es
@@ -4620,13 +4636,13 @@ def api_list_sellers(
                 ON e.slug = es.event_slug
              WHERE e.tenant_id = %s
                AND e.slug = %s
-               AND (e.tenant = %s OR e.producer = %s)
+               AND ({' OR '.join(event_owner_predicates)})
                AND {" AND ".join(where)}
              ORDER BY es.id ASC
         """
 
         try:
-            rows = conn.execute(query, (tenant_id, event_slug, producer, producer, *params)).fetchall()
+            rows = conn.execute(query, (tenant_id, event_slug, *event_owner_params, *params)).fetchall()
         except pg_errors.UndefinedTable:
             return {"ok": True, "sellers": []}
 
@@ -4768,7 +4784,7 @@ def api_seller_update(
 
         if "updated_at" in cols:
             sets.append("updated_at = %s")
-            params.append(now_s)
+            params.append(now_v)
 
         if not sets:
             raise HTTPException(status_code=400, detail="no_updatable_columns")

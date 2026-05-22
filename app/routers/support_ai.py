@@ -1211,7 +1211,7 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
         if "id" in cols:
             cur.execute(
                 """
-                SELECT column_default
+                SELECT column_default, data_type
                 FROM information_schema.columns
                 WHERE table_schema = current_schema()
                   AND table_name = 'sale_items'
@@ -1221,10 +1221,16 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
             )
             id_col = cur.fetchone() or {}
             id_default = str(id_col.get("column_default") or "").strip().lower()
+            id_data_type = str(id_col.get("data_type") or "").strip().lower()
             if not id_default:
-                cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items")
-                next_id_row = cur.fetchone() or {}
-                next_id = int(next_id_row.get("next_id") or 1)
+                if id_data_type in {"integer", "bigint", "smallint", "numeric", "decimal"}:
+                    cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items")
+                    next_id_row = cur.fetchone() or {}
+                    next_id = int(next_id_row.get("next_id") or 1)
+                else:
+                    cur.execute("SELECT COALESCE(MAX((id)::bigint), 0) + 1 AS next_id FROM sale_items WHERE (id)::text ~ '^[0-9]+$'")
+                    next_id_row = cur.fetchone() or {}
+                    next_id = str(int(next_id_row.get("next_id") or 1))
                 use_cols = ["id", *use_cols]
                 values = [next_id, *values]
 

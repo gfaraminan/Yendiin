@@ -5069,10 +5069,6 @@ if (closeOnSuccess) {
   };
 
   const openAdminEventCreator = () => {
-    if (!adminOwnerEmailForEditor.trim()) {
-      setAdminOpsError("Ingresá un email/owner para asignar el evento antes de crearlo");
-      return;
-    }
     setAdminOpsError(null);
     openEditor(null, "info");
   };

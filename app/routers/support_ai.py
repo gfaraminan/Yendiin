@@ -260,6 +260,31 @@ def _users_columns() -> set[str]:
         return {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
 
 
+
+
+def _event_owner_select_sql() -> str:
+    """Arma SELECT compatible con esquemas que no tienen producer/producer_id."""
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='events'
+            """
+        )
+        rows = cur.fetchall() or []
+    ecols = {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
+
+    select_cols: list[str] = []
+    for col in ("tenant", "producer", "producer_id"):
+        if col in ecols:
+            select_cols.append(col)
+    if not select_cols:
+        select_cols.append("''::text AS tenant")
+    return ", ".join(select_cols)
+
+
 def _event_owner_from_row(event_row: dict | None) -> str:
     """Resuelve el owner/productor de un evento de forma compatible con esquemas legacy."""
     if not isinstance(event_row, dict):
@@ -1089,8 +1114,8 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT tenant, producer, producer_id
+            f"""
+            SELECT {_event_owner_select_sql()}
             FROM events
             WHERE tenant_id=%s AND slug=%s
             LIMIT 1
@@ -1133,8 +1158,8 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT tenant, producer, producer_id
+            f"""
+            SELECT {_event_owner_select_sql()}
             FROM events
             WHERE tenant_id=%s AND slug=%s
             LIMIT 1
@@ -1179,8 +1204,8 @@ def support_ai_admin_toggle_sale_item(payload: SupportAIAdminSaleItemToggleIn, r
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT tenant, producer, producer_id
+            f"""
+            SELECT {_event_owner_select_sql()}
             FROM events
             WHERE tenant_id=%s AND slug=%s
             LIMIT 1
@@ -1235,8 +1260,8 @@ def support_ai_admin_update_sale_item(
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT tenant, producer, producer_id
+            f"""
+            SELECT {_event_owner_select_sql()}
             FROM events
             WHERE tenant_id=%s AND slug=%s
             LIMIT 1
@@ -1298,8 +1323,8 @@ def support_ai_admin_delete_sale_item(sale_item_id: int, request: Request, tenan
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
-            SELECT tenant, producer, producer_id
+            f"""
+            SELECT {_event_owner_select_sql()}
             FROM events
             WHERE tenant_id=%s AND slug=%s
             LIMIT 1

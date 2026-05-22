@@ -1193,6 +1193,27 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
         }
         use_cols = [c for c in data.keys() if c in cols and data.get(c) is not None]
         values = [data[c] for c in use_cols]
+
+        if "id" in cols:
+            cur.execute(
+                """
+                SELECT column_default
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'sale_items'
+                  AND column_name = 'id'
+                LIMIT 1
+                """
+            )
+            id_col = cur.fetchone() or {}
+            id_default = str(id_col.get("column_default") or "").strip().lower()
+            if not id_default:
+                cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items")
+                next_id_row = cur.fetchone() or {}
+                next_id = int(next_id_row.get("next_id") or 1)
+                use_cols = ["id", *use_cols]
+                values = [next_id, *values]
+
         placeholders = ", ".join(["%s"] * len(use_cols))
         cur.execute(
             f"INSERT INTO sale_items ({', '.join(use_cols)}) VALUES ({placeholders}) RETURNING id",

@@ -110,11 +110,27 @@ def _ensure_sale_items_schema(conn) -> None:
 
 
 def _ensure_sellers_schema(conn) -> None:
-    """No-op: no creamos tablas desde la app.
-
-    Sellers para Entradas se resuelve sobre `event_sellers` (si existe) o devolviendo lista vacía.
-    """
-    return
+    """Asegura una tabla mínima de event_sellers para flujos admin/producer legacy."""
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_sellers (
+                id BIGSERIAL PRIMARY KEY,
+                tenant TEXT,
+                event_slug TEXT NOT NULL,
+                name TEXT,
+                pin TEXT,
+                code TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+            """
+        )
+        conn.commit()
+        _invalidate_table_columns_cache("event_sellers")
+    except Exception:
+        return
 
 
 def _client_ip_from_request(request: Request) -> Optional[str]:
@@ -4559,6 +4575,7 @@ def api_list_sellers(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4639,6 +4656,7 @@ def api_seller_create(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4718,6 +4736,7 @@ def api_seller_update(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4780,6 +4799,7 @@ def api_seller_delete(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()

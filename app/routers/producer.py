@@ -110,11 +110,27 @@ def _ensure_sale_items_schema(conn) -> None:
 
 
 def _ensure_sellers_schema(conn) -> None:
-    """No-op: no creamos tablas desde la app.
-
-    Sellers para Entradas se resuelve sobre `event_sellers` (si existe) o devolviendo lista vacía.
-    """
-    return
+    """Asegura una tabla mínima de event_sellers para flujos admin/producer legacy."""
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS event_sellers (
+                id BIGSERIAL PRIMARY KEY,
+                tenant TEXT,
+                event_slug TEXT NOT NULL,
+                name TEXT,
+                pin TEXT,
+                code TEXT,
+                active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            )
+            """
+        )
+        conn.commit()
+        _invalidate_table_columns_cache("event_sellers")
+    except Exception:
+        return
 
 
 def _client_ip_from_request(request: Request) -> Optional[str]:
@@ -523,6 +539,14 @@ def _require_admin_user(request: Request) -> dict:
     if not email or email not in _staff_emails():
         raise HTTPException(status_code=403, detail="admin_only")
     return user
+
+
+def _is_admin_user(request: Request) -> bool:
+    user = (request.session or {}).get("user") if hasattr(request, "session") else None
+    if not isinstance(user, dict):
+        return False
+    email = str(user.get("email") or "").strip().lower()
+    return bool(email and email in _staff_emails())
 
 
 def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
@@ -4029,7 +4053,7 @@ def api_sale_items(
       - stock: disponible (stock_total - stock_sold)
     """
     producer = user.get("producer")
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
@@ -4132,7 +4156,7 @@ def api_sale_item_create(
     if not event_slug:
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     name = (payload.name or "").strip()
@@ -4284,7 +4308,7 @@ def api_sale_item_update(
     if not event_slug:
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     name = (payload.name or "").strip()
@@ -4380,7 +4404,7 @@ def api_sale_items_set_test_price(
     if not event_slug:
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     price_cents = int(round(float(payload.price) * 100))
@@ -4440,7 +4464,7 @@ def api_sale_item_delete(
     user: dict = Depends(_require_auth),
 ):
     producer = user.get("producer")
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
@@ -4476,7 +4500,7 @@ def api_create_staff_link(
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
     tenant_id = ((payload.tenant_id or tenant_id or "default")).strip() or "default"
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     scope = (payload.scope or "all").strip().lower()
@@ -4554,11 +4578,12 @@ def api_list_sellers(
     Si no existe, devolvemos lista vacía (sin 500) para no romper el panel.
     """
     producer = user.get("producer")
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4624,7 +4649,7 @@ def api_seller_create(
     if not event_slug:
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     name = (payload.name or "").strip()
@@ -4639,6 +4664,7 @@ def api_seller_create(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4677,7 +4703,7 @@ def api_seller_create(
         if "created_at" in cols:
             fields.append("created_at")
             values.append("%s")
-            params.append(now_s)
+            params.append(now_v)
 
         q = f"INSERT INTO event_sellers ({', '.join(fields)}) VALUES ({', '.join(values)}) RETURNING id"
         try:
@@ -4704,7 +4730,7 @@ def api_seller_update(
     if not event_slug:
         raise HTTPException(status_code=400, detail="missing_event_slug")
 
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     name = (payload.name or "").strip()
@@ -4718,6 +4744,7 @@ def api_seller_update(
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()
@@ -4775,11 +4802,12 @@ def api_seller_delete(
     user: dict = Depends(_require_auth),
 ):
     producer = user.get("producer")
-    if not _can_edit_event(tenant_id, event_slug, producer):
+    if not _can_edit_event(tenant_id, event_slug, producer) and not _is_admin_user(request):
         raise HTTPException(status_code=403, detail="forbidden_event")
 
     with get_conn() as conn:
         try:
+            _ensure_sellers_schema(conn)
             cols = _pg_columns(conn, "event_sellers")
         except Exception:
             cols = set()

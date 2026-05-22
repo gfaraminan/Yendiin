@@ -4486,9 +4486,11 @@ setLoading(true);
 
       // En Administrador, usamos endpoints admin para crear/actualizar sin depender del owner del staff.
       if (view === "supportAI" && editFormData?._is_new) {
-        const ownerEmail = String(adminOwnerEmailForEditor || "").trim();
+        const explicitOwner = String(adminOwnerEmailForEditor || "").trim();
+        const fallbackAdminOwner = String(me?.email || "").trim() || String(tenantId || "").trim();
+        const ownerEmail = explicitOwner || fallbackAdminOwner;
         if (!ownerEmail) {
-          alert("Antes de guardar, indicá email/owner para asignar el evento.");
+          alert("No se pudo resolver owner del evento. Completá email/owner o volvé a iniciar sesión admin.");
           return;
         }
 
@@ -4514,12 +4516,35 @@ setLoading(true);
 
         await refreshPublicEvents();
         await loadAdminSupportData();
-        setTransferForm((prev) => ({ ...prev, event_slug: String(adminData?.slug || "") }));
-        alert(`Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.`);
+        const createdSlug = String(adminData?.slug || "");
+        setTransferForm((prev) => ({ ...prev, event_slug: createdSlug }));
+
+        try {
+          const pendingFile = flyerPendingRef?.current || null;
+          if (pendingFile && createdSlug) {
+            const urlFlyer = await uploadFlyerForEvent(createdSlug, pendingFile);
+            flyerPendingRef.current = null;
+            await fetch("/api/support/ai/admin/events/update", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                tenant_id: tenantId,
+                event_slug: createdSlug,
+                flyer_url: urlFlyer,
+              }),
+            });
+          }
+        } catch (e) {
+          console.error(e);
+          alert("Evento creado, pero falló la subida del flyer: " + (e?.message || e));
+        }
+
+        alert(explicitOwner ? `Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.` : `Evento creado a nombre del admin (${ownerEmail}). Luego podés transferirlo al productor desde este panel.`);
         setEditFormData((prev) => ({
           ...(prev || {}),
           _is_new: false,
-          slug: String(adminData?.slug || prev?.slug || ""),
+          slug: String(createdSlug || prev?.slug || ""),
         }));
         setActiveTab("tickets");
         return true;
@@ -5069,10 +5094,6 @@ if (closeOnSuccess) {
   };
 
   const openAdminEventCreator = () => {
-    if (!adminOwnerEmailForEditor.trim()) {
-      setAdminOpsError("Ingresá un email/owner para asignar el evento antes de crearlo");
-      return;
-    }
     setAdminOpsError(null);
     openEditor(null, "info");
   };

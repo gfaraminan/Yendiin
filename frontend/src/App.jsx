@@ -3784,7 +3784,7 @@ const refreshMe = async () => {
     if (!slug) return;
 
     const isAdminMode = !!opts?.adminMode || view === "supportAI";
-    const modalTenantId = String(ev?.tenant_id || ev?.tenant || tenantId || "").trim() || tenantId;
+    const modalTenantId = String(ev?.tenant_id || tenantId || "").trim() || tenantId;
     setSoldTicketsSearch("");
     setSoldTicketsModal({ open: true, event: ev, rows: [], loading: true, error: "" });
     try {
@@ -5084,7 +5084,7 @@ if (closeOnSuccess) {
       return;
     }
     const eventMeta = adminEventsBySlug.get(slug) || { slug, title: slug };
-    const normalizedMeta = { ...eventMeta, tenant_id: eventMeta?.tenant_id || eventMeta?.tenant || "" };
+    const normalizedMeta = { ...eventMeta, tenant_id: eventMeta?.tenant_id || "" };
     setAdminOpsError(null);
     openEditor(normalizedMeta, initialTab);
   };

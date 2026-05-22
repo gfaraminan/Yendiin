@@ -260,6 +260,65 @@ def _users_columns() -> set[str]:
         return {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
 
 
+
+
+def _event_owner_select_sql() -> str:
+    """Arma SELECT compatible con esquemas que no tienen producer/producer_id."""
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='events'
+            """
+        )
+        rows = cur.fetchall() or []
+    ecols = {str((r or {}).get("column_name") or "") for r in rows if (r or {}).get("column_name")}
+
+    select_cols: list[str] = []
+    for col in ("tenant", "producer", "producer_id"):
+        if col in ecols:
+            select_cols.append(col)
+    if not select_cols:
+        select_cols.append("''::text AS tenant")
+    return ", ".join(select_cols)
+
+
+
+
+def _fetch_event_owner(cur, tenant_id: str, event_slug: str) -> str:
+    """Busca owner por tenant+slug y fallback por slug (compat multi-tenant legacy)."""
+    owner_select = _event_owner_select_sql()
+
+    cur.execute(
+        f"""
+        SELECT {owner_select}
+        FROM events
+        WHERE tenant_id=%s AND slug=%s
+        LIMIT 1
+        """,
+        (tenant_id, event_slug),
+    )
+    event = cur.fetchone() or {}
+    owner = _event_owner_from_row(event)
+    if owner:
+        return owner
+
+    cur.execute(
+        f"""
+        SELECT {owner_select}
+        FROM events
+        WHERE slug=%s
+        ORDER BY CASE WHEN COALESCE(tenant_id, '')=%s THEN 0 ELSE 1 END, updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        LIMIT 1
+        """,
+        (event_slug, tenant_id),
+    )
+    event = cur.fetchone() or {}
+    return _event_owner_from_row(event)
+
+
 def _event_owner_from_row(event_row: dict | None) -> str:
     """Resuelve el owner/productor de un evento de forma compatible con esquemas legacy."""
     if not isinstance(event_row, dict):
@@ -917,15 +976,24 @@ def support_ai_admin_transfer_event(payload: SupportAIAdminTransferEventIn, requ
     owner = _normalize_owner(payload.new_owner_tenant)
     tenant_id = (payload.tenant_id or "default").strip() or "default"
 
+    cols = _events_columns()
+    owner_targets = [c for c in ("tenant", "producer", "producer_id") if c in cols]
+    if not owner_targets:
+        raise HTTPException(status_code=500, detail="No hay columnas de owner configuradas en events")
+
+    set_fields = owner_targets
+    set_expr = ", ".join([f"{field}=%s" for field in set_fields])
+    set_values = [owner for _ in set_fields]
+
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             UPDATE events
-            SET tenant=%s, producer=%s
+            SET {set_expr}
             WHERE tenant_id=%s AND slug=%s
             """,
-            (owner, owner, tenant_id, payload.event_slug),
+            (*set_values, tenant_id, payload.event_slug),
         )
         updated = cur.rowcount
 
@@ -1088,17 +1156,7 @@ def support_ai_admin_list_sale_items(request: Request, tenant_id: str = "default
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
-        owner = _event_owner_from_row(event)
+        owner = _fetch_event_owner(cur, tenant_id, event_slug)
         if not owner:
             return {"ok": True, "items": []}
 
@@ -1132,17 +1190,7 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
     cols = _sale_items_columns()
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
-        owner = _event_owner_from_row(event)
+        owner = _fetch_event_owner(cur, tenant_id, payload.event_slug)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
@@ -1205,17 +1253,7 @@ def support_ai_admin_toggle_sale_item(payload: SupportAIAdminSaleItemToggleIn, r
     tenant_id = (payload.tenant_id or "default").strip() or "default"
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, payload.event_slug),
-        )
-        event = cur.fetchone() or {}
-        owner = _event_owner_from_row(event)
+        owner = _fetch_event_owner(cur, tenant_id, payload.event_slug)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
@@ -1261,17 +1299,7 @@ def support_ai_admin_update_sale_item(
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (owner_tenant, owner_event_slug),
-        )
-        event = cur.fetchone() or {}
-        owner = _event_owner_from_row(event)
+        owner = _fetch_event_owner(cur, owner_tenant, owner_event_slug)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 
@@ -1324,17 +1352,7 @@ def support_ai_admin_delete_sale_item(sale_item_id: int, request: Request, tenan
 
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT tenant, producer, producer_id
-            FROM events
-            WHERE tenant_id=%s AND slug=%s
-            LIMIT 1
-            """,
-            (tenant_id, event_slug),
-        )
-        event = cur.fetchone() or {}
-        owner = _event_owner_from_row(event)
+        owner = _fetch_event_owner(cur, tenant_id, event_slug)
         if not owner:
             raise HTTPException(status_code=404, detail="Evento no encontrado")
 

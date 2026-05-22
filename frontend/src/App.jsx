@@ -4488,9 +4488,11 @@ setLoading(true);
 
       // En Administrador, usamos endpoints admin para crear/actualizar sin depender del owner del staff.
       if (view === "supportAI" && editFormData?._is_new) {
-        const ownerEmail = String(adminOwnerEmailForEditor || "").trim();
+        const explicitOwner = String(adminOwnerEmailForEditor || "").trim();
+        const fallbackAdminOwner = String(me?.email || "").trim() || String(tenantId || "").trim();
+        const ownerEmail = explicitOwner || fallbackAdminOwner;
         if (!ownerEmail) {
-          alert("Antes de guardar, indicá email/owner para asignar el evento.");
+          alert("No se pudo resolver owner del evento. Completá email/owner o volvé a iniciar sesión admin.");
           return;
         }
 
@@ -4517,7 +4519,7 @@ setLoading(true);
         await refreshPublicEvents();
         await loadAdminSupportData();
         setTransferForm((prev) => ({ ...prev, event_slug: String(adminData?.slug || "") }));
-        alert(`Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.`);
+        alert(explicitOwner ? `Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.` : `Evento creado a nombre del admin (${ownerEmail}). Luego podés transferirlo al productor desde este panel.`);
         setEditFormData((prev) => ({
           ...(prev || {}),
           _is_new: false,

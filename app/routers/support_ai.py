@@ -943,12 +943,11 @@ def support_ai_admin_transfer_event(payload: SupportAIAdminTransferEventIn, requ
     tenant_id = (payload.tenant_id or "default").strip() or "default"
 
     cols = _events_columns()
-    tenant_targets = [c for c in ("tenant", "tenant_id") if c in cols]
-    owner_targets = [c for c in ("producer", "producer_id") if c in cols]
-    if not tenant_targets and not owner_targets:
-        raise HTTPException(status_code=500, detail="No hay columnas de owner/tenant configuradas en events")
+    owner_targets = [c for c in ("tenant", "producer", "producer_id") if c in cols]
+    if not owner_targets:
+        raise HTTPException(status_code=500, detail="No hay columnas de owner configuradas en events")
 
-    set_fields = [*tenant_targets, *owner_targets]
+    set_fields = owner_targets
     set_expr = ", ".join([f"{field}=%s" for field in set_fields])
     set_values = [owner for _ in set_fields]
 

@@ -3784,11 +3784,12 @@ const refreshMe = async () => {
     if (!slug) return;
 
     const isAdminMode = !!opts?.adminMode || view === "supportAI";
+    const modalTenantId = String(ev?.tenant_id || ev?.tenant || tenantId || "").trim() || tenantId;
     setSoldTicketsSearch("");
     setSoldTicketsModal({ open: true, event: ev, rows: [], loading: true, error: "" });
     try {
       const url = isAdminMode
-        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&event_slug=${encodeURIComponent(slug)}`
+        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(modalTenantId)}&event_slug=${encodeURIComponent(slug)}`
         : `/api/producer/events/${encodeURIComponent(slug)}/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&format=json`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
@@ -4412,6 +4413,7 @@ setLoading(true);
       const copy = JSON.parse(JSON.stringify(ev));
       copy._is_new = false;
       if (!copy.slug) copy.slug = copy.event_slug || copy.eventSlug || "";
+      if (!copy.tenant_id && copy.tenant) copy.tenant_id = copy.tenant;
 
       if (!copy.start_date && typeof copy.date_text === "string") {
         const m = copy.date_text.match(/^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);
@@ -4486,9 +4488,11 @@ setLoading(true);
 
       // En Administrador, usamos endpoints admin para crear/actualizar sin depender del owner del staff.
       if (view === "supportAI" && editFormData?._is_new) {
-        const ownerEmail = String(adminOwnerEmailForEditor || "").trim();
+        const explicitOwner = String(adminOwnerEmailForEditor || "").trim();
+        const fallbackAdminOwner = String(me?.email || "").trim() || String(tenantId || "").trim();
+        const ownerEmail = explicitOwner || fallbackAdminOwner;
         if (!ownerEmail) {
-          alert("Antes de guardar, indicá email/owner para asignar el evento.");
+          alert("No se pudo resolver owner del evento. Completá email/owner o volvé a iniciar sesión admin.");
           return;
         }
 
@@ -4515,7 +4519,7 @@ setLoading(true);
         await refreshPublicEvents();
         await loadAdminSupportData();
         setTransferForm((prev) => ({ ...prev, event_slug: String(adminData?.slug || "") }));
-        alert(`Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.`);
+        alert(explicitOwner ? `Evento creado y asignado a ${ownerEmail}. Ahora podés cargar sale items en la pestaña Tickets del modal.` : `Evento creado a nombre del admin (${ownerEmail}). Luego podés transferirlo al productor desde este panel.`);
         setEditFormData((prev) => ({
           ...(prev || {}),
           _is_new: false,
@@ -5069,10 +5073,6 @@ if (closeOnSuccess) {
   };
 
   const openAdminEventCreator = () => {
-    if (!adminOwnerEmailForEditor.trim()) {
-      setAdminOpsError("Ingresá un email/owner para asignar el evento antes de crearlo");
-      return;
-    }
     setAdminOpsError(null);
     openEditor(null, "info");
   };
@@ -5084,8 +5084,9 @@ if (closeOnSuccess) {
       return;
     }
     const eventMeta = adminEventsBySlug.get(slug) || { slug, title: slug };
+    const normalizedMeta = { ...eventMeta, tenant_id: eventMeta?.tenant_id || eventMeta?.tenant || "" };
     setAdminOpsError(null);
-    openEditor(eventMeta, initialTab);
+    openEditor(normalizedMeta, initialTab);
   };
 
   const requestDeleteEventAsProducer = async (eventSlug) => {

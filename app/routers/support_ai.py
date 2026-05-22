@@ -976,15 +976,24 @@ def support_ai_admin_transfer_event(payload: SupportAIAdminTransferEventIn, requ
     owner = _normalize_owner(payload.new_owner_tenant)
     tenant_id = (payload.tenant_id or "default").strip() or "default"
 
+    cols = _events_columns()
+    owner_targets = [c for c in ("tenant", "producer", "producer_id") if c in cols]
+    if not owner_targets:
+        raise HTTPException(status_code=500, detail="No hay columnas de owner configuradas en events")
+
+    set_fields = owner_targets
+    set_expr = ", ".join([f"{field}=%s" for field in set_fields])
+    set_values = [owner for _ in set_fields]
+
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             UPDATE events
-            SET tenant=%s, producer=%s
+            SET {set_expr}
             WHERE tenant_id=%s AND slug=%s
             """,
-            (owner, owner, tenant_id, payload.event_slug),
+            (*set_values, tenant_id, payload.event_slug),
         )
         updated = cur.rowcount
 
@@ -1198,6 +1207,27 @@ def support_ai_admin_create_sale_item(payload: SupportAIAdminSaleItemCreateIn, r
         }
         use_cols = [c for c in data.keys() if c in cols and data.get(c) is not None]
         values = [data[c] for c in use_cols]
+
+        if "id" in cols:
+            cur.execute(
+                """
+                SELECT column_default
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'sale_items'
+                  AND column_name = 'id'
+                LIMIT 1
+                """
+            )
+            id_col = cur.fetchone() or {}
+            id_default = str(id_col.get("column_default") or "").strip().lower()
+            if not id_default:
+                cur.execute("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM sale_items")
+                next_id_row = cur.fetchone() or {}
+                next_id = int(next_id_row.get("next_id") or 1)
+                use_cols = ["id", *use_cols]
+                values = [next_id, *values]
+
         placeholders = ", ".join(["%s"] * len(use_cols))
         cur.execute(
             f"INSERT INTO sale_items ({', '.join(use_cols)}) VALUES ({placeholders}) RETURNING id",

@@ -1585,8 +1585,7 @@ def support_ai_admin_sold_tickets(request: Request, tenant_id: str = "default", 
         if users_join and "tenant_id" in users_cols:
             params.append(tenant_id)
         params.extend([tenant_id, event_slug, limit])
-        cur.execute(
-            f"""
+        base_sql = f"""
             SELECT
               t.id::text AS ticket_id,
               COALESCE(t.order_id::text, '') AS order_id,
@@ -1608,15 +1607,22 @@ def support_ai_admin_sold_tickets(request: Request, tenant_id: str = "default", 
             FROM tickets t
             LEFT JOIN orders o ON o.id::text = t.order_id::text
             {users_join}
-            WHERE t.tenant_id=%s
-              AND t.event_slug=%s
+            WHERE {{where_clause}}
               AND COALESCE(t.status, '') NOT ILIKE 'revoked'
             ORDER BY {sold_at_expr} DESC NULLS LAST, t.id DESC
             LIMIT %s
-            """,
-            tuple(params),
-        )
+            """
+
+        cur.execute(base_sql.format(where_clause='t.tenant_id=%s AND t.event_slug=%s'), tuple(params))
         rows = cur.fetchall() or []
+
+        if not rows:
+            fallback_params: list = []
+            if users_join and "tenant_id" in users_cols:
+                fallback_params.append(tenant_id)
+            fallback_params.extend([event_slug, limit])
+            cur.execute(base_sql.format(where_clause='t.event_slug=%s'), tuple(fallback_params))
+            rows = cur.fetchall() or []
 
     tickets = []
     for r in rows:

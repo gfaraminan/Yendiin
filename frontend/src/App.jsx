@@ -3784,11 +3784,12 @@ const refreshMe = async () => {
     if (!slug) return;
 
     const isAdminMode = !!opts?.adminMode || view === "supportAI";
+    const modalTenantId = String(ev?.tenant_id || tenantId || "").trim() || tenantId;
     setSoldTicketsSearch("");
     setSoldTicketsModal({ open: true, event: ev, rows: [], loading: true, error: "" });
     try {
       const url = isAdminMode
-        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&event_slug=${encodeURIComponent(slug)}`
+        ? `/api/support/ai/admin/sold-tickets?tenant_id=${encodeURIComponent(modalTenantId)}&event_slug=${encodeURIComponent(slug)}`
         : `/api/producer/events/${encodeURIComponent(slug)}/sold-tickets?tenant_id=${encodeURIComponent(tenantId)}&format=json`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) {
@@ -5084,8 +5085,9 @@ if (closeOnSuccess) {
       return;
     }
     const eventMeta = adminEventsBySlug.get(slug) || { slug, title: slug };
+    const normalizedMeta = { ...eventMeta, tenant_id: eventMeta?.tenant_id || "" };
     setAdminOpsError(null);
-    openEditor(eventMeta, initialTab);
+    openEditor(normalizedMeta, initialTab);
   };
 
   const requestDeleteEventAsProducer = async (eventSlug) => {

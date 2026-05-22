@@ -677,6 +677,7 @@ def support_ai_admin_events(request: Request, tenant_id: str = "default"):
     select_fields = [
         "e.slug",
         "e.title",
+        "e.tenant_id",
         "e.tenant",
         "e.active",
     ]

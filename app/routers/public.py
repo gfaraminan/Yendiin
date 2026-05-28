@@ -180,6 +180,9 @@ def public_config():
         "name": brand.name,
         "support_email": brand.support_email,
         "legal_name": brand.legal_name,
+        "whatsapp": (os.getenv("VITE_BRAND_WHATSAPP") or "5492615260461").strip() or "5492615260461",
+        "instagramUrl": (os.getenv("VITE_BRAND_INSTAGRAM_URL") or "https://www.instagram.com/yendiin.tickets?igsh=ZG0zdTJqYnN2N2hj").strip() or "https://www.instagram.com/yendiin.tickets?igsh=ZG0zdTJqYnN2N2hj",
+        "footerLegalName": (os.getenv("VITE_BRAND_FOOTER_LEGAL_NAME") or brand.legal_name).strip() or brand.legal_name,
     }
     legal = {
         "termsUrl": (os.getenv("VITE_LEGAL_TERMS_URL") or "/static/legal/terminos-y-condiciones.pdf").strip() or "/static/legal/terminos-y-condiciones.pdf",

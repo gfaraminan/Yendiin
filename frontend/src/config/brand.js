@@ -14,11 +14,11 @@ const envBrandConfig = {
   supportEmail: trimOr(env.VITE_BRAND_SUPPORT_EMAIL, "soporte@yendiin.com"),
   salesEmail: trimOr(env.VITE_BRAND_SALES_EMAIL, "ventas@yendiin.com"),
   infoEmail: trimOr(env.VITE_BRAND_INFO_EMAIL, "info@yendiin.com"),
-  whatsapp: trimOr(env.VITE_BRAND_WHATSAPP, "5492614167597"),
-  instagramUrl: trimOr(env.VITE_BRAND_INSTAGRAM_URL, "#instagram"),
+  whatsapp: trimOr(env.VITE_BRAND_WHATSAPP, "5492615260461"),
+  instagramUrl: trimOr(env.VITE_BRAND_INSTAGRAM_URL, "https://www.instagram.com/yendiin.tickets?igsh=ZG0zdTJqYnN2N2hj"),
   tiktokUrl: trimOr(env.VITE_BRAND_TIKTOK_URL, "#tiktok"),
   xUrl: trimOr(env.VITE_BRAND_X_URL, "#x"),
-  footerLegalName: trimOr(env.VITE_BRAND_FOOTER_LEGAL_NAME, "The Brain Lab SAS"),
+  footerLegalName: trimOr(env.VITE_BRAND_FOOTER_LEGAL_NAME, "Event InDaHouse SAS"),
   footerCopyright: trimOr(env.VITE_BRAND_COPYRIGHT, "Todos los derechos reservados"),
   producerPanelLabel: trimOr(env.VITE_BRAND_PRODUCER_PANEL_LABEL, "Productor"),
   adminPanelLabel: trimOr(env.VITE_BRAND_ADMIN_PANEL_LABEL, "Administrador"),
@@ -30,10 +30,24 @@ const readWindowConfig = () => {
   return cfg && typeof cfg === "object" ? cfg : {};
 };
 
+const normalizeBrandOverrides = (config = {}) => ({
+  ...config,
+  supportEmail: config.supportEmail ?? config.support_email,
+  salesEmail: config.salesEmail ?? config.sales_email,
+  infoEmail: config.infoEmail ?? config.info_email,
+  instagramUrl: config.instagramUrl ?? config.instagram_url,
+  tiktokUrl: config.tiktokUrl ?? config.tiktok_url,
+  xUrl: config.xUrl ?? config.x_url,
+  footerLegalName: config.footerLegalName ?? config.legal_name ?? config.footer_legal_name,
+  footerCopyright: config.footerCopyright ?? config.footer_copyright,
+  producerPanelLabel: config.producerPanelLabel ?? config.producer_panel_label,
+  adminPanelLabel: config.adminPanelLabel ?? config.admin_panel_label,
+});
+
 export const resolveBrandConfig = (runtimeConfig = null) => {
   const windowCfg = readWindowConfig();
-  const fromRuntime = runtimeConfig?.branding || runtimeConfig?.brand || {};
-  const fromWindow = windowCfg.branding || windowCfg.brand || {};
+  const fromRuntime = normalizeBrandOverrides(runtimeConfig?.branding || runtimeConfig?.brand || {});
+  const fromWindow = normalizeBrandOverrides(windowCfg.branding || windowCfg.brand || {});
 
   return {
     ...envBrandConfig,
@@ -42,6 +56,12 @@ export const resolveBrandConfig = (runtimeConfig = null) => {
     name: trimOr(fromRuntime.name ?? fromWindow.name ?? runtimeConfig?.brand_name, envBrandConfig.name),
     shortName: trimOr(fromRuntime.shortName ?? fromWindow.shortName, envBrandConfig.shortName),
     headerLabel: trimOr(fromRuntime.headerLabel ?? fromWindow.headerLabel, envBrandConfig.headerLabel),
+    supportEmail: trimOr(fromRuntime.supportEmail ?? fromWindow.supportEmail, envBrandConfig.supportEmail),
+    salesEmail: trimOr(fromRuntime.salesEmail ?? fromWindow.salesEmail, envBrandConfig.salesEmail),
+    infoEmail: trimOr(fromRuntime.infoEmail ?? fromWindow.infoEmail, envBrandConfig.infoEmail),
+    whatsapp: trimOr(fromRuntime.whatsapp ?? fromWindow.whatsapp, envBrandConfig.whatsapp),
+    instagramUrl: trimOr(fromRuntime.instagramUrl ?? fromWindow.instagramUrl, envBrandConfig.instagramUrl),
+    footerLegalName: trimOr(fromRuntime.footerLegalName ?? fromWindow.footerLegalName, envBrandConfig.footerLegalName),
   };
 };
 

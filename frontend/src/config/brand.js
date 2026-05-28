@@ -20,8 +20,8 @@ const envBrandConfig = {
   xUrl: trimOr(env.VITE_BRAND_X_URL, "#x"),
   footerLegalName: trimOr(env.VITE_BRAND_FOOTER_LEGAL_NAME, "Event InDaHouse SAS"),
   footerCopyright: trimOr(env.VITE_BRAND_COPYRIGHT, "Todos los derechos reservados"),
-  producerPanelLabel: trimOr(env.VITE_BRAND_PRODUCER_PANEL_LABEL, "Productor"),
-  adminPanelLabel: trimOr(env.VITE_BRAND_ADMIN_PANEL_LABEL, "Administrador"),
+  producerPanelLabel: trimOr(env.VITE_BRAND_PRODUCER_PANEL_LABEL, "PRODUCTOR"),
+  adminPanelLabel: trimOr(env.VITE_BRAND_ADMIN_PANEL_LABEL, "ADMINISTRADOR"),
 };
 
 const readWindowConfig = () => {
@@ -62,6 +62,8 @@ export const resolveBrandConfig = (runtimeConfig = null) => {
     whatsapp: trimOr(fromRuntime.whatsapp ?? fromWindow.whatsapp, envBrandConfig.whatsapp),
     instagramUrl: trimOr(fromRuntime.instagramUrl ?? fromWindow.instagramUrl, envBrandConfig.instagramUrl),
     footerLegalName: trimOr(fromRuntime.footerLegalName ?? fromWindow.footerLegalName, envBrandConfig.footerLegalName),
+    producerPanelLabel: trimOr(fromRuntime.producerPanelLabel ?? fromWindow.producerPanelLabel, envBrandConfig.producerPanelLabel),
+    adminPanelLabel: trimOr(fromRuntime.adminPanelLabel ?? fromWindow.adminPanelLabel, envBrandConfig.adminPanelLabel),
   };
 };
 

@@ -12,6 +12,7 @@ export default function AppFooter({
   legal = legalConfig,
 }) {
   const showProducerCta = features.producerPanel;
+  const producerPanelLabel = String(brand.producerPanelLabel || "").trim() || "PRODUCTOR";
   const whatsappUrl = brand.whatsapp ? `https://wa.me/${String(brand.whatsapp).replace(/[^\d]/g, "")}` : "";
 
   return (
@@ -45,7 +46,7 @@ export default function AppFooter({
                   }}
                   className="px-5 py-3 rounded-2xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-300/30 text-[10px] font-black uppercase tracking-widest transition-all text-indigo-100"
                 >
-                  {brand.producerPanelLabel}
+                  {producerPanelLabel}
                 </button>
               </div>
             )}

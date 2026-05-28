@@ -183,6 +183,8 @@ def public_config():
         "whatsapp": (os.getenv("VITE_BRAND_WHATSAPP") or "5492615260461").strip() or "5492615260461",
         "instagramUrl": (os.getenv("VITE_BRAND_INSTAGRAM_URL") or "https://www.instagram.com/yendiin.tickets?igsh=ZG0zdTJqYnN2N2hj").strip() or "https://www.instagram.com/yendiin.tickets?igsh=ZG0zdTJqYnN2N2hj",
         "footerLegalName": (os.getenv("VITE_BRAND_FOOTER_LEGAL_NAME") or brand.legal_name).strip() or brand.legal_name,
+        "producerPanelLabel": (os.getenv("VITE_BRAND_PRODUCER_PANEL_LABEL") or "PRODUCTOR").strip() or "PRODUCTOR",
+        "adminPanelLabel": (os.getenv("VITE_BRAND_ADMIN_PANEL_LABEL") or "ADMINISTRADOR").strip() or "ADMINISTRADOR",
     }
     legal = {
         "termsUrl": (os.getenv("VITE_LEGAL_TERMS_URL") or "/static/legal/terminos-y-condiciones.pdf").strip() or "/static/legal/terminos-y-condiciones.pdf",

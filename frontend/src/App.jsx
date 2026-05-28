@@ -4706,6 +4706,8 @@ if (closeOnSuccess) {
   // UI Components (inline / demo)
   // -------------------------
   const Header = () => {
+    const adminPanelLabel = String(brandConfig.adminPanelLabel || "").trim() || "ADMINISTRADOR";
+
     return (
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#09140f]/88 backdrop-blur-xl border-b border-white/10 overflow-x-hidden">
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4">
@@ -4754,7 +4756,7 @@ if (closeOnSuccess) {
                     }`}
                     title="Panel interno para staff"
                   >
-                    {(featureFlags.brandedAdminLabels ? brandConfig.adminPanelLabel : "Administrador")}
+                    {(featureFlags.brandedAdminLabels ? adminPanelLabel : "ADMINISTRADOR")}
                   </button>
                 )}
               </nav>
@@ -4827,7 +4829,7 @@ if (closeOnSuccess) {
                 }`}
                 title="Panel interno para staff"
               >
-                {(featureFlags.brandedAdminLabels ? brandConfig.adminPanelLabel : "Administrador")}
+                {(featureFlags.brandedAdminLabels ? adminPanelLabel : "ADMINISTRADOR")}
               </button>
             )}
           </nav>

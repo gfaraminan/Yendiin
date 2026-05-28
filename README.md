@@ -202,14 +202,41 @@ El detalle ER y contratos compartidos se amplía en:
 
 ### Email
 
+Para mails transaccionales (magic link, confirmación de compra, PDF/QR de tickets y reenvíos) el backend usa `app/mailer.py`. La prioridad es:
+
+1. **Resend HTTP API** si `RESEND_API_KEY` está configurada.
+2. **SMTP fallback** si no hay `RESEND_API_KEY`.
+
+Variables principales:
+
+- `RESEND_API_KEY`: API key de Resend para envío transaccional. Recomendado crearla con permiso de envío y restringida al dominio verificado.
+- `RESEND_API_URL`: endpoint de Resend; default `https://api.resend.com/emails`.
+- `EMAIL_FROM` o `MAIL_FROM`: remitente visible. Debe pertenecer al dominio/subdominio verificado en Resend, por ejemplo `Yendiin <tickets@send.yendiin.com>`.
 - `EMAIL_CONFIRM_ENABLED`.
 - `EMAIL_CONFIRM_MAX_ATTEMPTS`.
 - `EMAIL_ATTACH_PDF`.
 - `EMAIL_ATTACH_QR_PNG`.
 - `EMAIL_MAX_QR_ATTACHMENTS`.
 - `ORDER_EMAIL_LOG_TABLE`.
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`.
-- `EMAIL_FROM` o `MAIL_FROM`.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` (solo fallback). Para Resend SMTP: `smtp.resend.com`, puerto `587`, usuario `resend`, password igual a `RESEND_API_KEY`.
+
+Checklist Resend + dominio:
+
+1. En Resend, agregar el dominio o subdominio que se usará para transaccionales. Recomendado usar un subdominio dedicado como `send.yendiin.com` para aislar reputación.
+2. Copiar en el DNS del dominio los registros que Resend indique para SPF y DKIM; DMARC es opcional pero recomendado.
+3. Esperar a que el dominio quede `verified` en Resend.
+4. Crear una API key de envío para ese dominio.
+5. Configurar en producción:
+
+```env
+RESEND_API_KEY=re_...
+MAIL_FROM=Yendiin <tickets@send.yendiin.com>
+EMAIL_FROM=Yendiin <tickets@send.yendiin.com>
+EMAIL_CONFIRM_ENABLED=true
+EMAIL_ATTACH_PDF=true
+```
+
+> Según la documentación de Resend, el endpoint de envío acepta `from`, `to`, `subject`, `html`/`text` y `attachments`; los adjuntos pueden enviarse como contenido Base64. Para SMTP, Resend documenta host `smtp.resend.com`, usuario `resend` y password igual a la API key.
 
 ### Mercado Pago
 

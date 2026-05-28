@@ -35,7 +35,11 @@ class Settings(BaseSettings):
     email_max_qr_attachments: int = int(os.getenv("EMAIL_MAX_QR_ATTACHMENTS", "20"))
     order_email_log_table: str = os.getenv("ORDER_EMAIL_LOG_TABLE", "order_email_log")
 
-    # --- SMTP (SendGrid / cualquier SMTP) ---
+    # --- Resend HTTP API (preferido para transaccionales) ---
+    resend_api_key: str = os.getenv("RESEND_API_KEY", "")
+    resend_api_url: str = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
+
+    # --- SMTP (fallback: SendGrid / Resend / cualquier SMTP) ---
     smtp_host: str = os.getenv("SMTP_HOST", "")
     smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
     smtp_user: str = os.getenv("SMTP_USER", "")

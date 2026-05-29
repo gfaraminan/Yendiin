@@ -236,7 +236,19 @@ EMAIL_CONFIRM_ENABLED=true
 EMAIL_ATTACH_PDF=true
 ```
 
-Con el dominio `mail.yendiin.com` en estado `Verified`, la prueba funcional mínima es enviar un mail real desde el mismo mailer que usa el checkout:
+Con el dominio `mail.yendiin.com` en estado `Verified`, la prueba funcional mínima es enviar un mail real desde el mismo mailer que usa el checkout. En Render/producción usar el módulo dentro de `app`, porque algunas imágenes de deploy no incluyen directorios auxiliares como `scripts/`:
+
+```bash
+PYTHONPATH=. python -m app.send_test_email --to TU_EMAIL@ejemplo.com --attach-pdf
+```
+
+Si estás probando local y necesitás cargar un `.env` manualmente:
+
+```bash
+PYTHONPATH=. python -m app.send_test_email --to TU_EMAIL@ejemplo.com --env-file .env --attach-pdf
+```
+
+También existe el wrapper local equivalente:
 
 ```bash
 PYTHONPATH=. python scripts/send_test_email.py --to TU_EMAIL@ejemplo.com --env-file .env --attach-pdf

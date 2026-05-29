@@ -265,6 +265,13 @@ La prueba pasa si:
 - En Resend aparece el envío en el panel/logs de emails.
 - Si usaste `--attach-pdf`, llega el adjunto `yendiin-resend-test.pdf`; esto valida el mismo camino de adjuntos que usan los PDFs/QRs de tickets.
 
+En compras reales, el backend envía la confirmación desde dos caminos idempotentes:
+
+- `GET /api/payments/mp/sync-order`, llamado por la pantalla de éxito del checkout.
+- `POST /api/payments/mp/webhook`, llamado por Mercado Pago.
+
+Ambos caminos usan `ORDER_EMAIL_LOG_TABLE` (default `order_email_log`) para evitar duplicados y permitir reintentos si un envío falla. En logs deberías ver `Order confirmation email sent ...` o `MP webhook order email result ...`.
+
 Si la prueba falla, revisar primero estos puntos:
 
 - Si el error dice `The yendiin.com domain is not verified`, el problema es el remitente: `MAIL_FROM`/`EMAIL_FROM` está usando `@yendiin.com` pero el dominio verificado en Resend es `mail.yendiin.com`. Cambiar ambas variables a algo como `Yendiin <tickets@mail.yendiin.com>`, redeploy/restart y volver a probar.

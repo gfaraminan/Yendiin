@@ -4710,23 +4710,23 @@ if (closeOnSuccess) {
 
     return (
       <header className="fixed top-0 left-0 right-0 z-50 bg-[#09140f]/88 backdrop-blur-xl border-b border-white/10 overflow-x-hidden">
-        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-1.5 sm:py-2">
           {/* TOP */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="flex items-center flex-shrink-0">
+              <div className="flex items-center flex-shrink-0 w-24 sm:w-28 h-10 sm:h-12 overflow-hidden">
                 <img
                   src="/Logo Blanco Png fondo transparente.png"
                   alt={brandConfig.headerLabel}
-                  className="w-32 sm:w-40 h-auto drop-shadow-[0_10px_28px_rgba(8,15,30,0.45)]"
+                  className="w-full h-full object-cover object-center drop-shadow-[0_10px_28px_rgba(8,15,30,0.45)]"
                   loading="lazy"
                 />
               </div>
 
-              <nav className="hidden md:flex items-center justify-center gap-2 pl-3">
+              <nav className="hidden md:flex items-center justify-center gap-2 pl-2">
                 <button
                   onClick={() => setView("public")}
-                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                     view === "public" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
@@ -4745,7 +4745,7 @@ if (closeOnSuccess) {
                       try { loadMyAssets(); } catch (e) {}
                     }, 0);
                   }}
-                  className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                     view === "myTickets" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                   }`}
                 >
@@ -4756,7 +4756,7 @@ if (closeOnSuccess) {
                 {me && supportAiStatus?.is_staff && (
                   <button
                     onClick={() => setView("supportAI")}
-                    className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                    className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                       view === "supportAI" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                     }`}
                     title="Panel interno para staff"
@@ -4772,7 +4772,7 @@ if (closeOnSuccess) {
               {!me ? (
                 <button
                   onClick={() => setLoginRequired(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-emerald-500/15 hover:bg-emerald-500/25 transition-all border border-emerald-300/35 text-white"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-emerald-500/15 hover:bg-emerald-500/25 transition-all border border-emerald-300/35 text-white"
                 >
                   <User size={16} /> Ingresar
                 </button>
@@ -4786,7 +4786,7 @@ if (closeOnSuccess) {
                   </div>
                   <button
                     onClick={logout}
-                    className="px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/15 text-white"
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 transition-all border border-white/15 text-white"
                   >
                     Salir
                   </button>
@@ -4796,10 +4796,10 @@ if (closeOnSuccess) {
           </div>
 
           {/* TABS (mobile) */}
-          <nav className="mt-3 md:hidden flex items-center justify-center sm:justify-start gap-2 w-full">
+          <nav className="mt-1.5 md:hidden flex items-center justify-center sm:justify-start gap-2 w-full">
             <button
               onClick={() => setView("public")}
-              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                 view === "public" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
@@ -4819,7 +4819,7 @@ if (closeOnSuccess) {
                   try { loadMyAssets(); } catch (e) {}
                 }, 0);
               }}
-              className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                 view === "myTickets" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
               }`}
             >
@@ -4829,7 +4829,7 @@ if (closeOnSuccess) {
             {me && supportAiStatus?.is_staff && (
               <button
                 onClick={() => setView("supportAI")}
-                className={`px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${
                   view === "supportAI" ? "bg-emerald-600/85 border-emerald-300/55 text-white" : "bg-white/5 border-white/10 hover:bg-white/10"
                 }`}
                 title="Panel interno para staff"
@@ -5429,7 +5429,7 @@ if (closeOnSuccess) {
     <div className="min-h-screen text-white overflow-x-hidden relative">
       <Header />
 
-      <main className="min-h-screen pt-32 sm:pt-36 relative z-10">
+      <main className="min-h-screen pt-24 md:pt-20 relative z-10">
         {/* PUBLIC */}
         {view === "public" && (
           <PublicHomeView

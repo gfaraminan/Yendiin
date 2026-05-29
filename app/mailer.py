@@ -44,6 +44,10 @@ def _get_resend_api_url() -> str:
     return _get_setting("RESEND_API_URL", "https://api.resend.com/emails")
 
 
+def _get_resend_user_agent() -> str:
+    return _get_setting("RESEND_USER_AGENT", "Yendiin/1.0 (transactional-email; +https://yendiin.com)")
+
+
 def _get_email_from() -> str:
     """
     Sender identity.
@@ -119,8 +123,11 @@ def _send_via_resend(
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
+            "Accept": "application/json",
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
+            # Resend returns Cloudflare 1010 when the API client has no User-Agent.
+            "User-Agent": _get_resend_user_agent(),
         },
     )
 
@@ -130,7 +137,10 @@ def _send_via_resend(
             body = response.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else str(e)
-        raise RuntimeError(f"Resend send failed status={e.code}: {body[:800]}") from e
+        detail = f"Resend send failed status={e.code}: {body[:800]}"
+        if e.code == 403 and "1010" in body:
+            detail += " (Cloudflare 1010: Resend requires a User-Agent header; check RESEND_USER_AGENT if this persists.)"
+        raise RuntimeError(detail) from e
     except Exception as e:
         raise RuntimeError(f"Resend send failed: {e}") from e
 

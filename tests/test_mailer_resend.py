@@ -39,6 +39,8 @@ def test_send_email_prefers_resend_api_when_key_is_configured(monkeypatch):
     request = urlopen_mock.call_args.args[0]
     assert request.full_url == "https://api.resend.test/emails"
     assert request.headers["Authorization"] == "Bearer re_test_key"
+    assert request.headers["Accept"] == "application/json"
+    assert request.headers["User-agent"].startswith("Yendiin/1.0")
 
     payload = json.loads(request.data.decode("utf-8"))
     assert payload["from"] == "Yendiin <tickets@mail.yendiin.com>"

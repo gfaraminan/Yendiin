@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     # --- Resend HTTP API (preferido para transaccionales) ---
     resend_api_key: str = os.getenv("RESEND_API_KEY", "")
     resend_api_url: str = os.getenv("RESEND_API_URL", "https://api.resend.com/emails")
+    resend_user_agent: str = os.getenv("RESEND_USER_AGENT", "Yendiin/1.0 (transactional-email; +https://yendiin.com)")
 
     # --- SMTP (fallback: SendGrid / Resend / cualquier SMTP) ---
     smtp_host: str = os.getenv("SMTP_HOST", "")

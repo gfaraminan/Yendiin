@@ -211,6 +211,7 @@ Variables principales:
 
 - `RESEND_API_KEY`: API key de Resend para envío transaccional. Recomendado crearla con permiso de envío y restringida al dominio verificado.
 - `RESEND_API_URL`: endpoint de Resend; default `https://api.resend.com/emails`.
+- `RESEND_USER_AGENT`: identificador HTTP enviado a Resend; default `Yendiin/1.0 (transactional-email; +https://yendiin.com)`. Resend puede responder `403` con código `1010` si falta este header.
 - `EMAIL_FROM` o `MAIL_FROM`: remitente visible. Debe pertenecer al dominio/subdominio verificado en Resend, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
 - `EMAIL_CONFIRM_ENABLED`.
 - `EMAIL_CONFIRM_MAX_ATTEMPTS`.
@@ -230,6 +231,7 @@ Checklist Resend + dominio:
 
 ```env
 RESEND_API_KEY=re_...
+RESEND_USER_AGENT=Yendiin/1.0 (transactional-email; +https://yendiin.com)
 MAIL_FROM=Yendiin <tickets@mail.yendiin.com>
 EMAIL_FROM=Yendiin <tickets@mail.yendiin.com>
 EMAIL_CONFIRM_ENABLED=true
@@ -263,6 +265,7 @@ La prueba pasa si:
 
 Si la prueba falla, revisar primero estos puntos:
 
+- Si el error es `403` con `error code: 1010`, revisar que el deploy tenga este cambio y que `RESEND_USER_AGENT` no esté vacío. Ese código suele indicar que Resend/Cloudflare bloqueó una request sin User-Agent.
 - `MAIL_FROM`/`EMAIL_FROM` debe usar el dominio verificado exacto, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
 - La API key debe tener permiso de envío para ese dominio.
 - En Render/producción, redeploy/restart después de cambiar env vars para que el proceso tome los nuevos valores.

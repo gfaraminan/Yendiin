@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from email.utils import parseaddr
 from pathlib import Path
 
 
@@ -59,6 +60,14 @@ def _load_env_file(path: Path) -> None:
         os.environ.setdefault(key, value)
 
 
+def _email_domain(email_from: str) -> str:
+    _name, addr = parseaddr(email_from or "")
+    email = (addr or email_from or "").strip()
+    if "@" not in email:
+        return ""
+    return email.rsplit("@", 1)[1].strip().lower()
+
+
 def _provider_label() -> str:
     if (os.getenv("RESEND_API_KEY") or "").strip():
         return "resend-http-api"
@@ -89,6 +98,11 @@ def main() -> int:
     parser.add_argument("--env-file", help="Optional env file to load before sending.")
     parser.add_argument("--subject", default="Yendiin / Resend transactional email test")
     parser.add_argument("--attach-pdf", action="store_true", help="Attach a tiny PDF to validate attachment delivery.")
+    parser.add_argument(
+        "--expected-from-domain",
+        default=(os.getenv("RESEND_EXPECTED_FROM_DOMAIN") or "mail.yendiin.com").strip(),
+        help="Warn if MAIL_FROM/EMAIL_FROM is not on this domain. Default: mail.yendiin.com",
+    )
     args = parser.parse_args()
 
     if args.env_file:
@@ -101,6 +115,14 @@ def main() -> int:
 
     provider = _provider_label()
     mail_from = (os.getenv("MAIL_FROM") or os.getenv("EMAIL_FROM") or "").strip()
+    from_domain = _email_domain(mail_from)
+    expected_from_domain = (args.expected_from_domain or "").lower()
+    print(f"Config: provider={provider} from={mail_from} from_domain={from_domain or '-'}")
+    if expected_from_domain and from_domain and from_domain != expected_from_domain:
+        print(
+            "WARNING: MAIL_FROM/EMAIL_FROM is not using the expected verified domain "
+            f"'{expected_from_domain}'. Current sender domain is '{from_domain}'."
+        )
     attachments = [("yendiin-resend-test.pdf", MINIMAL_PDF, "application/pdf")] if args.attach_pdf else None
 
     text = (

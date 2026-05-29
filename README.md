@@ -212,6 +212,7 @@ Variables principales:
 - `RESEND_API_KEY`: API key de Resend para envío transaccional. Recomendado crearla con permiso de envío y restringida al dominio verificado.
 - `RESEND_API_URL`: endpoint de Resend; default `https://api.resend.com/emails`.
 - `RESEND_USER_AGENT`: identificador HTTP enviado a Resend; default `Yendiin/1.0 (transactional-email; +https://yendiin.com)`. Resend puede responder `403` con código `1010` si falta este header.
+- `RESEND_EXPECTED_FROM_DOMAIN`: dominio esperado por el smoke test para avisar si `MAIL_FROM`/`EMAIL_FROM` quedó apuntando a otro dominio; default recomendado `mail.yendiin.com`.
 - `EMAIL_FROM` o `MAIL_FROM`: remitente visible. Debe pertenecer al dominio/subdominio verificado en Resend, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
 - `EMAIL_CONFIRM_ENABLED`.
 - `EMAIL_CONFIRM_MAX_ATTEMPTS`.
@@ -232,6 +233,7 @@ Checklist Resend + dominio:
 ```env
 RESEND_API_KEY=re_...
 RESEND_USER_AGENT=Yendiin/1.0 (transactional-email; +https://yendiin.com)
+RESEND_EXPECTED_FROM_DOMAIN=mail.yendiin.com
 MAIL_FROM=Yendiin <tickets@mail.yendiin.com>
 EMAIL_FROM=Yendiin <tickets@mail.yendiin.com>
 EMAIL_CONFIRM_ENABLED=true
@@ -265,6 +267,7 @@ La prueba pasa si:
 
 Si la prueba falla, revisar primero estos puntos:
 
+- Si el error dice `The yendiin.com domain is not verified`, el problema es el remitente: `MAIL_FROM`/`EMAIL_FROM` está usando `@yendiin.com` pero el dominio verificado en Resend es `mail.yendiin.com`. Cambiar ambas variables a algo como `Yendiin <tickets@mail.yendiin.com>`, redeploy/restart y volver a probar.
 - Si el error es `403` con `error code: 1010`, revisar que el deploy tenga este cambio y que `RESEND_USER_AGENT` no esté vacío. Ese código suele indicar que Resend/Cloudflare bloqueó una request sin User-Agent.
 - `MAIL_FROM`/`EMAIL_FROM` debe usar el dominio verificado exacto, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
 - La API key debe tener permiso de envío para ese dominio.

@@ -65,6 +65,14 @@ def _get_email_from() -> str:
     return ""
 
 
+def _extract_email_domain(email_from: str) -> str:
+    _name, addr = parseaddr(email_from or "")
+    email = (addr or email_from or "").strip()
+    if "@" not in email:
+        return ""
+    return email.rsplit("@", 1)[1].strip().lower()
+
+
 def _resend_attachment_payload(attachments: list[tuple[str, bytes, str]] | None) -> list[dict[str, str]]:
     if not attachments:
         return []
@@ -140,6 +148,13 @@ def _send_via_resend(
         detail = f"Resend send failed status={e.code}: {body[:800]}"
         if e.code == 403 and "1010" in body:
             detail += " (Cloudflare 1010: Resend requires a User-Agent header; check RESEND_USER_AGENT if this persists.)"
+        if e.code == 403 and "domain is not verified" in body.lower():
+            sender_domain = _extract_email_domain(email_from)
+            detail += (
+                f" (Resend rejected the sender domain '{sender_domain}'. "
+                "Set MAIL_FROM/EMAIL_FROM to an address on the verified Resend domain, "
+                "for example 'Yendiin <tickets@mail.yendiin.com>', then redeploy/restart.)"
+            )
         raise RuntimeError(detail) from e
     except Exception as e:
         raise RuntimeError(f"Resend send failed: {e}") from e

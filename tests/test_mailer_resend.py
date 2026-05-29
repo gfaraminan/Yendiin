@@ -1,5 +1,7 @@
 import base64
+import io
 import json
+import urllib.error
 from unittest.mock import patch
 
 from app.mailer import send_email
@@ -74,3 +76,22 @@ def test_send_email_uses_smtp_fallback_without_resend_key(monkeypatch):
         html=None,
         attachments=None,
     )
+
+
+def test_send_email_explains_unverified_resend_sender_domain(monkeypatch):
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("RESEND_API_URL", "https://api.resend.test/emails")
+    monkeypatch.setenv("MAIL_FROM", "Yendiin <tickets@yendiin.com>")
+    body = b'{"statusCode":403,"message":"The yendiin.com domain is not verified.","name":"validation_error"}'
+    error = urllib.error.HTTPError("https://api.resend.test/emails", 403, "Forbidden", {}, io.BytesIO(body))
+
+    with patch("app.mailer.urllib.request.urlopen", side_effect=error):
+        try:
+            send_email(to_email="cliente@example.com", subject="Hola", text="Texto")
+        except RuntimeError as exc:
+            message = str(exc)
+        else:
+            raise AssertionError("Expected RuntimeError")
+
+    assert "sender domain 'yendiin.com'" in message
+    assert "Yendiin <tickets@mail.yendiin.com>" in message

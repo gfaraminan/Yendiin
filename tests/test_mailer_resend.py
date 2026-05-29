@@ -22,7 +22,7 @@ class _FakeResponse:
 def test_send_email_prefers_resend_api_when_key_is_configured(monkeypatch):
     monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
     monkeypatch.setenv("RESEND_API_URL", "https://api.resend.test/emails")
-    monkeypatch.setenv("MAIL_FROM", "Yendiin <tickets@send.yendiin.com>")
+    monkeypatch.setenv("MAIL_FROM", "Yendiin <tickets@mail.yendiin.com>")
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_USER", raising=False)
     monkeypatch.delenv("SMTP_PASS", raising=False)
@@ -41,7 +41,7 @@ def test_send_email_prefers_resend_api_when_key_is_configured(monkeypatch):
     assert request.headers["Authorization"] == "Bearer re_test_key"
 
     payload = json.loads(request.data.decode("utf-8"))
-    assert payload["from"] == "Yendiin <tickets@send.yendiin.com>"
+    assert payload["from"] == "Yendiin <tickets@mail.yendiin.com>"
     assert payload["to"] == ["cliente@example.com"]
     assert payload["subject"] == "Tus tickets"
     assert payload["text"] == "Adjuntamos tus tickets."

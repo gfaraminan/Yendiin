@@ -211,7 +211,7 @@ Variables principales:
 
 - `RESEND_API_KEY`: API key de Resend para envío transaccional. Recomendado crearla con permiso de envío y restringida al dominio verificado.
 - `RESEND_API_URL`: endpoint de Resend; default `https://api.resend.com/emails`.
-- `EMAIL_FROM` o `MAIL_FROM`: remitente visible. Debe pertenecer al dominio/subdominio verificado en Resend, por ejemplo `Yendiin <tickets@send.yendiin.com>`.
+- `EMAIL_FROM` o `MAIL_FROM`: remitente visible. Debe pertenecer al dominio/subdominio verificado en Resend, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
 - `EMAIL_CONFIRM_ENABLED`.
 - `EMAIL_CONFIRM_MAX_ATTEMPTS`.
 - `EMAIL_ATTACH_PDF`.
@@ -222,7 +222,7 @@ Variables principales:
 
 Checklist Resend + dominio:
 
-1. En Resend, agregar el dominio o subdominio que se usará para transaccionales. Recomendado usar un subdominio dedicado como `send.yendiin.com` para aislar reputación.
+1. En Resend, agregar el dominio o subdominio que se usará para transaccionales. Recomendado usar un subdominio dedicado como `mail.yendiin.com` para aislar reputación.
 2. Copiar en el DNS del dominio los registros que Resend indique para SPF y DKIM; DMARC es opcional pero recomendado.
 3. Esperar a que el dominio quede `verified` en Resend.
 4. Crear una API key de envío para ese dominio.
@@ -230,11 +230,31 @@ Checklist Resend + dominio:
 
 ```env
 RESEND_API_KEY=re_...
-MAIL_FROM=Yendiin <tickets@send.yendiin.com>
-EMAIL_FROM=Yendiin <tickets@send.yendiin.com>
+MAIL_FROM=Yendiin <tickets@mail.yendiin.com>
+EMAIL_FROM=Yendiin <tickets@mail.yendiin.com>
 EMAIL_CONFIRM_ENABLED=true
 EMAIL_ATTACH_PDF=true
 ```
+
+Con el dominio `mail.yendiin.com` en estado `Verified`, la prueba funcional mínima es enviar un mail real desde el mismo mailer que usa el checkout:
+
+```bash
+PYTHONPATH=. python scripts/send_test_email.py --to TU_EMAIL@ejemplo.com --env-file .env --attach-pdf
+```
+
+La prueba pasa si:
+
+- El comando imprime `OK: sent test email ... using resend-http-api`.
+- El email llega a la casilla destino con el remitente configurado en `MAIL_FROM`/`EMAIL_FROM`.
+- En Resend aparece el envío en el panel/logs de emails.
+- Si usaste `--attach-pdf`, llega el adjunto `yendiin-resend-test.pdf`; esto valida el mismo camino de adjuntos que usan los PDFs/QRs de tickets.
+
+Si la prueba falla, revisar primero estos puntos:
+
+- `MAIL_FROM`/`EMAIL_FROM` debe usar el dominio verificado exacto, por ejemplo `Yendiin <tickets@mail.yendiin.com>`.
+- La API key debe tener permiso de envío para ese dominio.
+- En Render/producción, redeploy/restart después de cambiar env vars para que el proceso tome los nuevos valores.
+- `EMAIL_CONFIRM_ENABLED=true` y `EMAIL_ATTACH_PDF=true` para que el flujo de compra dispare confirmación con PDF.
 
 > Según la documentación de Resend, el endpoint de envío acepta `from`, `to`, `subject`, `html`/`text` y `attachments`; los adjuntos pueden enviarse como contenido Base64. Para SMTP, Resend documenta host `smtp.resend.com`, usuario `resend` y password igual a la API key.
 

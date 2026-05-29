@@ -1,11 +1,16 @@
 # app/mailer.py
 from __future__ import annotations
 
+import base64
+import json
 import os
 import ssl
 import smtplib
+import urllib.error
+import urllib.request
 from email.message import EmailMessage
 from email.utils import parseaddr
+from typing import Any
 
 # Keep compatibility with existing code that imports `settings`.
 try:
@@ -30,6 +35,15 @@ def _get_setting(name: str, default: str = "") -> str:
     return default
 
 
+def _get_resend_key() -> str:
+    """Resend API key, when configured for transactional email delivery."""
+    return _get_setting("RESEND_API_KEY")
+
+
+def _get_resend_api_url() -> str:
+    return _get_setting("RESEND_API_URL", "https://api.resend.com/emails")
+
+
 def _get_email_from() -> str:
     """
     Sender identity.
@@ -45,6 +59,83 @@ def _get_email_from() -> str:
         except Exception:
             return ""
     return ""
+
+
+def _resend_attachment_payload(attachments: list[tuple[str, bytes, str]] | None) -> list[dict[str, str]]:
+    if not attachments:
+        return []
+
+    payload: list[dict[str, str]] = []
+    for filename, content, _mimetype in attachments:
+        payload.append(
+            {
+                "filename": filename,
+                "content": base64.b64encode(content).decode("ascii"),
+            }
+        )
+    return payload
+
+
+def _send_via_resend(
+    *,
+    to_email: str,
+    subject: str,
+    text: str,
+    html: str | None,
+    attachments: list[tuple[str, bytes, str]] | None,
+) -> None:
+    """
+    Resend HTTP API sender for transactional emails.
+
+    Requires:
+      - RESEND_API_KEY
+      - MAIL_FROM or EMAIL_FROM (must use a verified Resend domain)
+
+    Attachments are sent as Base64 content, matching Resend's API contract.
+    """
+    api_key = _get_resend_key()
+    if not api_key:
+        raise RuntimeError("Resend is not configured (RESEND_API_KEY missing).")
+
+    email_from = _get_email_from()
+    if not email_from:
+        raise RuntimeError("Email sender is not configured (MAIL_FROM or EMAIL_FROM missing).")
+
+    payload: dict[str, Any] = {
+        "from": email_from,
+        "to": [to_email],
+        "subject": subject,
+        "text": text,
+    }
+    if html:
+        payload["html"] = html
+
+    attachment_payload = _resend_attachment_payload(attachments)
+    if attachment_payload:
+        payload["attachments"] = attachment_payload
+
+    request = urllib.request.Request(
+        _get_resend_api_url(),
+        data=json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            status_code = int(response.getcode() or 0)
+            body = response.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace") if hasattr(e, "read") else str(e)
+        raise RuntimeError(f"Resend send failed status={e.code}: {body[:800]}") from e
+    except Exception as e:
+        raise RuntimeError(f"Resend send failed: {e}") from e
+
+    if status_code >= 300:
+        raise RuntimeError(f"Resend send failed status={status_code}: {body[:800]}")
 
 
 def _send_via_smtp(
@@ -63,7 +154,7 @@ def _send_via_smtp(
       - SMTP_PASS
       - SMTP_PORT (opcional, default 587)
 
-    Nota: usamos STARTTLS (587).
+    Nota: usa STARTTLS para 25/587/2587 e SSL implícito para 465/2465.
     """
     smtp_host = (os.getenv("SMTP_HOST") or "").strip()
     smtp_user = (os.getenv("SMTP_USER") or "").strip()
@@ -103,17 +194,14 @@ def _send_via_smtp(
 
     context = ssl.create_default_context()
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(smtp_user, smtp_pass)
-
-            # IMPORTANT (SendGrid): el "envelope from" debe ser solo email (no "Nombre <email>").
-            _name, _addr = parseaddr(email_from)
-            from_addr = (_addr or email_from).strip()
-
-            server.send_message(msg, from_addr=from_addr)
+        if smtp_port in {465, 2465}:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20, context=context) as server:
+                _send_smtp_message(server, smtp_user, smtp_pass, email_from, msg)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+                server.ehlo()
+                server.starttls(context=context)
+                _send_smtp_message(server, smtp_user, smtp_pass, email_from, msg)
     except smtplib.SMTPAuthenticationError as e:
         print(f"SMTP auth failed user={smtp_user} host={smtp_host} port={smtp_port}: {e}")
         raise
@@ -123,6 +211,19 @@ def _send_via_smtp(
     except Exception as e:
         print(f"SMTP send failed host={smtp_host} port={smtp_port}: {e}")
         raise
+
+
+def _send_smtp_message(server: smtplib.SMTP, smtp_user: str, smtp_pass: str, email_from: str, msg: EmailMessage) -> None:
+    server.ehlo()
+    server.login(smtp_user, smtp_pass)
+
+    # IMPORTANT: el "envelope from" debe ser solo email (no "Nombre <email>").
+    _name, _addr = parseaddr(email_from)
+    from_addr = (_addr or email_from).strip()
+
+    server.send_message(msg, from_addr=from_addr)
+
+
 def send_email(
     *,
     to_email: str,
@@ -133,10 +234,17 @@ def send_email(
 ) -> None:
     """
     Primary send function used across the app.
-    En TicketPro, eliminamos Resend: enviamos SIEMPRE por SMTP (ej: SendGrid SMTP).
+
+    Strategy:
+      - If RESEND_API_KEY is configured, send through the Resend HTTP API.
+      - Otherwise, keep the existing SMTP fallback.
 
     Raises on failure (callers convert to 502).
     """
+    if _get_resend_key():
+        _send_via_resend(to_email=to_email, subject=subject, text=text, html=html, attachments=attachments)
+        return
+
     _send_via_smtp(to_email=to_email, subject=subject, text=text, html=html, attachments=attachments)
 
 

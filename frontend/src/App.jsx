@@ -4249,10 +4249,12 @@ setLoading(true);
   useEffect(() => {
     if (view !== "success") return;
     const orderId = String(purchaseData?.order_id || "").trim();
+    const paymentId = String(purchaseData?.payment_id || "").trim();
     if (!orderId) return;
 
     let cancelled = false;
     let tries = 0;
+    let syncCompleted = false;
     setSuccessProcessing(true);
     setSuccessTries(0);
     setSuccessMessage(null);
@@ -4262,6 +4264,20 @@ setLoading(true);
       tries += 1;
       setSuccessTries(tries);
       try {
+        if (!syncCompleted) {
+          const syncUrl = `/api/payments/mp/sync-order?tenant=${encodeURIComponent(publicTenant)}&order_id=${encodeURIComponent(orderId)}${paymentId ? `&payment_id=${encodeURIComponent(paymentId)}` : ""}`;
+          const syncResp = await fetch(syncUrl, { credentials: "include" });
+          const syncData = await readJsonOrText(syncResp);
+          if (syncResp.ok && syncData?.ok) {
+            syncCompleted = Boolean(syncData.processed || syncData.status === "paid");
+            if (syncData?.email?.sent) {
+              console.info("Email de tickets enviado", syncData.email);
+            } else if (syncData?.email?.reason && syncData.email.reason !== "already_sent") {
+              console.warn("Email de tickets no enviado todavía", syncData.email);
+            }
+          }
+        }
+
         const r = await fetch(`/api/orders/my-assets?tenant=${encodeURIComponent(publicTenant)}`, { credentials: "include" });
         const data = await readJsonOrText(r);
         if (r.ok && data?.ok) {
@@ -4296,7 +4312,7 @@ setLoading(true);
       cancelled = true;
       clearInterval(id);
     };
-  }, [view, purchaseData?.order_id]);
+  }, [view, purchaseData?.order_id, purchaseData?.payment_id, publicTenant]);
 
   useEffect(() => {
     const syncViewFromPath = () => {

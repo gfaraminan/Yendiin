@@ -5,6 +5,7 @@ import os
 import json
 import uuid
 import logging
+import re
 from urllib.parse import urlencode, urlparse
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, Optional, Tuple, List
@@ -829,6 +830,306 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
         return False
 
 
+
+
+def _order_email_log_table_name() -> str:
+    raw = (os.getenv("ORDER_EMAIL_LOG_TABLE") or "order_email_log").strip() or "order_email_log"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", raw):
+        logger.warning("Invalid ORDER_EMAIL_LOG_TABLE=%r; using order_email_log", raw)
+        return "order_email_log"
+    return raw
+
+
+def _ensure_order_email_log_table(cur) -> str:
+    table = _order_email_log_table_name()
+    cur.execute(
+        f"""
+        CREATE TABLE IF NOT EXISTS {table} (
+            order_id TEXT PRIMARY KEY,
+            to_email TEXT,
+            status TEXT NOT NULL DEFAULT 'sending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT,
+            sent_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+        """
+    )
+    return table
+
+
+def _claim_order_email_send(order_id: str, to_email: str) -> bool:
+    """Return True when this process should send the order email.
+
+    The webhook and the success-page sync endpoint can race. This lightweight log
+    table makes sending idempotent while still allowing retries after failures.
+    """
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            table = _ensure_order_email_log_table(cur)
+            cur.execute(
+                f"""
+                INSERT INTO {table} (order_id, to_email, status, attempts, updated_at)
+                VALUES (%s, %s, 'sending', 1, NOW())
+                ON CONFLICT (order_id) DO UPDATE
+                  SET to_email=EXCLUDED.to_email,
+                      status='sending',
+                      attempts={table}.attempts + 1,
+                      last_error=NULL,
+                      updated_at=NOW()
+                WHERE {table}.status <> 'sent'
+                  AND ({table}.status <> 'sending' OR {table}.updated_at < NOW() - INTERVAL '5 minutes')
+                """,
+                (order_id, to_email),
+            )
+            claimed = int(getattr(cur, "rowcount", 0) or 0) > 0
+            conn.commit()
+            return claimed
+    except Exception:
+        logger.exception("Could not claim order confirmation email order_id=%s; sending without idempotency", order_id)
+        return True
+
+
+def _mark_order_email_sent(order_id: str, to_email: str) -> None:
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            table = _ensure_order_email_log_table(cur)
+            cur.execute(
+                f"""
+                INSERT INTO {table} (order_id, to_email, status, attempts, sent_at, updated_at)
+                VALUES (%s, %s, 'sent', 1, NOW(), NOW())
+                ON CONFLICT (order_id) DO UPDATE
+                  SET to_email=EXCLUDED.to_email,
+                      status='sent',
+                      sent_at=NOW(),
+                      updated_at=NOW(),
+                      last_error=NULL
+                """,
+                (order_id, to_email),
+            )
+            conn.commit()
+    except Exception:
+        logger.exception("Could not mark order confirmation email sent order_id=%s", order_id)
+
+
+def _mark_order_email_failed(order_id: str, to_email: str, error: str) -> None:
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            table = _ensure_order_email_log_table(cur)
+            cur.execute(
+                f"""
+                INSERT INTO {table} (order_id, to_email, status, attempts, last_error, updated_at)
+                VALUES (%s, %s, 'failed', 1, %s, NOW())
+                ON CONFLICT (order_id) DO UPDATE
+                  SET to_email=EXCLUDED.to_email,
+                      status='failed',
+                      last_error=EXCLUDED.last_error,
+                      updated_at=NOW()
+                """,
+                (order_id, to_email, error[:1000]),
+            )
+            conn.commit()
+    except Exception:
+        logger.exception("Could not mark order confirmation email failed order_id=%s", order_id)
+
+
+def _order_email_enabled() -> bool:
+    return _env_bool("EMAIL_CONFIRM_ENABLED", True)
+
+
+def _send_paid_order_confirmation_email(request: Request, *, order_id: str, payment_id: str | None = None, force: bool = False) -> dict[str, Any]:
+    """Build and send the paid-order PDF email. Safe to call from sync-order or webhook."""
+    if not _order_email_enabled():
+        logger.info("Order confirmation email disabled order_id=%s", order_id)
+        return {"sent": False, "reason": "disabled"}
+
+    UPLOAD_DIR = os.getenv("UPLOAD_DIR", "/var/data/uploads")
+    os.makedirs(os.path.join(UPLOAD_DIR, "tickets"), exist_ok=True)
+
+    with get_conn() as conn2:
+        cur2 = conn2.cursor()
+        tcols2 = _table_columns(cur2, "tickets")
+        ecols2 = _table_columns(cur2, "events")
+        ocols2 = _table_columns(cur2, "orders")
+
+        if "order_id" not in tcols2:
+            return {"sent": False, "reason": "schema_missing_order_id"}
+
+        cur2.execute(
+            """
+            SELECT t.id AS ticket_id,
+                    {ticket_type} AS ticket_type,
+                    {qr_payload} AS qr_payload,
+                    o.event_slug,
+                    {e_title} AS event_title,
+                    {e_date} AS event_date,
+                    {e_time} AS event_time,
+                    {e_venue} AS venue,
+                    {e_city} AS city,
+                    {e_address} AS event_address,
+                    {o_buyer_name} AS buyer_name,
+                    {o_buyer_email} AS buyer_email
+            FROM tickets t
+            JOIN orders o ON o.id = t.order_id
+            LEFT JOIN events e ON e.slug = o.event_slug
+            WHERE t.order_id = %s
+            ORDER BY t.created_at DESC
+            """.format(
+                ticket_type="t.ticket_type" if "ticket_type" in tcols2 else "NULL::text",
+                qr_payload="t.qr_payload" if "qr_payload" in tcols2 else "t.qr_token",
+                e_title="e.title" if "title" in ecols2 else "NULL::text",
+                e_date="e.event_date" if "event_date" in ecols2 else ("e.date" if "date" in ecols2 else "NULL::date"),
+                e_time="e.event_time" if "event_time" in ecols2 else ("e.time" if "time" in ecols2 else "NULL::text"),
+                e_venue="e.venue" if "venue" in ecols2 else "NULL::text",
+                e_city="e.city" if "city" in ecols2 else "NULL::text",
+                e_address="e.address" if "address" in ecols2 else "NULL::text",
+                o_buyer_name="o.buyer_name" if "buyer_name" in ocols2 else "NULL::text",
+                o_buyer_email="o.buyer_email" if "buyer_email" in ocols2 else "NULL::text",
+            ),
+            (order_id,),
+        )
+        ticket_rows_raw = cur2.fetchall() or []
+        ticket_rows = _rows_to_dicts(cur2, ticket_rows_raw)
+
+    if not ticket_rows:
+        logger.info("Order confirmation email skipped: no tickets order_id=%s", order_id)
+        return {"sent": False, "reason": "tickets_none"}
+
+    first_ticket = (ticket_rows or [{}])[0]
+    buyer_email = str(first_ticket.get("buyer_email") or "").strip()
+    if not buyer_email:
+        logger.warning("Order confirmation email skipped: missing buyer_email order_id=%s", order_id)
+        return {"sent": False, "reason": "missing_buyer_email"}
+
+    if not force and not _claim_order_email_send(order_id, buyer_email):
+        logger.info("Order confirmation email already sent/skipped order_id=%s to=%s", order_id, buyer_email)
+        return {"sent": False, "reason": "already_sent", "to_email": buyer_email}
+
+    pdf_bytes = _build_tickets_pdf_bytes(ticket_rows)
+    pdf_filename = f"order-{order_id}.pdf"
+    pdf_path = os.path.join(UPLOAD_DIR, "tickets", pdf_filename)
+    try:
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+    except Exception:
+        logger.exception("Could not persist ticket PDF order_id=%s path=%s", order_id, pdf_path)
+
+    base = _request_base_url(request)
+    mis_path = os.getenv("MIS_TICKETS_PATH", "/#/mis-tickets").strip() or "/#/mis-tickets"
+    if not mis_path.startswith("/"):
+        mis_path = "/" + mis_path
+    mis_url = base + mis_path
+    pdf_url = f"{base}/api/tickets/orders/{order_id}/pdf"
+    terms_url = (os.getenv("LEGAL_TERMS_URL") or f"{base}/static/legal/terminos-y-condiciones.pdf").strip()
+    privacy_url = (os.getenv("LEGAL_PRIVACY_URL") or f"{base}/static/legal/politica-de-privacidad.pdf").strip()
+
+    event_title = first_ticket.get("event_title") or first_ticket.get("event_slug") or "Tu evento"
+    buyer_label = first_ticket.get("buyer_name") or buyer_email or "Cliente"
+    event_date = first_ticket.get("event_date")
+    event_time = first_ticket.get("event_time")
+    venue = first_ticket.get("venue") or "-"
+    event_address = first_ticket.get("event_address") or "-"
+    qty = len(ticket_rows or [])
+
+    subject = "✅ Compra confirmada en Yendiin — tus QRs y entradas"
+    text_msg = (
+        "Yendiin\n"
+        "Compra confirmada\n\n"
+        f"Evento: {event_title}\n"
+        f"Titular: {buyer_label}\n"
+        f"Cantidad de tickets: {qty}\n"
+        f"Fecha/Hora: {event_date or '-'} {event_time or ''}\n"
+        f"Lugar: {venue}\n"
+        f"Dirección: {event_address}\n\n"
+        f"• Descargar PDF: {pdf_url}\n"
+        f"• Ver Mis Tickets: {mis_url}\n\n"
+        "Adjuntamos el PDF con el resumen y tus QRs para ingresar.\n"
+        + "\nContacto Yendiin:\n"
+        + "• Soporte: soporte@yendiin.com\n"
+        + "• Web: https://yendiin.com\n"
+        + f"• Términos y Condiciones: {terms_url}\n"
+        + f"• Política de Privacidad: {privacy_url}\n"
+    )
+
+    html_msg = f"""
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+                background:linear-gradient(180deg,#f5f3ff 0%, #f9fafb 100%); padding:28px;">
+      <div style="max-width:620px; margin:0 auto; background:#ffffff;
+                  border-radius:18px; padding:0; border:1px solid #e5e7eb; overflow:hidden;">
+        <div style="background:#0f172a; padding:18px 24px;">
+          <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">YENDI<span style='color:#ec4899;'>IN</span></div>
+          <div style="color:#cbd5e1; font-size:12px; margin-top:4px;">Confirmación de compra</div>
+        </div>
+
+        <div style="padding:24px;">
+          <h2 style="margin:0 0 10px; color:#111827;">✅ Compra confirmada</h2>
+          <p style="color:#374151; font-size:15px; margin:0 0 16px;">
+            Tus tickets están listos para usar. Adjuntamos el PDF con toda la información de tu compra y tus QRs de ingreso.
+          </p>
+
+          <div style="background:#f3f4f6; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-bottom:16px; color:#111827; font-size:14px; line-height:1.6;">
+            <div><strong>Evento:</strong> {event_title}</div>
+            <div><strong>Titular:</strong> {buyer_label}</div>
+            <div><strong>Cantidad:</strong> {qty} ticket(s)</div>
+            <div><strong>Fecha / Hora:</strong> {event_date or '-'} {event_time or ''}</div>
+            <div><strong>Lugar:</strong> {venue}</div>
+            <div><strong>Dirección:</strong> {event_address}</div>
+          </div>
+
+          <div style="display:flex; gap:12px; flex-wrap:wrap; margin:18px 0 4px;">
+            <a href="{mis_url}"
+               style="background:#111827; color:#ffffff; text-decoration:none;
+                      padding:12px 16px; border-radius:12px; font-weight:600; display:inline-block;">
+              Ver Mis Tickets
+            </a>
+            <a href="{pdf_url}"
+               style="background:#ffffff; color:#111827; text-decoration:none;
+                      padding:12px 16px; border-radius:12px; font-weight:600; display:inline-block;
+                      border:1px solid #e5e7eb;">
+              Descargar PDF
+            </a>
+          </div>
+
+          <p style="color:#6b7280; font-size:13px; margin:14px 0 0;">
+            Tip: guardá este mail. Si estás sin señal en la puerta, el PDF te salva.
+          </p>
+        </div>
+
+        <div style="padding:16px 24px; border-top:1px solid #e5e7eb; background:#f8fafc; color:#475569; font-size:12px; line-height:1.6;">
+          <div><strong>Contacto Yendiin</strong></div>
+          <div>Soporte: <a href="mailto:soporte@yendiin.com" style="color:#334155;">soporte@yendiin.com</a></div>
+          <div>Web: <a href="https://yendiin.com" style="color:#334155;">yendiin.com</a></div>
+          <div style="margin-top:6px;">
+            <a href="{terms_url}" style="color:#334155;">Términos y Condiciones</a>
+            <span style="color:#94a3b8;"> · </span>
+            <a href="{privacy_url}" style="color:#334155;">Política de Privacidad</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+
+    try:
+        send_email(
+            to_email=buyer_email,
+            subject=subject,
+            text=text_msg,
+            html=html_msg,
+            attachments=[(pdf_filename, pdf_bytes, "application/pdf")],
+        )
+    except Exception as e:
+        _mark_order_email_failed(order_id, buyer_email, str(e))
+        raise
+
+    _mark_order_email_sent(order_id, buyer_email)
+    logger.info("Order confirmation email sent order_id=%s payment_id=%s to=%s", order_id, payment_id, buyer_email)
+    return {"sent": True, "to_email": buyer_email, "ticket_count": qty}
+
+
 # -------------------------
 # MP endpoints
 # -------------------------
@@ -1280,11 +1581,34 @@ async def mp_create_preference(
         }
 
 
+def _local_paid_order_has_tickets(order_id: str) -> bool:
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            ocols = set(_table_columns(cur, "orders"))
+            if "id" not in ocols or "status" not in ocols:
+                return False
+            cur.execute("SELECT status FROM orders WHERE id=%s LIMIT 1", (order_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            status = str((row.get("status") if isinstance(row, dict) else row[0]) or "").lower()
+            if status != "paid":
+                return False
+            cur.execute("SELECT COUNT(*) AS c FROM tickets WHERE order_id=%s", (order_id,))
+            rowc = cur.fetchone()
+            return int((rowc.get("c") if isinstance(rowc, dict) else rowc[0]) or 0) > 0
+    except Exception:
+        logger.exception("Could not inspect local paid order state order_id=%s", order_id)
+        return False
+
+
 @router.get("/mp/sync-order")
 async def mp_sync_order(
     request: Request,
     order_id: str = Query(...),
     tenant: str = Query("default"),
+    payment_id: str = Query(""),
 ):
     """Forza sincronización de una orden contra Mercado Pago (Checkout Pro)."""
     _ = _norm_tenant_id(tenant)
@@ -1292,43 +1616,91 @@ async def mp_sync_order(
     if not MP_ACCESS_TOKEN:
         raise HTTPException(status_code=500, detail="MP_ACCESS_TOKEN_not_configured")
 
-    # Buscar pagos por external_reference (=order_id)
+    if not isinstance(payment_id, str):
+        payment_id = ""
+    payment_id = str(payment_id or "").strip()
+    chosen: dict[str, Any] | None = None
+    sync_source = "search"
+
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                f"{MP_API_BASE}/v1/payments/search",
-                headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
-                params={"external_reference": order_id, "sort": "date_created", "criteria": "desc", "limit": 5},
-            )
-            if r.status_code >= 400:
-                raise HTTPException(status_code=502, detail=f"mp_search_error:{r.status_code}")
-            data = r.json() or {}
+            if payment_id:
+                r = await client.get(
+                    f"{MP_API_BASE}/v1/payments/{payment_id}",
+                    headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
+                )
+                if r.status_code < 400:
+                    direct_payment = r.json() or {}
+                    direct_ref = str(direct_payment.get("external_reference") or "").strip()
+                    if direct_ref and direct_ref != order_id:
+                        return {
+                            "ok": True,
+                            "order_id": order_id,
+                            "status": "payment_order_mismatch",
+                            "processed": False,
+                            "payment_id": payment_id,
+                            "payment_external_reference": direct_ref,
+                        }
+                    chosen = direct_payment
+                    sync_source = "payment_id"
+                elif r.status_code not in (404, 400):
+                    raise HTTPException(status_code=502, detail=f"mp_payment_error:{r.status_code}")
+
+            if chosen is None:
+                r = await client.get(
+                    f"{MP_API_BASE}/v1/payments/search",
+                    headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
+                    params={"external_reference": order_id, "sort": "date_created", "criteria": "desc", "limit": 5},
+                )
+                if r.status_code >= 400:
+                    raise HTTPException(status_code=502, detail=f"mp_search_error:{r.status_code}")
+                data = r.json() or {}
+                results = data.get("results") if isinstance(data, dict) else None
+                results = results if isinstance(results, list) else []
+                for p in results:
+                    st = str((p or {}).get("status") or "").lower()
+                    if st in ("approved", "authorized"):
+                        chosen = p
+                        break
+                if chosen is None and results:
+                    chosen = results[0] or {}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"mp_search_error:{type(e).__name__}")
 
-    results = data.get("results") if isinstance(data, dict) else None
-    results = results if isinstance(results, list) else []
-    if not results:
-        return {"ok": True, "order_id": order_id, "status": "not_found", "processed": False}
+    if chosen is None:
+        email_result = None
+        if _local_paid_order_has_tickets(order_id):
+            try:
+                email_result = _send_paid_order_confirmation_email(request, order_id=order_id, payment_id=payment_id or None)
+            except Exception as e:
+                logger.exception("MP sync-order local email failed order_id=%s payment_id=%s", order_id, payment_id or None)
+                email_result = {"sent": False, "reason": "error", "error": str(e)}
+            return {
+                "ok": True,
+                "order_id": order_id,
+                "status": "paid",
+                "processed": True,
+                "source": "local_paid_order",
+                "email": email_result,
+            }
+        return {"ok": True, "order_id": order_id, "status": "not_found", "processed": False, "source": sync_source}
 
-    chosen = None
-    for p in results:
-        st = str((p or {}).get("status") or "").lower()
-        if st in ("approved", "authorized"):
-            chosen = p
-            break
-    if not chosen:
-        chosen = results[0] or {}
-
-    payment_id = str(chosen.get("id") or "").strip()
+    payment_id = str(chosen.get("id") or payment_id or "").strip()
     st = str(chosen.get("status") or "").lower()
     if st not in ("approved", "authorized"):
-        return {"ok": True, "order_id": order_id, "status": st or "unknown", "processed": False}
+        return {"ok": True, "order_id": order_id, "status": st or "unknown", "processed": False, "source": sync_source}
 
     processed = _finalize_paid_order(order_id=order_id, payment_id=payment_id)
-    return {"ok": True, "order_id": order_id, "status": "paid", "processed": bool(processed)}
+    email_result: dict[str, Any] | None = None
+    if processed:
+        try:
+            email_result = _send_paid_order_confirmation_email(request, order_id=order_id, payment_id=payment_id)
+        except Exception as e:
+            logger.exception("MP sync-order email failed order_id=%s payment_id=%s", order_id, payment_id)
+            email_result = {"sent": False, "reason": "error", "error": str(e)}
+    return {"ok": True, "order_id": order_id, "status": "paid", "processed": bool(processed), "payment_id": payment_id, "source": sync_source, "email": email_result}
 
 
 @router.post("/mp/webhook")
@@ -1466,183 +1838,16 @@ async def mp_webhook(request: Request):
             # ✅ commit ANTES de armar PDF / enviar mail (así no “se pierde” el paid/tickets)
             conn.commit()
 
-        # Fetch tickets for PDF/email (afuera del commit)
-        with get_conn() as conn2:
-            cur2 = conn2.cursor()
-            tcols2 = _table_columns(cur2, "tickets")
-            ecols2 = _table_columns(cur2, "events")
-            ocols2 = _table_columns(cur2, "orders")
-
-            if "order_id" not in tcols2:
-                return {"ok": True, "received": True, "tickets": "schema_missing_order_id"}
-
-            cur2.execute(
-                """
-                SELECT t.id AS ticket_id,
-                        {ticket_type} AS ticket_type,
-                        {qr_payload} AS qr_payload,
-                        o.event_slug,
-                        {e_title} AS event_title,
-                        {e_date} AS event_date,
-                        {e_time} AS event_time,
-                        {e_venue} AS venue,
-                        {e_city} AS city,
-                        {e_address} AS event_address,
-                        {o_buyer_name} AS buyer_name,
-                        {o_buyer_email} AS buyer_email
-                FROM tickets t
-                JOIN orders o ON o.id = t.order_id
-                LEFT JOIN events e ON e.slug = o.event_slug
-                WHERE t.order_id = %s
-                ORDER BY t.created_at DESC
-                """.format(
-                    ticket_type="t.ticket_type" if "ticket_type" in tcols2 else "NULL::text",
-                    qr_payload="t.qr_payload" if "qr_payload" in tcols2 else "t.qr_token",
-                    e_title="e.title" if "title" in ecols2 else "NULL::text",
-                    e_date="e.event_date" if "event_date" in ecols2 else ("e.date" if "date" in ecols2 else "NULL::date"),
-                    e_time="e.event_time" if "event_time" in ecols2 else ("e.time" if "time" in ecols2 else "NULL::text"),
-                    e_venue="e.venue" if "venue" in ecols2 else "NULL::text",
-                    e_city="e.city" if "city" in ecols2 else "NULL::text",
-                    e_address="e.address" if "address" in ecols2 else "NULL::text",
-                    o_buyer_name="o.buyer_name" if "buyer_name" in ocols2 else "NULL::text",
-                    o_buyer_email="o.buyer_email" if "buyer_email" in ocols2 else "NULL::text",
-                ),
-                (order_id,),
-            )
-            ticket_rows_raw = cur2.fetchall() or []
-            ticket_rows = _rows_to_dicts(cur2, ticket_rows_raw)
-
-        if not ticket_rows:
-            return {"ok": True, "received": True, "tickets": "none"}
-
-        pdf_bytes = _build_tickets_pdf_bytes(ticket_rows)
-
-        pdf_filename = f"order-{order_id}.pdf"
-        pdf_path = os.path.join(UPLOAD_DIR, "tickets", pdf_filename)
-        try:
-            with open(pdf_path, "wb") as f:
-                f.write(pdf_bytes)
-        except Exception:
-            pass
-
-        # Send email once (avoid duplicates)
-        allow_resend = os.getenv("MP_WEBHOOK_RESEND_EMAIL", "0").strip() == "1"
-        if buyer_email and (allow_resend or not already_paid):
-            base = _request_base_url(request)
-            mis_path = os.getenv("MIS_TICKETS_PATH", "/#/mis-tickets").strip() or "/#/mis-tickets"
-            if not mis_path.startswith("/"):
-                mis_path = "/" + mis_path
-            mis_url = base + mis_path
-            pdf_url = f"{base}/api/tickets/orders/{order_id}/pdf"
-            terms_url = (os.getenv("LEGAL_TERMS_URL") or f"{base}/static/legal/terminos-y-condiciones.pdf").strip()
-            privacy_url = (os.getenv("LEGAL_PRIVACY_URL") or f"{base}/static/legal/politica-de-privacidad.pdf").strip()
-
-            qr_atts: list[tuple[str, bytes, str]] = []
-            extra = 0
-            first_ticket = (ticket_rows or [{}])[0]
-            event_title = first_ticket.get("event_title") or first_ticket.get("event_slug") or "Tu evento"
-            buyer_label = first_ticket.get("buyer_name") or buyer_email or "Cliente"
-            event_date = first_ticket.get("event_date")
-            event_time = first_ticket.get("event_time")
-            venue = first_ticket.get("venue") or "-"
-            event_address = first_ticket.get("event_address") or "-"
-            qty = len(ticket_rows or [])
-
-            subject = "✅ Compra confirmada en TicketPro — tus QRs y entradas"
-            text_msg = (
-                "TicketPro\n"
-                "Compra confirmada\n\n"
-                f"Evento: {event_title}\n"
-                f"Titular: {buyer_label}\n"
-                f"Cantidad de tickets: {qty}\n"
-                f"Fecha/Hora: {event_date or '-'} {event_time or ''}\n"
-                f"Lugar: {venue}\n"
-                f"Dirección: {event_address}\n\n"
-                f"• Descargar PDF: {pdf_url}\n"
-                f"• Ver Mis Tickets: {mis_url}\n\n"
-                "Adjuntamos el PDF con el resumen y tus QRs para ingresar.\n"
-                + (f"\n(Nota: se adjuntaron {len(qr_atts)} QRs de {len(ticket_rows)} por límite de adjuntos.)\n" if extra else "")
-                + "\nContacto TicketPro:\n"
-                + "• Soporte: soporte@ticketpro.com.ar\n"
-                + "• Comercial: hola@ticketpro.com.ar\n"
-                + "• Web: https://ticketpro.com.ar\n"
-                + f"• Términos y Condiciones: {terms_url}\n"
-                + f"• Política de Privacidad: {privacy_url}\n\n"
-                + "TicketPro es una marca operada por The Brain Lab SAS.\n"
-            )
-
-            extra_html = ""
-            if extra:
-                extra_html = f'<p style="color:#9ca3af; font-size:12px; margin:10px 0 0;">Se adjuntaron {len(qr_atts)} QRs de {len(ticket_rows)} por límite de adjuntos.</p>'
-
-            html_msg = f"""
-            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-                        background:linear-gradient(180deg,#f5f3ff 0%, #f9fafb 100%); padding:28px;">
-              <div style="max-width:620px; margin:0 auto; background:#ffffff;
-                          border-radius:18px; padding:0; border:1px solid #e5e7eb; overflow:hidden;">
-                <div style="background:#0f172a; padding:18px 24px;">
-                  <div style="color:#ffffff; font-size:22px; font-weight:800; letter-spacing:0.4px;">TICKET<span style='color:#818cf8;'>PRO</span></div>
-                  <div style="color:#cbd5e1; font-size:12px; margin-top:4px;">Confirmación de compra</div>
-                </div>
-
-                <div style="padding:24px;">
-                  <h2 style="margin:0 0 10px; color:#111827;">✅ Compra confirmada</h2>
-                  <p style="color:#374151; font-size:15px; margin:0 0 16px;">
-                    Tus tickets están listos para usar. Adjuntamos el PDF con toda la información de tu compra y tus QRs de ingreso.
-                  </p>
-
-                  <div style="background:#f3f4f6; border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-bottom:16px; color:#111827; font-size:14px; line-height:1.6;">
-                    <div><strong>Evento:</strong> {event_title}</div>
-                    <div><strong>Titular:</strong> {buyer_label}</div>
-                    <div><strong>Cantidad:</strong> {qty} ticket(s)</div>
-                    <div><strong>Fecha / Hora:</strong> {event_date or '-'} {event_time or ''}</div>
-                    <div><strong>Lugar:</strong> {venue}</div>
-                    <div><strong>Dirección:</strong> {event_address}</div>
-                  </div>
-
-                  <div style="display:flex; gap:12px; flex-wrap:wrap; margin:18px 0 4px;">
-                    <a href="{mis_url}"
-                       style="background:#111827; color:#ffffff; text-decoration:none;
-                              padding:12px 16px; border-radius:12px; font-weight:600; display:inline-block;">
-                      Ver Mis Tickets
-                    </a>
-                    <a href="{pdf_url}"
-                       style="background:#ffffff; color:#111827; text-decoration:none;
-                              padding:12px 16px; border-radius:12px; font-weight:600; display:inline-block;
-                              border:1px solid #e5e7eb;">
-                      Descargar PDF
-                    </a>
-                  </div>
-
-                  <p style="color:#6b7280; font-size:13px; margin:14px 0 0;">
-                    Tip: guardá este mail. Si estás sin señal en la puerta, el PDF te salva.
-                  </p>
-                  {extra_html}
-                </div>
-
-                <div style="padding:16px 24px; border-top:1px solid #e5e7eb; background:#f8fafc; color:#475569; font-size:12px; line-height:1.6;">
-                  <div><strong>Contacto TicketPro</strong></div>
-                  <div>Soporte: <a href="mailto:soporte@ticketpro.com.ar" style="color:#334155;">soporte@ticketpro.com.ar</a> · Comercial: <a href="mailto:hola@ticketpro.com.ar" style="color:#334155;">hola@ticketpro.com.ar</a></div>
-                  <div>Web: <a href="https://ticketpro.com.ar" style="color:#334155;">ticketpro.com.ar</a></div>
-                  <div style="margin-top:8px; color:#64748b;">TicketPro es una marca operada por <strong>The Brain Lab SAS</strong>.</div>
-                  <div style="margin-top:6px;">
-                    <a href="{terms_url}" style="color:#334155;">Términos y Condiciones</a>
-                    <span style="color:#94a3b8;"> · </span>
-                    <a href="{privacy_url}" style="color:#334155;">Política de Privacidad</a>
-                  </div>
-                </div>
-              </div>
-            </div>
-            """
-
-            attachments = [(pdf_filename, pdf_bytes, "application/pdf")]
-            send_email(
-                to_email=buyer_email,
-                subject=subject,
-                text=text_msg,
-                html=html_msg,
-                attachments=attachments,
-            )
+        # Send confirmation email from the webhook too. This helper is idempotent
+        # because the frontend success page may have already finalized the order via
+        # /mp/sync-order before Mercado Pago delivers this webhook.
+        email_result = _send_paid_order_confirmation_email(
+            request,
+            order_id=order_id,
+            payment_id=payment_id,
+            force=_env_bool("MP_WEBHOOK_RESEND_EMAIL", False),
+        )
+        logger.info("MP webhook order email result order_id=%s payment_id=%s result=%s", order_id, payment_id, email_result)
 
     except Exception as e:
         logger.exception("MP webhook error processing payment_id=%s", payment_id)

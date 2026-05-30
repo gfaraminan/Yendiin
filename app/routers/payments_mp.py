@@ -1581,11 +1581,34 @@ async def mp_create_preference(
         }
 
 
+def _local_paid_order_has_tickets(order_id: str) -> bool:
+    try:
+        with get_conn() as conn:
+            cur = conn.cursor()
+            ocols = set(_table_columns(cur, "orders"))
+            if "id" not in ocols or "status" not in ocols:
+                return False
+            cur.execute("SELECT status FROM orders WHERE id=%s LIMIT 1", (order_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            status = str((row.get("status") if isinstance(row, dict) else row[0]) or "").lower()
+            if status != "paid":
+                return False
+            cur.execute("SELECT COUNT(*) AS c FROM tickets WHERE order_id=%s", (order_id,))
+            rowc = cur.fetchone()
+            return int((rowc.get("c") if isinstance(rowc, dict) else rowc[0]) or 0) > 0
+    except Exception:
+        logger.exception("Could not inspect local paid order state order_id=%s", order_id)
+        return False
+
+
 @router.get("/mp/sync-order")
 async def mp_sync_order(
     request: Request,
     order_id: str = Query(...),
     tenant: str = Query("default"),
+    payment_id: str = Query(""),
 ):
     """Forza sincronización de una orden contra Mercado Pago (Checkout Pro)."""
     _ = _norm_tenant_id(tenant)
@@ -1593,40 +1616,81 @@ async def mp_sync_order(
     if not MP_ACCESS_TOKEN:
         raise HTTPException(status_code=500, detail="MP_ACCESS_TOKEN_not_configured")
 
-    # Buscar pagos por external_reference (=order_id)
+    if not isinstance(payment_id, str):
+        payment_id = ""
+    payment_id = str(payment_id or "").strip()
+    chosen: dict[str, Any] | None = None
+    sync_source = "search"
+
     try:
         async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.get(
-                f"{MP_API_BASE}/v1/payments/search",
-                headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
-                params={"external_reference": order_id, "sort": "date_created", "criteria": "desc", "limit": 5},
-            )
-            if r.status_code >= 400:
-                raise HTTPException(status_code=502, detail=f"mp_search_error:{r.status_code}")
-            data = r.json() or {}
+            if payment_id:
+                r = await client.get(
+                    f"{MP_API_BASE}/v1/payments/{payment_id}",
+                    headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
+                )
+                if r.status_code < 400:
+                    direct_payment = r.json() or {}
+                    direct_ref = str(direct_payment.get("external_reference") or "").strip()
+                    if direct_ref and direct_ref != order_id:
+                        return {
+                            "ok": True,
+                            "order_id": order_id,
+                            "status": "payment_order_mismatch",
+                            "processed": False,
+                            "payment_id": payment_id,
+                            "payment_external_reference": direct_ref,
+                        }
+                    chosen = direct_payment
+                    sync_source = "payment_id"
+                elif r.status_code not in (404, 400):
+                    raise HTTPException(status_code=502, detail=f"mp_payment_error:{r.status_code}")
+
+            if chosen is None:
+                r = await client.get(
+                    f"{MP_API_BASE}/v1/payments/search",
+                    headers={"Authorization": f"Bearer {MP_ACCESS_TOKEN}"},
+                    params={"external_reference": order_id, "sort": "date_created", "criteria": "desc", "limit": 5},
+                )
+                if r.status_code >= 400:
+                    raise HTTPException(status_code=502, detail=f"mp_search_error:{r.status_code}")
+                data = r.json() or {}
+                results = data.get("results") if isinstance(data, dict) else None
+                results = results if isinstance(results, list) else []
+                for p in results:
+                    st = str((p or {}).get("status") or "").lower()
+                    if st in ("approved", "authorized"):
+                        chosen = p
+                        break
+                if chosen is None and results:
+                    chosen = results[0] or {}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"mp_search_error:{type(e).__name__}")
 
-    results = data.get("results") if isinstance(data, dict) else None
-    results = results if isinstance(results, list) else []
-    if not results:
-        return {"ok": True, "order_id": order_id, "status": "not_found", "processed": False}
+    if chosen is None:
+        email_result = None
+        if _local_paid_order_has_tickets(order_id):
+            try:
+                email_result = _send_paid_order_confirmation_email(request, order_id=order_id, payment_id=payment_id or None)
+            except Exception as e:
+                logger.exception("MP sync-order local email failed order_id=%s payment_id=%s", order_id, payment_id or None)
+                email_result = {"sent": False, "reason": "error", "error": str(e)}
+            return {
+                "ok": True,
+                "order_id": order_id,
+                "status": "paid",
+                "processed": True,
+                "source": "local_paid_order",
+                "email": email_result,
+            }
+        return {"ok": True, "order_id": order_id, "status": "not_found", "processed": False, "source": sync_source}
 
-    chosen = None
-    for p in results:
-        st = str((p or {}).get("status") or "").lower()
-        if st in ("approved", "authorized"):
-            chosen = p
-            break
-    if not chosen:
-        chosen = results[0] or {}
-
-    payment_id = str(chosen.get("id") or "").strip()
+    payment_id = str(chosen.get("id") or payment_id or "").strip()
     st = str(chosen.get("status") or "").lower()
     if st not in ("approved", "authorized"):
-        return {"ok": True, "order_id": order_id, "status": st or "unknown", "processed": False}
+        return {"ok": True, "order_id": order_id, "status": st or "unknown", "processed": False, "source": sync_source}
 
     processed = _finalize_paid_order(order_id=order_id, payment_id=payment_id)
     email_result: dict[str, Any] | None = None
@@ -1636,7 +1700,7 @@ async def mp_sync_order(
         except Exception as e:
             logger.exception("MP sync-order email failed order_id=%s payment_id=%s", order_id, payment_id)
             email_result = {"sent": False, "reason": "error", "error": str(e)}
-    return {"ok": True, "order_id": order_id, "status": "paid", "processed": bool(processed), "email": email_result}
+    return {"ok": True, "order_id": order_id, "status": "paid", "processed": bool(processed), "payment_id": payment_id, "source": sync_source, "email": email_result}
 
 
 @router.post("/mp/webhook")

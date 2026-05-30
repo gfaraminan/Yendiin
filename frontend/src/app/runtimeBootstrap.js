@@ -18,6 +18,7 @@ export const resolveCheckoutSuccessState = ({ hash, previousPurchaseData, select
 
   const params = new URLSearchParams(match[1] || "");
   const orderId = (params.get("order_id") || "").trim();
+  const paymentId = (params.get("payment_id") || params.get("collection_id") || "").trim();
 
   return {
     event: previousPurchaseData?.event || selectedEvent || { title: "Tu evento" },
@@ -26,6 +27,7 @@ export const resolveCheckoutSuccessState = ({ hash, previousPurchaseData, select
     user: previousPurchaseData?.user || checkoutForm || {},
     method: previousPurchaseData?.method || "mp",
     order_id: orderId || previousPurchaseData?.order_id || null,
+    payment_id: paymentId || previousPurchaseData?.payment_id || null,
     tickets: Array.isArray(previousPurchaseData?.tickets) ? previousPurchaseData.tickets : [],
   };
 };

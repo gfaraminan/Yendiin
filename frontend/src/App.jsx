@@ -4249,6 +4249,7 @@ setLoading(true);
   useEffect(() => {
     if (view !== "success") return;
     const orderId = String(purchaseData?.order_id || "").trim();
+    const paymentId = String(purchaseData?.payment_id || "").trim();
     if (!orderId) return;
 
     let cancelled = false;
@@ -4264,10 +4265,8 @@ setLoading(true);
       setSuccessTries(tries);
       try {
         if (!syncCompleted) {
-          const syncResp = await fetch(
-            `/api/payments/mp/sync-order?tenant=${encodeURIComponent(publicTenant)}&order_id=${encodeURIComponent(orderId)}`,
-            { credentials: "include" },
-          );
+          const syncUrl = `/api/payments/mp/sync-order?tenant=${encodeURIComponent(publicTenant)}&order_id=${encodeURIComponent(orderId)}${paymentId ? `&payment_id=${encodeURIComponent(paymentId)}` : ""}`;
+          const syncResp = await fetch(syncUrl, { credentials: "include" });
           const syncData = await readJsonOrText(syncResp);
           if (syncResp.ok && syncData?.ok) {
             syncCompleted = Boolean(syncData.processed || syncData.status === "paid");
@@ -4313,7 +4312,7 @@ setLoading(true);
       cancelled = true;
       clearInterval(id);
     };
-  }, [view, purchaseData?.order_id, publicTenant]);
+  }, [view, purchaseData?.order_id, purchaseData?.payment_id, publicTenant]);
 
   useEffect(() => {
     const syncViewFromPath = () => {

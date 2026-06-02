@@ -5463,7 +5463,7 @@ if (closeOnSuccess) {
             setSearchQuery={setSearchQuery}
             onOpenEvent={openEventFromHome}
             isEventSoldOut={isEventSoldOut}
-            SoldOutRibbon={SoldOutRibbon}
+            soldOutRibbon={SoldOutRibbon}
             formatMoney={formatMoney}
           />
         )}

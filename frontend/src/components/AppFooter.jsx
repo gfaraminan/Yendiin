@@ -89,9 +89,8 @@ export default function AppFooter({
 
         <div className="mt-10 pt-6 border-t border-white/10 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between text-[10px] font-black uppercase tracking-widest text-white/45">
           <div>© {new Date().getFullYear()} {brand.shortName}</div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col gap-2 text-left sm:text-right">
             <span>{brand.name} © es una marca registrada de {brand.footerLegalName}</span>
-            <span className="hidden sm:inline">·</span>
             <span>{brand.footerCopyright}</span>
           </div>
         </div>

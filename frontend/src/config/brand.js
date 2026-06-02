@@ -62,6 +62,7 @@ export const resolveBrandConfig = (runtimeConfig = null) => {
     whatsapp: trimOr(fromRuntime.whatsapp ?? fromWindow.whatsapp, envBrandConfig.whatsapp),
     instagramUrl: trimOr(fromRuntime.instagramUrl ?? fromWindow.instagramUrl, envBrandConfig.instagramUrl),
     footerLegalName: trimOr(fromRuntime.footerLegalName ?? fromWindow.footerLegalName, envBrandConfig.footerLegalName),
+    footerCopyright: trimOr(fromRuntime.footerCopyright ?? fromWindow.footerCopyright, envBrandConfig.footerCopyright),
     producerPanelLabel: trimOr(fromRuntime.producerPanelLabel ?? fromWindow.producerPanelLabel, envBrandConfig.producerPanelLabel),
     adminPanelLabel: trimOr(fromRuntime.adminPanelLabel ?? fromWindow.adminPanelLabel, envBrandConfig.adminPanelLabel),
   };

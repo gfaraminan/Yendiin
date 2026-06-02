@@ -29,7 +29,7 @@ function FilterDropdown({ label, value, onChange, allLabel, options }) {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className={`mt-2 flex w-full items-center justify-between gap-3 rounded-xl border ${HOME_BRAND_THEME.inputBorder} bg-[#f4fff9] px-4 py-3 text-left text-[12px] font-black normal-case tracking-normal text-[#10231f] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.18)] transition focus:outline-none focus:ring-4 focus:ring-emerald-300/25`}
+        className={`mt-2 flex w-full items-center justify-between gap-3 rounded-xl border ${HOME_BRAND_THEME.inputBorder} bg-[#f4fff9] px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest text-[#10231f] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.18)] transition focus:outline-none focus:ring-4 focus:ring-emerald-300/25`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -49,7 +49,7 @@ function FilterDropdown({ label, value, onChange, allLabel, options }) {
                   onChange(item.value);
                   setIsOpen(false);
                 }}
-                className={`block w-full px-4 py-3 text-left text-[12px] font-black normal-case tracking-normal transition ${
+                className={`block w-full px-4 py-3 text-left text-[10px] font-black uppercase tracking-widest transition ${
                   selected ? "bg-emerald-300/70 text-[#09231c]" : "hover:bg-emerald-200/80"
                 }`}
                 role="option"

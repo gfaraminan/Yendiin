@@ -4729,17 +4729,17 @@ if (closeOnSuccess) {
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-1.5 sm:py-2">
           {/* TOP */}
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="flex items-center flex-shrink-0 w-24 sm:w-28 h-10 sm:h-12 overflow-hidden">
+            <div className="flex flex-1 items-center gap-3 min-w-0">
+              <div className="flex items-center flex-shrink-0 w-28 sm:w-32 h-12 sm:h-14 overflow-visible">
                 <img
                   src="/Logo Blanco Png fondo transparente.png"
                   alt={brandConfig.headerLabel}
-                  className="w-full h-full object-cover object-center drop-shadow-[0_10px_28px_rgba(8,15,30,0.45)]"
+                  className="w-full h-full object-contain object-center drop-shadow-[0_10px_28px_rgba(8,15,30,0.45)]"
                   loading="lazy"
                 />
               </div>
 
-              <nav className="hidden md:flex items-center justify-center gap-2 pl-2">
+              <nav className="hidden md:flex items-center justify-center gap-2 ml-auto mr-4 lg:mr-8">
                 <button
                   onClick={() => setView("public")}
                   className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-widest transition-all border ${

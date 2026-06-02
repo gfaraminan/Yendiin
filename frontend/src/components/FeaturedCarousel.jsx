@@ -114,7 +114,7 @@ export default function FeaturedCarousel({ events = [], onOpen, formatMoneyFn })
               </div>
             </div>
             <div className="p-4">
-              <div className="text-base font-black text-emerald-300 italic">
+              <div className="text-base font-black text-[#FF4FB7] italic">
                 {priceLabelForEvent(ev, formatMoneyFn)}
               </div>
               <div className="mt-3 inline-flex px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest bg-emerald-500/25 border border-emerald-300/35">

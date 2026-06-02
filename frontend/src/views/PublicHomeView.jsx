@@ -171,7 +171,7 @@ export default function PublicHomeView({
                 <div className="text-[10px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/70 flex items-center gap-2 flex-wrap"><MapPin size={13} /> {ev.city} · {ev.venue}</div>
                 <div className="text-2xl font-black uppercase italic leading-tight break-words">{ev.title}</div>
-                <div className="text-xl font-black text-[#FF4FB7] italic">{priceLabelForEvent(ev, formatMoney)}</div>
+                <div className="text-xl font-black text-[#EC16A6] italic">{priceLabelForEvent(ev, formatMoney)}</div>
               </div>
             </div>
           </button>
@@ -200,7 +200,7 @@ export default function PublicHomeView({
                 <div className="text-[11px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>
                 <div className="text-[10px] font-black uppercase tracking-widest text-white/70 flex items-center gap-2 flex-wrap"><MapPin size={13} /> {ev.city} · {ev.venue}</div>
                 <div className="text-3xl font-black uppercase italic leading-tight line-clamp-2">{ev.title}</div>
-                <div className="text-2xl font-black text-[#FF4FB7] italic">{priceLabelForEvent(ev, formatMoney)}</div>
+                <div className="text-2xl font-black text-[#EC16A6] italic">{priceLabelForEvent(ev, formatMoney)}</div>
               </div>
             </div>
           </button>

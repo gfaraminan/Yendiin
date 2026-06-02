@@ -6,7 +6,6 @@ import { HOME_BRAND_THEME } from "../app/homeTheme";
 
 export default function PublicHomeView({
   featureFlags,
-  UI,
   filteredEvents,
   totalEvents,
   cities,
@@ -19,9 +18,11 @@ export default function PublicHomeView({
   setSearchQuery,
   onOpenEvent,
   isEventSoldOut,
-  SoldOutRibbon,
+  soldOutRibbon,
   formatMoney,
 }) {
+  const soldOutMarker = typeof soldOutRibbon === "function" ? soldOutRibbon : null;
+
   return (
     <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
       {featureFlags.featuredCarousel && (
@@ -34,12 +35,12 @@ export default function PublicHomeView({
         </div>
       )}
 
-      <div className={`mt-6 rounded-3xl border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-hidden shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
+      <div className={`mt-6 mb-8 md:mb-10 rounded-3xl border ${HOME_BRAND_THEME.inputBorder} p-4 sm:p-5 overflow-x-visible shadow-[0_18px_40px_rgba(148,163,184,0.28)] ${HOME_BRAND_THEME.inputBg}`}>
         <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
           <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Ciudad
-              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`mt-2 w-full rounded-xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterCity} onChange={(e) => setFilterCity(e.target.value)} className={`public-home-filter-select mt-2 w-full rounded-xl border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-[12px] font-black`}>
                 <option value="all">Todas</option>
                 {cities.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -47,7 +48,7 @@ export default function PublicHomeView({
 
             <label className="text-[10px] font-black uppercase tracking-widest text-white/65">
               Tipo
-              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`mt-2 w-full rounded-xl ${HOME_BRAND_THEME.inputBg} border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-white text-[12px] font-black`}>
+              <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className={`public-home-filter-select mt-2 w-full rounded-xl border ${HOME_BRAND_THEME.inputBorder} px-4 py-3 text-[12px] font-black`}>
                 <option value="all">Todos</option>
                 {types.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -85,7 +86,7 @@ export default function PublicHomeView({
         </div>
       </div>
 
-      <div className="md:hidden mt-8 space-y-4">
+      <div className="md:hidden mt-10 space-y-5">
         {filteredEvents.map((ev) => (
           <button
             key={ev.id}
@@ -101,7 +102,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top"
               />
-              {isEventSoldOut(ev) && <SoldOutRibbon />}
+              {isEventSoldOut(ev) && soldOutMarker ? soldOutMarker() : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-5 min-w-0 space-y-2">
                 <div className="text-[10px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>
@@ -114,7 +115,7 @@ export default function PublicHomeView({
         ))}
       </div>
 
-      <div className="hidden md:grid grid-cols-2 xl:grid-cols-3 gap-8">
+      <div className="hidden md:grid grid-cols-2 xl:grid-cols-3 gap-8 mt-10">
         {filteredEvents.map((ev) => (
           <button
             key={ev.id}
@@ -130,7 +131,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top opacity-95"
               />
-              {isEventSoldOut(ev) && <SoldOutRibbon />}
+              {isEventSoldOut(ev) && soldOutMarker ? soldOutMarker() : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute bottom-0 left-0 p-6 space-y-2 w-full">
                 <div className="text-[11px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>

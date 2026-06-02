@@ -178,7 +178,7 @@ export default function PublicHomeView({
         ))}
       </div>
 
-      <div className="hidden md:grid grid-cols-2 xl:grid-cols-3 gap-8">
+      <div className="hidden md:grid grid-cols-2 xl:grid-cols-3 gap-8 mt-10">
         {filteredEvents.map((ev) => (
           <button
             key={ev.id}

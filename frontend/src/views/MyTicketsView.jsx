@@ -17,7 +17,7 @@ export default function MyTicketsView({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
         <div>
           <h1 className="text-5xl font-black uppercase italic tracking-tight">
-            Mis <span className="text-indigo-600">Tickets</span>
+            Mis <span className="text-[#EC16A6]">Tickets</span>
           </h1>
           <p className="text-[11px] text-white/60 mt-2 max-w-2xl leading-relaxed">
             Acá ves tus compras de <span className="text-white font-black">Entradas</span> y <span className="text-white font-black">Barra</span>.

@@ -14,6 +14,8 @@ export default function AppFooter({
   const showProducerCta = features.producerPanel;
   const producerPanelLabel = String(brand.producerPanelLabel || "").trim() || "PRODUCTOR";
   const whatsappUrl = brand.whatsapp ? `https://wa.me/${String(brand.whatsapp).replace(/[^\d]/g, "")}` : "";
+  const footerBrandLabel = String(brand.headerLabel || "Yendiin");
+  const footerBrandMatch = footerBrandLabel.match(/^(.*)(iin)$/i);
 
   return (
     <footer className="border-t border-white/10 bg-[#070912]/95 backdrop-blur-xl overflow-x-hidden">
@@ -23,7 +25,16 @@ export default function AppFooter({
             <div className="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-indigo-200 bg-indigo-500/15 border border-indigo-300/20">
               Ticketing online
             </div>
-            <div className="text-white font-black uppercase italic tracking-tight text-2xl mt-3">{brand.headerLabel}</div>
+            <div className="text-white font-black uppercase italic tracking-tight text-2xl mt-3">
+              {footerBrandMatch ? (
+                <>
+                  {footerBrandMatch[1]}
+                  <span className="text-[#EC16A6]">{footerBrandMatch[2]}</span>
+                </>
+              ) : (
+                footerBrandLabel
+              )}
+            </div>
             <div className="text-[12px] text-white/60 mt-3 max-w-md">
               Experiencia de compra rápida con validación QR y gestión centralizada para eventos.
             </div>

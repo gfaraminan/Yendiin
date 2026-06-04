@@ -670,13 +670,31 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     return buf.getvalue()
 
 
-def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
+def _first_non_empty(*values) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _insert_ticket_from_order(
+    cur,
+    *,
+    tcols: set[str],
+    order: dict,
+    order_id: str,
+    sale_item_id: str,
+    item: dict | None = None,
+):
+    order = order if isinstance(order, dict) else {}
+    item = item if isinstance(item, dict) else {}
     cols = ["id", "order_id", "status"]
     vals = ["%s", "%s", "%s"]
     args = [
         str(uuid.uuid4()),
         order_id,
-        "valid",
+        "issued",
     ]
 
     qr_value = uuid.uuid4().hex
@@ -684,7 +702,7 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
         cols.append("qr_token")
         vals.append("%s")
         args.append(qr_value)
-    elif "qr_payload" in tcols:
+    if "qr_payload" in tcols:
         cols.append("qr_payload")
         vals.append("%s")
         args.append(qr_value)
@@ -692,36 +710,34 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
     if "tenant_id" in tcols:
         cols.append("tenant_id")
         vals.append("%s")
-        args.append(order.get("tenant_id") if isinstance(order, dict) else None)
+        args.append(order.get("tenant_id"))
 
     if "producer_tenant" in tcols:
         cols.append("producer_tenant")
         vals.append("%s")
-        args.append(order.get("producer_tenant") if isinstance(order, dict) else None)
+        args.append(order.get("producer_tenant"))
 
     if "event_slug" in tcols:
         cols.append("event_slug")
         vals.append("%s")
-        args.append(order.get("event_slug") if isinstance(order, dict) else None)
+        args.append(order.get("event_slug"))
 
     if "sale_item_id" in tcols:
         cols.append("sale_item_id")
         vals.append("%s")
         args.append(sale_item_id)
 
-    buyer_phone = ""
-    buyer_dni = ""
-    if isinstance(order, dict):
-        buyer_phone = str(order.get("buyer_phone") or "").strip()
-        buyer_dni = str(order.get("buyer_dni") or "").strip()
-
-        if not buyer_dni:
-            try:
-                items = _normalize_order_items(order.get("items_json"))
-                if isinstance(items, list) and items:
-                    buyer_dni = str((items[0] or {}).get("buyer_dni") or "").strip()
-            except Exception:
-                buyer_dni = ""
+    buyer_phone = _first_non_empty(order.get("buyer_phone"), item.get("buyer_phone"), item.get("phone"))
+    buyer_dni = _first_non_empty(order.get("buyer_dni"), item.get("buyer_dni"), item.get("document_number"), item.get("dni"))
+    buyer_address = _first_non_empty(order.get("buyer_address"), item.get("buyer_address"), item.get("address"))
+    buyer_province = _first_non_empty(order.get("buyer_province"), item.get("buyer_province"), item.get("province"))
+    buyer_postal_code = _first_non_empty(
+        order.get("buyer_postal_code"),
+        item.get("buyer_postal_code"),
+        item.get("postal_code"),
+        item.get("zip_code"),
+    )
+    buyer_birth_date = _first_non_empty(order.get("buyer_birth_date"), item.get("buyer_birth_date"), item.get("birth_date"))
 
     if "buyer_phone" in tcols:
         cols.append("buyer_phone")
@@ -732,6 +748,26 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
         cols.append("buyer_dni")
         vals.append("%s")
         args.append(buyer_dni or None)
+
+    if "buyer_address" in tcols:
+        cols.append("buyer_address")
+        vals.append("%s")
+        args.append(buyer_address or None)
+
+    if "buyer_province" in tcols:
+        cols.append("buyer_province")
+        vals.append("%s")
+        args.append(buyer_province or None)
+
+    if "buyer_postal_code" in tcols:
+        cols.append("buyer_postal_code")
+        vals.append("%s")
+        args.append(buyer_postal_code or None)
+
+    if "buyer_birth_date" in tcols:
+        cols.append("buyer_birth_date")
+        vals.append("%s")
+        args.append(buyer_birth_date or None)
 
     sql = f"INSERT INTO tickets ({', '.join(cols)}) VALUES ({', '.join(vals)})"
     cur.execute(sql, tuple(args))
@@ -821,6 +857,7 @@ def _finalize_paid_order(order_id: str, payment_id: str) -> bool:
                             order=order,
                             order_id=order_id,
                             sale_item_id=sale_item_id,
+                            item=it,
                         )
 
             conn.commit()
@@ -1833,6 +1870,7 @@ async def mp_webhook(request: Request):
                             order=order,
                             order_id=order_id,
                             sale_item_id=sale_item_id,
+                            item=it,
                         )
 
             # ✅ commit ANTES de armar PDF / enviar mail (así no “se pierde” el paid/tickets)

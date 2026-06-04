@@ -3671,7 +3671,9 @@ const refreshMe = async () => {
       return "-";
     };
 
-    const fullName = pickFirst(t.buyer_name, t.full_name, t.holder_name, t.name, holderData.full_name, holderData.name, holderData.fullName, metaData.full_name, metaData.name);
+    // Do not use generic row.name as a buyer name here: sold-ticket rows may
+    // also carry item/sale names (e.g. "general") and those belong in item_name.
+    const fullName = pickFirst(t.buyer_name, t.full_name, t.holder_name, holderData.full_name, holderData.name, holderData.fullName, metaData.full_name, metaData.name);
     const dni = pickFirst(t.buyer_dni, t.dni, t.document, t.document_number, t.documentNumber, holderData.dni, holderData.document, holderData.document_number, metaData.dni, metaData.document, metaData.document_number);
     const email = pickFirst(t.buyer_email, t.email, t.mail, holderData.email, metaData.email);
     const phone = pickFirst(t.buyer_phone, t.phone, t.cellphone, t.mobile, holderData.phone, holderData.cellphone, holderData.mobile, metaData.phone, metaData.cellphone, metaData.mobile);

@@ -425,7 +425,9 @@ def _extract_buyer_fields_from_items_json(raw: object) -> dict[str, str]:
         payload = None
 
     targets = {
-        "buyer_name": ("buyer_name", "full_name", "name"),
+        # Do not treat a generic top-level "name" as buyer_name: in order
+        # items_json that is usually the sale item label (e.g. "general").
+        "buyer_name": ("buyer_name", "full_name", "fullName", "buyer_full_name", "holder_name"),
         "buyer_email": ("buyer_email", "email", "mail"),
         "buyer_phone": ("buyer_phone", "phone", "cellphone", "mobile"),
         "buyer_dni": ("buyer_dni", "dni", "document_number", "document"),
@@ -1492,7 +1494,16 @@ def support_ai_admin_sold_tickets(request: Request, tenant_id: str = "default", 
     ticket_cols = _tickets_columns()
     users_cols = _users_columns()
 
-    name_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in order_cols else "''"
+    name_candidates = []
+    if "buyer_name" in ticket_cols:
+        name_candidates.append("NULLIF(TRIM(t.buyer_name), '')")
+    if "buyer_name" in order_cols:
+        name_candidates.append("NULLIF(TRIM(o.buyer_name), '')")
+    if "full_name" in order_cols:
+        name_candidates.append("NULLIF(TRIM(o.full_name), '')")
+    if "customer_name" in order_cols:
+        name_candidates.append("NULLIF(TRIM(o.customer_name), '')")
+    name_expr = f"COALESCE({', '.join(name_candidates)}, '')" if name_candidates else "''"
 
     users_join = ""
     if "auth_subject" in order_cols and "auth_subject" in users_cols and "email" in users_cols:

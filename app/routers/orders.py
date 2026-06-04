@@ -50,6 +50,8 @@ def _table_columns(cur, table: str) -> set[str]:
     """Return column names for a table.
 
     Works with tuple rows (default cursor) and dict-like rows (DictCursor/RealDictCursor).
+    Some Render/Postgres setups can resolve an unqualified table while
+    information_schema returns no rows, so we fall back to cursor.description.
     """
     cur.execute(
         """
@@ -60,30 +62,37 @@ def _table_columns(cur, table: str) -> set[str]:
         (table,),
     )
     rows = cur.fetchall() or []
-    if not rows:
-        return set()
-
-    first = rows[0]
-    if isinstance(first, dict):
-        out: set[str] = set()
-        for r in rows:
-            if not r:
-                continue
-            v = r.get("column_name")
-            if v is None and len(r):
-                v = next(iter(r.values()))
-            if v:
-                out.add(str(v))
-        return out
 
     out: set[str] = set()
-    for r in rows:
-        if not r:
-            continue
-        v = r[0] if len(r) else None
-        if v:
-            out.add(str(v))
-    return out
+    if rows:
+        first = rows[0]
+        if isinstance(first, dict):
+            for r in rows:
+                if not r:
+                    continue
+                v = r.get("column_name")
+                if v is None and len(r):
+                    v = next(iter(r.values()))
+                if v:
+                    out.add(str(v))
+        else:
+            for r in rows:
+                if not r:
+                    continue
+                v = r[0] if len(r) else None
+                if v:
+                    out.add(str(v))
+    if out:
+        return out
+
+    # Safe because `table` is always an internal constant in this router.
+    if not str(table).replace("_", "").isalnum():
+        return set()
+    try:
+        cur.execute(f"SELECT * FROM {table} WHERE 1=0")
+        return {str(col[0]) for col in (getattr(cur, "description", None) or []) if col and col[0]}
+    except Exception:
+        return set()
 
 
 
@@ -165,7 +174,7 @@ class BuyerIn(BaseModel):
 
 
 class OrderItemIn(BaseModel):
-    sale_item_id: str = Field(..., description="ID del item/entrada a comprar")
+    sale_item_id: str | int = Field(..., description="ID del item/entrada a comprar")
     quantity: int = Field(1, ge=1, le=20, description="Cantidad")
 
 
@@ -175,7 +184,7 @@ class OrderCreate(BaseModel):
     event_slug: str = Field(..., min_length=1)
 
     # compat: modo simple
-    sale_item_id: Optional[str] = None
+    sale_item_id: Optional[str | int] = None
     quantity: int = Field(1, ge=1, le=20)
 
     # modo múltiple
@@ -190,9 +199,34 @@ class OrderCreate(BaseModel):
 
 
 
-def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: str, sale_item_id: str):
+def _first_non_empty(*values) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _insert_ticket_from_order(
+    cur,
+    *,
+    tcols: set[str],
+    order: dict,
+    order_id: str,
+    sale_item_id: str,
+    item: dict | None = None,
+):
+    """Insert one persisted ticket from an already-created order.
+
+    This helper is intentionally schema-safe because older white-label DBs may
+    have a smaller tickets table. When QR columns exist, both qr_token and
+    qr_payload are populated so admin, producer, validation and PDFs can all use
+    the same persisted ticket row instead of falling back to virtual assets.
+    """
+    item = item if isinstance(item, dict) else {}
+    order = order if isinstance(order, dict) else {}
     ticket_id = str(uuid.uuid4())
-    qr_token = str(uuid.uuid4())
+    qr_token = uuid.uuid4().hex
 
     cols = []
     vals = []
@@ -211,25 +245,47 @@ def _insert_ticket_from_order(cur, *, tcols: set[str], order: dict, order_id: st
     add("event_slug", order.get("event_slug"))
     add("sale_item_id", sale_item_id)
     add("status", "issued")
-    if "qr_token" in tcols:
-        add("qr_token", qr_token)
-    elif "qr_payload" in tcols:
-        add("qr_payload", qr_token)
+    add("qr_token", qr_token)
+    add("qr_payload", qr_token)
     add("used", False)
     add("checked_in", False)
 
-    buyer_name = (order.get("buyer_name") or "").strip()
-    buyer_email = (order.get("buyer_email") or "").strip()
+    buyer_name = _first_non_empty(order.get("buyer_name"), item.get("buyer_name"))
+    buyer_email = _first_non_empty(order.get("buyer_email"), item.get("buyer_email"))
+    buyer_phone = _first_non_empty(order.get("buyer_phone"), item.get("buyer_phone"), item.get("phone"))
+    buyer_dni = _first_non_empty(order.get("buyer_dni"), item.get("buyer_dni"), item.get("document_number"), item.get("dni"))
+    buyer_address = _first_non_empty(order.get("buyer_address"), item.get("buyer_address"), item.get("address"))
+    buyer_province = _first_non_empty(order.get("buyer_province"), item.get("buyer_province"), item.get("province"))
+    buyer_postal_code = _first_non_empty(
+        order.get("buyer_postal_code"),
+        item.get("buyer_postal_code"),
+        item.get("postal_code"),
+        item.get("zip_code"),
+    )
+    buyer_birth_date = _first_non_empty(order.get("buyer_birth_date"), item.get("buyer_birth_date"), item.get("birth_date"))
+
     if buyer_name:
         add("buyer_name", buyer_name)
     if buyer_email:
         add("buyer_email", buyer_email)
+    if buyer_phone:
+        add("buyer_phone", buyer_phone)
+    if buyer_dni:
+        add("buyer_dni", buyer_dni)
+    if buyer_address:
+        add("buyer_address", buyer_address)
+    if buyer_province:
+        add("buyer_province", buyer_province)
+    if buyer_postal_code:
+        add("buyer_postal_code", buyer_postal_code)
+    if buyer_birth_date:
+        add("buyer_birth_date", buyer_birth_date)
 
     if "created_at" in tcols:
         cols.append("created_at")
         vals.append("NOW()")
 
-    if not ({"id", "order_id", "status"}.issubset(set(cols)) and cols):
+    if not ({"id", "order_id", "event_slug", "status"}.issubset(set(cols)) and cols):
         return
 
     cur.execute(f"INSERT INTO tickets ({', '.join(cols)}) VALUES ({', '.join(vals)})", tuple(args))
@@ -394,6 +450,8 @@ def create_order(
                         "unit_price": unit_cents / 100.0,
                         "line_total_cents": line_total_cents,
                         "line_total": line_total_cents / 100.0,
+                        "buyer_name": (payload.buyer.full_name if payload.buyer else None),
+                        "buyer_email": (payload.buyer.email if payload.buyer else None),
                         "buyer_phone": buyer_phone,
                         "buyer_dni": buyer_dni,
                         "buyer_address": (payload.buyer.address if payload.buyer else None),
@@ -493,11 +551,21 @@ def create_order(
                                 cur,
                                 tcols=tcols,
                                 order={
+                                    "tenant_id": tenant_id,
+                                    "producer_tenant": owner_tenant,
+                                    "event_slug": event_slug,
                                     "buyer_name": (payload.buyer.full_name if payload.buyer else None),
                                     "buyer_email": (payload.buyer.email if payload.buyer else None),
+                                    "buyer_phone": buyer_phone,
+                                    "buyer_dni": buyer_dni,
+                                    "buyer_address": (payload.buyer.address if payload.buyer else None),
+                                    "buyer_province": (payload.buyer.province if payload.buyer else None),
+                                    "buyer_postal_code": (payload.buyer.postal_code if payload.buyer else None),
+                                    "buyer_birth_date": (payload.buyer.birth_date if payload.buyer else None),
                                 },
                                 order_id=order_id,
                                 sale_item_id=sale_item_id,
+                                item=it,
                             )
             conn.commit()
 

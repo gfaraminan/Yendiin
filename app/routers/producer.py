@@ -1740,7 +1740,16 @@ def api_event_sold_tickets(
         if "mail" in tickets_cols:
             email_candidates.append("NULLIF(TRIM(t.mail), '')")
         buyer_email_expr = f"COALESCE({', '.join(email_candidates)}, '')" if email_candidates else "''"
-        buyer_name_expr = "COALESCE(o.buyer_name, '')" if "buyer_name" in orders_cols else "''"
+        name_candidates = []
+        if "buyer_name" in tickets_cols:
+            name_candidates.append("NULLIF(TRIM(t.buyer_name), '')")
+        if "buyer_name" in orders_cols:
+            name_candidates.append("NULLIF(TRIM(o.buyer_name), '')")
+        if "full_name" in orders_cols:
+            name_candidates.append("NULLIF(TRIM(o.full_name), '')")
+        if "customer_name" in orders_cols:
+            name_candidates.append("NULLIF(TRIM(o.customer_name), '')")
+        buyer_name_expr = f"COALESCE({', '.join(name_candidates)}, '')" if name_candidates else "''"
         address_candidates = []
         if "buyer_address" in orders_cols:
             address_candidates.append("NULLIF(TRIM(o.buyer_address), '')")
@@ -2310,7 +2319,7 @@ def api_issue_courtesy_tickets(
                    AND tenant = %s
                    AND event_slug = %s
                 """,
-                (qty, now_s, int(payload.sale_item_id), producer, event_slug),
+                (qty, now_v, int(payload.sale_item_id), producer, event_slug),
             )
 
         event_title = event_slug
@@ -2631,7 +2640,7 @@ def api_issue_pos_sale(
                    AND tenant = %s
                    AND event_slug = %s
                 """,
-                (qty, now_s, int(payload.sale_item_id), producer, event_slug),
+                (qty, now_v, int(payload.sale_item_id), producer, event_slug),
             )
 
         event_title = event_slug

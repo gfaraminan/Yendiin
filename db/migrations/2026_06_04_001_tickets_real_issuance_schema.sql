@@ -2,6 +2,19 @@ BEGIN;
 
 -- Bring older Yendiin tickets tables up to the persisted-ticket contract used by
 -- admin sold-ticket lists, producer lists, QR validation and MP finalization.
+
+-- Older installs may not have order-level buyer columns. Ensure future orders
+-- can persist form identity and make the ticket hydration query schema-safe.
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS buyer_name TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_email TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_phone TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_dni TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_address TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_province TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_postal_code TEXT,
+  ADD COLUMN IF NOT EXISTS buyer_birth_date TEXT;
+
 ALTER TABLE public.tickets
   ADD COLUMN IF NOT EXISTS producer_tenant TEXT,
   ADD COLUMN IF NOT EXISTS qr_token TEXT,

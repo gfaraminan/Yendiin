@@ -450,6 +450,8 @@ def create_order(
                         "unit_price": unit_cents / 100.0,
                         "line_total_cents": line_total_cents,
                         "line_total": line_total_cents / 100.0,
+                        "buyer_name": (payload.buyer.full_name if payload.buyer else None),
+                        "buyer_email": (payload.buyer.email if payload.buyer else None),
                         "buyer_phone": buyer_phone,
                         "buyer_dni": buyer_dni,
                         "buyer_address": (payload.buyer.address if payload.buyer else None),

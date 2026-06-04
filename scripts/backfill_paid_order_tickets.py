@@ -55,6 +55,73 @@ def _first_non_empty(*values: Any) -> str:
     return ""
 
 
+def _buyer_values(order: dict[str, Any], item: dict[str, Any]) -> dict[str, str]:
+    return {
+        "buyer_name": _first_non_empty(order.get("buyer_name"), item.get("buyer_name"), item.get("full_name"), item.get("fullName"), item.get("buyer_full_name")),
+        "buyer_email": _first_non_empty(order.get("buyer_email"), item.get("buyer_email"), item.get("email"), item.get("mail")),
+        "buyer_phone": _first_non_empty(order.get("buyer_phone"), item.get("buyer_phone"), item.get("phone")),
+        "buyer_dni": _first_non_empty(order.get("buyer_dni"), item.get("buyer_dni"), item.get("document_number"), item.get("dni")),
+        "buyer_address": _first_non_empty(order.get("buyer_address"), item.get("buyer_address"), item.get("address")),
+        "buyer_province": _first_non_empty(order.get("buyer_province"), item.get("buyer_province"), item.get("province")),
+        "buyer_postal_code": _first_non_empty(order.get("buyer_postal_code"), item.get("buyer_postal_code"), item.get("postal_code"), item.get("zip_code")),
+        "buyer_birth_date": _first_non_empty(order.get("buyer_birth_date"), item.get("buyer_birth_date"), item.get("birth_date")),
+    }
+
+
+def _hydrate_existing_tickets(cur, *, ocols: set[str], tcols: set[str], tenant_id: str, event_slug: str, execute: bool, limit: int) -> tuple[int, int]:
+    buyer_cols = [
+        c for c in ("buyer_name", "buyer_email", "buyer_phone", "buyer_dni", "buyer_address", "buyer_province", "buyer_postal_code", "buyer_birth_date")
+        if c in tcols
+    ]
+    if not buyer_cols:
+        return (0, 0)
+
+    where = ["t.order_id IS NOT NULL"]
+    params: list[Any] = []
+    if "tenant_id" in tcols and tenant_id:
+        where.append("t.tenant_id = %s")
+        params.append(tenant_id)
+    if event_slug:
+        where.append("t.event_slug = %s")
+        params.append(event_slug)
+    where.append("(" + " OR ".join([f"t.{c} IS NULL OR t.{c} = ''" for c in buyer_cols]) + ")")
+    params.append(max(1, int(limit)))
+
+    cur.execute(
+        f"""
+        SELECT t.id AS ticket_id, t.sale_item_id AS ticket_sale_item_id, o.*
+        FROM tickets t
+        JOIN orders o ON o.id::text = t.order_id::text
+        WHERE {' AND '.join(where)}
+        ORDER BY t.created_at DESC NULLS LAST, t.id DESC
+        LIMIT %s
+        """,
+        tuple(params),
+    )
+    rows = cur.fetchall() or []
+    updated = 0
+    for row in rows:
+        order = dict(row)
+        items = _normalize_items(order.get("items_json"))
+        sale_item_id = str(order.get("ticket_sale_item_id") or "").strip()
+        item = next((it for it in items if str(it.get("sale_item_id") or it.get("id") or "").strip() == sale_item_id), items[0] if items else {})
+        values = _buyer_values(order, item)
+        assignments = []
+        args: list[Any] = []
+        for col in buyer_cols:
+            value = values.get(col) or ""
+            if value:
+                assignments.append(f"{col} = COALESCE(NULLIF({col}, ''), %s)")
+                args.append(value)
+        if not assignments:
+            continue
+        updated += 1
+        if execute:
+            args.append(order.get("ticket_id"))
+            cur.execute(f"UPDATE tickets SET {', '.join(assignments)} WHERE id = %s", tuple(args))
+    return (len(rows), updated)
+
+
 def _insert_ticket(cur, *, tcols: set[str], order: dict[str, Any], item: dict[str, Any], seq: int) -> None:
     sale_item_id = _first_non_empty(item.get("sale_item_id"), item.get("id"), "item")
     qr_value = uuid.uuid4().hex
@@ -77,17 +144,9 @@ def _insert_ticket(cur, *, tcols: set[str], order: dict[str, Any], item: dict[st
     add("status", "issued")
     add("qr_token", qr_value)
     add("qr_payload", qr_value)
-    add("buyer_name", _first_non_empty(order.get("buyer_name"), item.get("buyer_name"), item.get("full_name"), item.get("fullName"), item.get("buyer_full_name")) or None)
-    add("buyer_email", _first_non_empty(order.get("buyer_email"), item.get("buyer_email"), item.get("email"), item.get("mail")) or None)
-    add("buyer_phone", _first_non_empty(order.get("buyer_phone"), item.get("buyer_phone"), item.get("phone")) or None)
-    add("buyer_dni", _first_non_empty(order.get("buyer_dni"), item.get("buyer_dni"), item.get("document_number"), item.get("dni")) or None)
-    add("buyer_address", _first_non_empty(order.get("buyer_address"), item.get("buyer_address"), item.get("address")) or None)
-    add("buyer_province", _first_non_empty(order.get("buyer_province"), item.get("buyer_province"), item.get("province")) or None)
-    add(
-        "buyer_postal_code",
-        _first_non_empty(order.get("buyer_postal_code"), item.get("buyer_postal_code"), item.get("postal_code"), item.get("zip_code")) or None,
-    )
-    add("buyer_birth_date", _first_non_empty(order.get("buyer_birth_date"), item.get("buyer_birth_date"), item.get("birth_date")) or None)
+    buyer_values = _buyer_values(order, item)
+    for col, value in buyer_values.items():
+        add(col, value or None)
 
     if "created_at" in tcols:
         cols.append("created_at")
@@ -108,6 +167,11 @@ def main() -> None:
     parser.add_argument("--event-slug", default="")
     parser.add_argument("--limit", type=int, default=500)
     parser.add_argument("--execute", action="store_true", help="Actually insert tickets. Default is dry-run.")
+    parser.add_argument(
+        "--hydrate-existing",
+        action="store_true",
+        help="Update existing tickets with buyer fields from orders/items_json instead of inserting missing ticket rows.",
+    )
     args = parser.parse_args()
 
     dsn = os.getenv("DATABASE_URL")
@@ -122,6 +186,24 @@ def main() -> None:
                 raise SystemExit("orders schema must include id, items_json and status")
             if not ({"qr_token", "qr_payload"} & tcols):
                 raise SystemExit("tickets schema must include qr_token or qr_payload before backfill")
+
+            if args.hydrate_existing:
+                scanned, updated = _hydrate_existing_tickets(
+                    cur,
+                    ocols=ocols,
+                    tcols=tcols,
+                    tenant_id=args.tenant_id,
+                    event_slug=args.event_slug,
+                    execute=args.execute,
+                    limit=max(1, int(args.limit)),
+                )
+                if args.execute:
+                    conn.commit()
+                else:
+                    conn.rollback()
+                mode = "EXECUTE" if args.execute else "DRY-RUN"
+                print(f"{mode} HYDRATE: scanned_tickets={scanned} updatable_tickets={updated}")
+                return
 
             where = ["lower(COALESCE(o.status, '')) = 'paid'"]
             params: list[Any] = []

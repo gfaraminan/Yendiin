@@ -121,7 +121,7 @@ def main() -> None:
             if not ({"qr_token", "qr_payload"} & tcols):
                 raise SystemExit("tickets schema must include qr_token or qr_payload before backfill")
 
-            where = ["lower(COALESCE(o.status, '')) = 'paid"]
+            where = ["lower(COALESCE(o.status, '')) = 'paid'"]
             params: list[Any] = []
             if "tenant_id" in ocols and args.tenant_id:
                 where.append("o.tenant_id = %s")

@@ -77,6 +77,8 @@ def _insert_ticket(cur, *, tcols: set[str], order: dict[str, Any], item: dict[st
     add("status", "issued")
     add("qr_token", qr_value)
     add("qr_payload", qr_value)
+    add("buyer_name", _first_non_empty(order.get("buyer_name"), item.get("buyer_name"), item.get("full_name"), item.get("fullName"), item.get("buyer_full_name")) or None)
+    add("buyer_email", _first_non_empty(order.get("buyer_email"), item.get("buyer_email"), item.get("email"), item.get("mail")) or None)
     add("buyer_phone", _first_non_empty(order.get("buyer_phone"), item.get("buyer_phone"), item.get("phone")) or None)
     add("buyer_dni", _first_non_empty(order.get("buyer_dni"), item.get("buyer_dni"), item.get("document_number"), item.get("dni")) or None)
     add("buyer_address", _first_non_empty(order.get("buyer_address"), item.get("buyer_address"), item.get("address")) or None)

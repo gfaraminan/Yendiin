@@ -2310,7 +2310,7 @@ def api_issue_courtesy_tickets(
                    AND tenant = %s
                    AND event_slug = %s
                 """,
-                (qty, now_s, int(payload.sale_item_id), producer, event_slug),
+                (qty, now_v, int(payload.sale_item_id), producer, event_slug),
             )
 
         event_title = event_slug
@@ -2631,7 +2631,7 @@ def api_issue_pos_sale(
                    AND tenant = %s
                    AND event_slug = %s
                 """,
-                (qty, now_s, int(payload.sale_item_id), producer, event_slug),
+                (qty, now_v, int(payload.sale_item_id), producer, event_slug),
             )
 
         event_title = event_slug

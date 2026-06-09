@@ -6842,7 +6842,6 @@ if (closeOnSuccess) {
             <div className="p-5 rounded-3xl bg-indigo-500/10 border border-indigo-500/30 mb-6">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="text-[9px] font-black uppercase tracking-widest text-indigo-200">NUEVO · Consola Admin</div>
-                <div className="text-[10px] text-indigo-100/80">tenant: <b>{tenantId}</b></div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
                 <select
@@ -6879,7 +6878,6 @@ if (closeOnSuccess) {
               ) : (
                 <div className="text-[11px] text-white/60">{adminOpsLoading ? "Cargando dashboard admin..." : "Sin datos de dashboard"}</div>
               )}
-              <div className="mt-3 text-[10px] text-white/60">Si no ves métricas, revisá que backend tenga SUPPORT_AI_ENABLED=true y que tu email esté en SUPPORT_AI_STAFF_EMAILS.</div>
               <div className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-2">
                 <input
                   value={adminReportSearch}
@@ -7063,38 +7061,12 @@ if (closeOnSuccess) {
             </div>
 
             <div className="mb-6 p-6 md:p-7 rounded-3xl border border-indigo-400/40 bg-gradient-to-br from-indigo-500/20 via-indigo-500/10 to-black/30 shadow-[0_12px_40px_rgba(99,102,241,0.2)]">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                <div>
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200/90">Centro de control soporte IA</div>
-                  <p className="mt-3 text-[12px] md:text-[13px] text-indigo-50/95 max-w-3xl leading-relaxed">
-                    Desde acá podés: consultar al Soporte IA, crear eventos de prueba o para productores, y transferir ownership.
-                  </p>
-                </div>
-                <button
-                  onClick={() => {
-                    loadSupportAIStatus();
-                    loadAdminSupportData();
-                  }}
-                  className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/10 hover:bg-white/15 border border-white/20 shrink-0"
-                >
-                  Revalidar
-                </button>
-              </div>
-
-              <div className="mt-5 p-4 rounded-2xl bg-black/35 border border-white/15 text-[12px] text-white/85">
-                {supportAiStatus?.error ? (
-                  <span className="text-rose-300">{supportAiStatus.error}</span>
-                ) : supportAiStatus ? (
-                  <div className="flex flex-wrap gap-x-4 gap-y-2">
-                    <span>enabled: <b>{String(!!supportAiStatus.enabled)}</b></span>
-                    <span>staff: <b>{String(!!supportAiStatus.is_staff)}</b></span>
-                    <span>model: <b>{supportAiStatus.model || "-"}</b></span>
-                    <span>openai_key: <b>{String(!!supportAiStatus.has_openai_key)}</b></span>
-                    <span>vector_store: <b>{String(!!supportAiStatus.has_vector_store)}</b></span>
-                  </div>
-                ) : (
-                  <span className="text-white/60">Cargando estado...</span>
-                )}
+              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-200/90">Centro de control soporte IA</div>
+              <div className="mt-5 p-5 rounded-2xl bg-black/35 border border-white/15 text-center">
+                <div className="text-2xl md:text-3xl font-black uppercase italic tracking-tight text-white">Próximamente</div>
+                <p className="mt-2 text-[12px] md:text-[13px] text-indigo-50/80 leading-relaxed">
+                  Estamos preparando una experiencia más simple para administrar el soporte inteligente.
+                </p>
               </div>
             </div>
 

@@ -5447,7 +5447,7 @@ if (closeOnSuccess) {
     <div className="min-h-screen text-white overflow-x-hidden relative">
       <Header />
 
-      <main className="min-h-screen pt-24 md:pt-20 relative z-10">
+      <main className="min-h-screen pt-32 md:pt-20 relative z-10">
         {/* PUBLIC */}
         {view === "public" && (
           <PublicHomeView

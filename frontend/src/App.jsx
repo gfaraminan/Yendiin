@@ -70,7 +70,7 @@ import { eventSalesProgress, formatEventDateText, isEventSoldOut } from "./app/e
 import { fetchPublicRuntimeConfig, resolveCheckoutSuccessState, resolveRuntimeConfigState } from "./app/runtimeBootstrap";
 import { parseAppLocation } from "./app/navigation";
 import { buildEventGoogleMapsLink, buildUberLink, formatMoneyAr, normalizeErrorDetail } from "./app/formatters";
-import { buildCheckoutBlockReason, buildOrderPayload, resolveCheckoutServicePct, validateCheckoutForm } from "./app/checkout";
+import { buildCheckoutBlockReason, buildOrderPayload, checkoutProfileToForm, resolveCheckoutServicePct, validateCheckoutForm } from "./app/checkout";
 import { createMpPreference } from "./app/payments";
 import { getOwnerSummary, getProducerDashboard, listProducerEvents } from "./app/producerApi";
 import { buildStaffPosPayload, buildValidateQrPayload, normalizeStaffPosResult } from "./app/staff";
@@ -3220,6 +3220,25 @@ const [selectedTicket, setSelectedTicket] = useState(null);
 
   const checkoutServicePct = resolveCheckoutServicePct(selectedEvent);
   const checkoutServicePctLabel = `${(checkoutServicePct * 100).toFixed(2)}%`;
+
+  useEffect(() => {
+    if (!me?.email) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/orders/checkout-profile?tenant=${encodeURIComponent(publicTenant)}`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(readJsonOrText)
+      .then((data) => {
+        if (data?.ok && data.profile) {
+          setCheckoutForm((current) => checkoutProfileToForm(data.profile, current));
+        }
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") console.warn("No se pudieron recordar los datos de compra", error);
+      });
+    return () => controller.abort();
+  }, [me?.email, publicTenant]);
 
   
   const loadMyAssets = async () => {

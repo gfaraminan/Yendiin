@@ -111,3 +111,49 @@ def test_mp_sync_order_can_sync_by_payment_id(monkeypatch):
     assert result["source"] == "payment_id"
     assert sent["finalized"] == ("ORD-12345678", "160788460765")
     assert sent["email"] == ("ORD-12345678", "160788460765", False)
+
+
+def test_confirmation_attachment_pdf_uses_yendiin_branding(monkeypatch):
+    drawn_text = []
+
+    class RecordingCanvas:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def setStrokeColorRGB(self, *_args):
+            pass
+
+        def roundRect(self, *_args, **_kwargs):
+            pass
+
+        def drawImage(self, *_args, **_kwargs):
+            pass
+
+        def setFont(self, *_args):
+            pass
+
+        def drawString(self, _x, _y, value):
+            drawn_text.append(value)
+
+        def showPage(self):
+            pass
+
+        def save(self):
+            pass
+
+    monkeypatch.setattr(payments_mp.canvas, "Canvas", RecordingCanvas)
+
+    payments_mp._build_tickets_pdf_bytes(
+        [
+            {
+                "ticket_id": "TICKET-1",
+                "qr_payload": "QR-TICKET-1",
+                "event_title": "Evento de prueba",
+                "buyer_name": "Comprador",
+                "buyer_email": "buyer@example.com",
+            }
+        ]
+    )
+
+    assert "Yendiin" in drawn_text
+    assert "TicketPro" not in drawn_text

@@ -115,6 +115,7 @@ def test_mp_sync_order_can_sync_by_payment_id(monkeypatch):
 
 def test_confirmation_attachment_pdf_uses_yendiin_branding(monkeypatch):
     drawn_text = []
+    drawn_images = []
 
     class RecordingCanvas:
         def __init__(self, *_args, **_kwargs):
@@ -126,7 +127,10 @@ def test_confirmation_attachment_pdf_uses_yendiin_branding(monkeypatch):
         def roundRect(self, *_args, **_kwargs):
             pass
 
-        def drawImage(self, *_args, **_kwargs):
+        def drawImage(self, image, *_args, **_kwargs):
+            drawn_images.append(image)
+
+        def setFillColorRGB(self, *_args):
             pass
 
         def setFont(self, *_args):
@@ -155,5 +159,6 @@ def test_confirmation_attachment_pdf_uses_yendiin_branding(monkeypatch):
         ]
     )
 
-    assert "Yendiin" in drawn_text
+    assert any("Logo Blanco Png fondo transparente.png" in str(image.fileName) for image in drawn_images)
+    assert "Yendiin" not in drawn_text
     assert "TicketPro" not in drawn_text

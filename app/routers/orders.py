@@ -662,6 +662,51 @@ def my_tickets(
 # PRO: "Mis tickets" + "Mis consumos" (cliente)
 # Devuelve Entradas + Barra unificados como assets.
 # -------------------------
+@router.get("/checkout-profile")
+def checkout_profile(request: Request, tenant: str = Query("default")):
+    """Return the latest paid buyer details so signed-in customers can reuse them."""
+    user = (request.session or {}).get("user")
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    with _conn_cm(tenant) as conn:
+        cur = conn.cursor()
+        columns = set(_table_columns(cur, "orders"))
+        owner_predicates = []
+        params = []
+        if user.get("sub") and "auth_subject" in columns:
+            owner_predicates.append("auth_subject = %s")
+            params.append(user["sub"])
+        if user.get("email") and "buyer_email" in columns:
+            owner_predicates.append("lower(buyer_email) = lower(%s)")
+            params.append(user["email"])
+        if not owner_predicates:
+            return {"ok": True, "profile": None}
+
+        paid_predicate = (
+            "lower(COALESCE(status, '')) = 'paid'" if "status" in columns
+            else "paid_at IS NOT NULL" if "paid_at" in columns
+            else "1=0"
+        )
+        fields = {
+            "full_name": "buyer_name",
+            "dni": "buyer_dni",
+            "phone": "buyer_phone",
+            "address": "buyer_address",
+            "province": "buyer_province",
+            "postal_code": "buyer_postal_code",
+            "birth_date": "buyer_birth_date",
+        }
+        selections = [f"{column} AS {alias}" if column in columns else f"NULL::text AS {alias}" for alias, column in fields.items()]
+        order_by = "created_at DESC NULLS LAST" if "created_at" in columns else "id DESC"
+        cur.execute(
+            f"SELECT {', '.join(selections)} FROM orders WHERE ({' OR '.join(owner_predicates)}) AND {paid_predicate} ORDER BY {order_by} LIMIT 1",
+            params,
+        )
+        rows = _rows_to_dicts(cur, cur.fetchall() or [])
+        return {"ok": True, "profile": rows[0] if rows else None}
+
+
 @router.get("/my-assets")
 def my_assets(request: Request, tenant: str = Query("default"), order_id: Optional[str] = Query(default=None)):
     """Devuelve los tickets/entradas del usuario (unificado Entradas + Barra).

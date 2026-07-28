@@ -43,6 +43,17 @@ export const buildCheckoutBlockReason = ({ selectedTicket, selectedEvent, hasChe
   return "";
 };
 
+export const checkoutProfileToForm = (profile = {}, currentForm = {}) => ({
+  ...currentForm,
+  fullName: currentForm.fullName || String(profile.full_name || ""),
+  dni: currentForm.dni || String(profile.dni || "").replace(/\D/g, "").slice(0, 8),
+  phone: currentForm.phone || String(profile.phone || "").replace(/\D/g, "").slice(0, 15),
+  address: currentForm.address || String(profile.address || ""),
+  province: currentForm.province || String(profile.province || ""),
+  postalCode: currentForm.postalCode || String(profile.postal_code || ""),
+  birthDate: currentForm.birthDate || String(profile.birth_date || "").slice(0, 10),
+});
+
 export const buildOrderPayload = ({ publicTenant, selectedEvent, selectedTicket, quantity, method, selectedSellerCode, checkoutForm, userNow }) => ({
   tenant_id: publicTenant,
   event_slug: selectedEvent.slug,

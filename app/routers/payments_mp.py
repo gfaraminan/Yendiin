@@ -599,7 +599,9 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
-    logo_path = os.path.join("static", "favicon-192.png")
+    # Reutilizamos el recurso de marca que ya forma parte del frontend. Así el
+    # PDF no necesita incorporar un segundo archivo binario al repositorio.
+    logo_path = os.path.join("frontend", "public", "Logo Blanco Png fondo transparente.png")
 
     def _fmt_date(v: Any) -> str:
         if v is None:
@@ -627,11 +629,14 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
         c.roundRect(28, 28, width - 56, height - 56, 18, stroke=1, fill=0)
 
         if os.path.exists(logo_path):
-            c.drawImage(ImageReader(logo_path), 40, height - 88, width=36, height=36, mask="auto")
-        c.setFont("Helvetica-Bold", 18)
-        c.drawString(84, height - 64, "TicketPro")
+            # El logotipo es blanco y rosa: el fondo oscuro conserva su contraste
+            # tanto al imprimir como al visualizar el PDF.
+            c.setFillColorRGB(0.08, 0.10, 0.16)
+            c.roundRect(40, height - 104, 170, 76, 10, stroke=0, fill=1)
+            c.drawImage(ImageReader(logo_path), 50, height - 99, width=150, height=66, mask="auto")
+            c.setFillColorRGB(0, 0, 0)
         c.setFont("Helvetica", 10)
-        c.drawString(84, height - 80, "Entrada confirmada")
+        c.drawString(224, height - 68, "Entrada confirmada")
 
         c.setFont("Helvetica-Bold", 13)
         c.drawString(40, height - 120, event_title)

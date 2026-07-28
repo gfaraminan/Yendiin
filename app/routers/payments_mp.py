@@ -629,7 +629,7 @@ def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
         if os.path.exists(logo_path):
             c.drawImage(ImageReader(logo_path), 40, height - 88, width=36, height=36, mask="auto")
         c.setFont("Helvetica-Bold", 18)
-        c.drawString(84, height - 64, "TicketPro")
+        c.drawString(84, height - 64, "Yendiin")
         c.setFont("Helvetica", 10)
         c.drawString(84, height - 80, "Entrada confirmada")
 

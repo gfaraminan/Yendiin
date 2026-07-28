@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Yendiin">
+  <rect width="64" height="64" rx="12" fill="#08080b"/>
+  <path fill="#fff" d="M13 15h11l7 19 7-19h11L34 51c-2.5 6-6.5 9-13 9-2.4 0-4.7-.4-7-1.3v-8.4c1.8.7 3.4 1 4.9 1 2.8 0 4.7-1.5 5.8-4.4l.5-1.3L13 15Z"/>
+  <circle cx="52" cy="12" r="6" fill="#f10fa4"/>
+</svg>

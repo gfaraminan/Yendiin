@@ -595,84 +595,10 @@ def _choose_charge_amount(
 
 
 def _build_tickets_pdf_bytes(rows: List[dict]) -> bytes:
-    """Genera un PDF amigable con resumen de compra + QR por ticket."""
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
-    # Reutilizamos el recurso de marca que ya forma parte del frontend. Así el
-    # PDF no necesita incorporar un segundo archivo binario al repositorio.
-    logo_path = os.path.join("frontend", "public", "Logo Blanco Png fondo transparente.png")
+    """Generate the same canonical PDF attached to email and served for download."""
+    from app.ticket_pdf import build_tickets_pdf
 
-    def _fmt_date(v: Any) -> str:
-        if v is None:
-            return "-"
-        try:
-            return v.strftime("%d/%m/%Y")
-        except Exception:
-            return str(v)
-
-    total = len(rows or [])
-    for idx, r in enumerate(rows or [], start=1):
-        ticket_id = r.get("ticket_id") or r.get("id")
-        ticket_type = r.get("ticket_type") or "General"
-        qr_payload = r.get("qr_payload") or str(ticket_id)
-        event_title = r.get("event_title") or r.get("event_slug") or "Evento"
-        event_date = _fmt_date(r.get("event_date"))
-        event_time = str(r.get("event_time") or "-").strip() or "-"
-        venue = str(r.get("venue") or "-").strip() or "-"
-        city = str(r.get("city") or "-").strip() or "-"
-        event_address = str(r.get("event_address") or "-").strip() or "-"
-        buyer_name = str(r.get("buyer_name") or "-").strip() or "-"
-        buyer_email = str(r.get("buyer_email") or "-").strip() or "-"
-
-        c.setStrokeColorRGB(0.21, 0.25, 0.33)
-        c.roundRect(28, 28, width - 56, height - 56, 18, stroke=1, fill=0)
-
-        if os.path.exists(logo_path):
-            # El logotipo es blanco y rosa: el fondo oscuro conserva su contraste
-            # tanto al imprimir como al visualizar el PDF.
-            c.setFillColorRGB(0.08, 0.10, 0.16)
-            c.roundRect(40, height - 104, 170, 76, 10, stroke=0, fill=1)
-            c.drawImage(ImageReader(logo_path), 50, height - 99, width=150, height=66, mask="auto")
-            c.setFillColorRGB(0, 0, 0)
-        c.setFont("Helvetica", 10)
-        c.drawString(224, height - 68, "Entrada confirmada")
-
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(40, height - 120, event_title)
-        c.setFont("Helvetica", 10)
-        c.drawString(40, height - 138, f"Ticket {idx}/{total} · ID: {ticket_id}")
-
-        y = height - 170
-        for label, value in [
-            ("Titular", buyer_name),
-            ("Email", buyer_email),
-            ("Tipo", ticket_type),
-            ("Fecha", event_date),
-            ("Hora", event_time),
-            ("Lugar", venue),
-            ("Dirección", event_address),
-            ("Ciudad", city),
-        ]:
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(40, y, f"{label}:")
-            c.setFont("Helvetica", 9)
-            c.drawString(108, y, value)
-            y -= 16
-
-        qr_img = qrcode.make(qr_payload)
-        img_buf = io.BytesIO()
-        qr_img.save(img_buf, format="PNG")
-        img_buf.seek(0)
-        qr_reader = ImageReader(img_buf)
-        c.drawImage(qr_reader, width - 220, height - 355, width=170, height=170, mask="auto")
-
-        c.setFont("Helvetica", 8)
-        c.drawString(40, 50, "Mostrá este QR en el ingreso. También podés validar con el Ticket ID.")
-        c.showPage()
-
-    c.save()
-    return buf.getvalue()
+    return build_tickets_pdf(rows)
 
 
 def _first_non_empty(*values) -> str:

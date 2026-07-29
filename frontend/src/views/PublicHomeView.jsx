@@ -82,7 +82,7 @@ export default function PublicHomeView({
   soldOutRibbon,
   formatMoney,
 }) {
-  const soldOutMarker = typeof soldOutRibbon === "function" ? soldOutRibbon : null;
+  const SoldOutMarker = typeof soldOutRibbon === "function" ? soldOutRibbon : null;
 
   return (
     <div className="pt-0 pb-20 px-6 max-w-7xl mx-auto animate-in fade-in text-white">
@@ -165,7 +165,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top"
               />
-              {isEventSoldOut(ev) && soldOutMarker ? soldOutMarker() : null}
+              {isEventSoldOut(ev) && SoldOutMarker ? <SoldOutMarker /> : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-5 min-w-0 space-y-2">
                 <div className="text-[10px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>
@@ -194,7 +194,7 @@ export default function PublicHomeView({
                 onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = FALLBACK_FLYER; }}
                 className="w-full h-full object-contain object-top opacity-95"
               />
-              {isEventSoldOut(ev) && soldOutMarker ? soldOutMarker() : null}
+              {isEventSoldOut(ev) && SoldOutMarker ? <SoldOutMarker /> : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black via-black/65 to-transparent" />
               <div className="absolute bottom-0 left-0 p-6 space-y-2 w-full">
                 <div className="text-[11px] text-neutral-200 flex items-center gap-2"><Calendar size={14} /> {ev.date_text}</div>

@@ -3,7 +3,7 @@
   "short_name": "Yendiin",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "/yendiin-favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

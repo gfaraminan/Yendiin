@@ -14,9 +14,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 
-NAVY = (15 / 255, 23 / 255, 42 / 255)
-PURPLE = (124 / 255, 58 / 255, 237 / 255)
-PINK = (236 / 255, 72 / 255, 153 / 255)
+YENDIIN_BLACK = (5 / 255, 5 / 255, 8 / 255)
+YENDIIN_PINK = (241 / 255, 15 / 255, 164 / 255)
 SLATE = (71 / 255, 85 / 255, 105 / 255)
 LIGHT = (248 / 255, 250 / 255, 252 / 255)
 
@@ -47,20 +46,25 @@ def _fit(value: Any, font: str, size: float, max_width: float) -> str:
 def _logo_path() -> Path | None:
     configured = os.getenv("BRAND_PDF_LOGO", "").strip()
     candidates = [Path(configured)] if configured else []
-    candidates.extend((Path("static/favicon-192.png"), Path("frontend/public/favicon-192.png")))
+    candidates.extend(
+        (
+            Path("frontend/public/Logo Blanco Png fondo transparente.png"),
+            Path("static/favicon-192.png"),
+        )
+    )
     return next((path for path in candidates if path.is_file()), None)
 
 
-def _draw_logo(c: canvas.Canvas, path: Path, x: float, y: float, box: float) -> None:
-    """Draw the logo contained in a square, preserving its original proportions."""
+def _draw_logo(c: canvas.Canvas, path: Path, x: float, y: float, box_width: float, box_height: float) -> None:
+    """Draw the official Yendiin lockup contained without stretching it."""
     image = ImageReader(str(path))
     image_width, image_height = image.getSize()
-    scale = min(box / image_width, box / image_height)
+    scale = min(box_width / image_width, box_height / image_height)
     width, height = image_width * scale, image_height * scale
     c.drawImage(
         image,
-        x + (box - width) / 2,
-        y + (box - height) / 2,
+        x + (box_width - width) / 2,
+        y + (box_height - height) / 2,
         width=width,
         height=height,
         preserveAspectRatio=True,
@@ -86,27 +90,24 @@ def build_tickets_pdf(rows: Iterable[dict]) -> bytes:
         c.setLineWidth(1)
         c.roundRect(30, 42, page_width - 60, page_height - 84, 18, stroke=1, fill=1)
 
-        # Strong branded header with a square logo holder.
-        c.setFillColorRGB(*NAVY)
+        # Strong branded header using the complete official Yendiin lockup.
+        c.setFillColorRGB(*YENDIIN_BLACK)
         c.roundRect(30, page_height - 158, page_width - 60, 116, 18, stroke=0, fill=1)
-        c.setFillColorRGB(*PURPLE)
+        c.setFillColorRGB(*YENDIIN_PINK)
         c.roundRect(30, page_height - 158, 7, 116, 3, stroke=0, fill=1)
         if logo:
-            _draw_logo(c, logo, 54, page_height - 133, 58)
-        c.setFillColorRGB(1, 1, 1)
-        c.setFont("Helvetica-Bold", 23)
-        c.drawString(130, page_height - 91, "Yendiin")
+            _draw_logo(c, logo, 54, page_height - 148, 178, 96)
         c.setFillColorRGB(203 / 255, 213 / 255, 225 / 255)
         c.setFont("Helvetica", 10)
-        c.drawString(130, page_height - 111, "Tu entrada, lista para disfrutar")
-        c.setFillColorRGB(*PINK)
+        c.drawString(246, page_height - 101, "Tu entrada, lista para disfrutar")
+        c.setFillColorRGB(*YENDIIN_PINK)
         c.roundRect(page_width - 164, page_height - 105, 104, 27, 13, stroke=0, fill=1)
         c.setFillColorRGB(1, 1, 1)
         c.setFont("Helvetica-Bold", 9)
         c.drawCentredString(page_width - 112, page_height - 95, "CONFIRMADA")
 
         event_title = _fit(row.get("event_title") or row.get("event_slug") or "Evento", "Helvetica-Bold", 20, page_width - 110)
-        c.setFillColorRGB(*NAVY)
+        c.setFillColorRGB(*YENDIIN_BLACK)
         c.setFont("Helvetica-Bold", 20)
         c.drawString(54, page_height - 198, event_title)
         c.setFillColorRGB(*SLATE)
@@ -132,7 +133,7 @@ def build_tickets_pdf(rows: Iterable[dict]) -> bytes:
             c.setFillColorRGB(*SLATE)
             c.setFont("Helvetica-Bold", 8)
             c.drawString(panel_x + 16, y, label.upper())
-            c.setFillColorRGB(*NAVY)
+            c.setFillColorRGB(*YENDIIN_BLACK)
             c.setFont("Helvetica", 9)
             c.drawString(panel_x + 82, y, _fit(value, "Helvetica", 9, panel_w - 105))
             y -= 19
@@ -159,12 +160,14 @@ def build_tickets_pdf(rows: Iterable[dict]) -> bytes:
         c.setFillColorRGB(*SLATE)
         c.setFont("Helvetica", 8)
         c.drawString(54, 77, "Código de entrada")
-        c.setFillColorRGB(*NAVY)
+        c.setFillColorRGB(*YENDIIN_BLACK)
         c.setFont("Helvetica-Bold", 8)
         c.drawString(54, 63, _fit(ticket_id, "Helvetica-Bold", 8, page_width - 180))
         c.setFillColorRGB(*SLATE)
         c.setFont("Helvetica", 8)
         c.drawRightString(page_width - 54, 63, "yendiin.com")
+        c.setFillColorRGB(*YENDIIN_PINK)
+        c.rect(30, 42, page_width - 60, 3, stroke=0, fill=1)
         c.showPage()
 
     c.save()

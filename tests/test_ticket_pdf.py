@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.ticket_pdf import build_tickets_pdf
+from app.ticket_pdf import _logo_path, build_tickets_pdf
 
 
 def _ticket(**overrides):
@@ -27,6 +27,10 @@ def test_build_tickets_pdf_creates_one_branded_page_per_ticket():
     assert pdf.startswith(b"%PDF-")
     assert pdf.count(b"/Type /Page\n") == 2
     assert len(pdf) > 5_000
+
+
+def test_renderer_uses_the_official_yendiin_logo_asset():
+    assert _logo_path() == Path("frontend/public/Logo Blanco Png fondo transparente.png")
 
 
 def test_email_renderer_uses_the_canonical_download_renderer(monkeypatch):

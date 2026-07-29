@@ -215,8 +215,8 @@ export default function EventDetailView({
               </button>
               {!!checkoutBlockReason && <div className="px-4 py-2 rounded-xl bg-amber-500/20 border border-amber-400/50 text-[12px] font-black text-amber-100 text-center leading-snug shadow-[0_10px_20px_rgba(245,158,11,0.22)]">{checkoutBlockReason}</div>}
 
-              <button onClick={() => handleCheckout("card")} disabled={loading || !!checkoutBlockReason} className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed"><CreditCard size={16} /> Pagar con tarjeta (demo)</button>
-              <button onClick={() => handleCheckout("reserve")} disabled={loading || !!checkoutBlockReason} className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 hover:bg-white/10 transition-all disabled:opacity-40 disabled:cursor-not-allowed" title="Modo demo: confirma al instante"><ShoppingCart size={16} /> Reservar (demo)</button>
+              <button type="button" disabled className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed" title="Próximamente"><CreditCard size={16} /> Pagar con tarjeta — Próximamente</button>
+              <button type="button" disabled className="w-full py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest bg-white/5 border border-white/10 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed" title="Próximamente"><ShoppingCart size={16} /> Reservar — Próximamente</button>
             </div>
           </div>
         </div>

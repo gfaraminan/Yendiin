@@ -70,7 +70,7 @@ import { eventSalesProgress, formatEventDateText, isEventSoldOut } from "./app/e
 import { fetchPublicRuntimeConfig, resolveCheckoutSuccessState, resolveRuntimeConfigState } from "./app/runtimeBootstrap";
 import { parseAppLocation } from "./app/navigation";
 import { buildEventGoogleMapsLink, buildUberLink, formatMoneyAr, normalizeErrorDetail } from "./app/formatters";
-import { buildCheckoutBlockReason, buildOrderPayload, resolveCheckoutServicePct, validateCheckoutForm } from "./app/checkout";
+import { buildCheckoutBlockReason, buildOrderPayload, checkoutProfileToForm, resolveCheckoutServicePct, validateCheckoutForm } from "./app/checkout";
 import { createMpPreference } from "./app/payments";
 import { getOwnerSummary, getProducerDashboard, listProducerEvents } from "./app/producerApi";
 import { buildStaffPosPayload, buildValidateQrPayload, normalizeStaffPosResult } from "./app/staff";
@@ -3221,6 +3221,25 @@ const [selectedTicket, setSelectedTicket] = useState(null);
   const checkoutServicePct = resolveCheckoutServicePct(selectedEvent);
   const checkoutServicePctLabel = `${(checkoutServicePct * 100).toFixed(2)}%`;
 
+  useEffect(() => {
+    if (!me?.email) return undefined;
+    const controller = new AbortController();
+    fetch(`/api/orders/checkout-profile?tenant=${encodeURIComponent(publicTenant)}`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(readJsonOrText)
+      .then((data) => {
+        if (data?.ok && data.profile) {
+          setCheckoutForm((current) => checkoutProfileToForm(data.profile, current));
+        }
+      })
+      .catch((error) => {
+        if (error?.name !== "AbortError") console.warn("No se pudieron recordar los datos de compra", error);
+      });
+    return () => controller.abort();
+  }, [me?.email, publicTenant]);
+
   
   const loadMyAssets = async () => {
     setMyAssetsLoading(true);
@@ -6025,32 +6044,32 @@ if (closeOnSuccess) {
               )}
             </div>
 
-              <div className={`p-8 rounded-[2.5rem] ${UI.card}`}>
-                <div className="flex items-center justify-between gap-3 mb-6">
+              <div className={`p-4 sm:p-8 rounded-[2.5rem] ${UI.card}`}>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
                   <div>
                     <div className="text-[9px] font-black uppercase tracking-widest text-neutral-500">Clientes y Campañas</div>
                     <div className="text-2xl font-black uppercase italic mt-1">Fidelización</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setMarketingSection("audience")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${marketingSection === "audience" ? "bg-indigo-600" : "bg-white/10"}`}>Audiencia</button>
-                    <button onClick={() => setMarketingSection("campaigns")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${marketingSection === "campaigns" ? "bg-indigo-600" : "bg-white/10"}`}>Campañas</button>
-                    <button onClick={() => setMarketingSection("new")} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${marketingSection === "new" ? "bg-indigo-600" : "bg-white/10"}`}>Nueva</button>
+                  <div className="grid grid-cols-3 gap-2 w-full sm:w-auto">
+                    <button onClick={() => setMarketingSection("audience")} className={`min-w-0 px-2 sm:px-4 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-widest ${marketingSection === "audience" ? "bg-indigo-600" : "bg-white/10"}`}>Audiencia</button>
+                    <button onClick={() => setMarketingSection("campaigns")} className={`min-w-0 px-2 sm:px-4 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-widest ${marketingSection === "campaigns" ? "bg-indigo-600" : "bg-white/10"}`}>Campañas</button>
+                    <button onClick={() => setMarketingSection("new")} className={`min-w-0 px-2 sm:px-4 py-2 rounded-xl text-[9px] sm:text-[10px] font-black uppercase tracking-wide sm:tracking-widest ${marketingSection === "new" ? "bg-indigo-600" : "bg-white/10"}`}>Nueva</button>
                   </div>
                 </div>
 
                 {marketingSection === "audience" && (
                   <div>
                     <div className="grid grid-cols-1 md:grid-cols-5 gap-2 mb-3">
-                      <select value={audienceFilters.event_slug} onChange={(e) => setAudienceFilters((p) => ({ ...p, event_slug: e.target.value }))} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]">
+                      <select value={audienceFilters.event_slug} onChange={(e) => setAudienceFilters((p) => ({ ...p, event_slug: e.target.value }))} className="w-full min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]">
                         <option value="">Todos los eventos</option>
                         {(producerEvents || []).map((ev) => <option key={ev.slug} value={ev.slug}>{ev.slug}</option>)}
                       </select>
-                      <input type="date" value={audienceFilters.date_from} onChange={(e) => setAudienceFilters((p) => ({ ...p, date_from: e.target.value }))} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
-                      <input type="date" value={audienceFilters.date_to} onChange={(e) => setAudienceFilters((p) => ({ ...p, date_to: e.target.value }))} className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
-                      <input type="text" value={audienceFilters.sale_item_id} onChange={(e) => setAudienceFilters((p) => ({ ...p, sale_item_id: e.target.value }))} placeholder="sale_item_id" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
-                      <input type="text" value={audienceFilters.q} onChange={(e) => setAudienceFilters((p) => ({ ...p, q: e.target.value }))} placeholder="Buscar email/nombre" className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
+                      <input type="date" value={audienceFilters.date_from} onChange={(e) => setAudienceFilters((p) => ({ ...p, date_from: e.target.value }))} className="w-full min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
+                      <input type="date" value={audienceFilters.date_to} onChange={(e) => setAudienceFilters((p) => ({ ...p, date_to: e.target.value }))} className="w-full min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
+                      <input type="text" value={audienceFilters.sale_item_id} onChange={(e) => setAudienceFilters((p) => ({ ...p, sale_item_id: e.target.value }))} placeholder="sale_item_id" className="w-full min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
+                      <input type="text" value={audienceFilters.q} onChange={(e) => setAudienceFilters((p) => ({ ...p, q: e.target.value }))} placeholder="Buscar email/nombre" className="w-full min-w-0 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-[11px]" />
                     </div>
-                    <div className="flex items-center gap-2 mb-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <button onClick={loadAudience} className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-[10px] font-black uppercase">Aplicar</button>
                       <button onClick={exportAudienceCsv} className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-[10px] font-black uppercase">Export CSV</button>
                       <button onClick={() => setMarketingSection("new")} className="px-4 py-2 rounded-xl bg-indigo-600 text-[10px] font-black uppercase">Crear campaña con filtros</button>

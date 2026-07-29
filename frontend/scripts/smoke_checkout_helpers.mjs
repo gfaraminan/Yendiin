@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   buildCheckoutBlockReason,
   buildOrderPayload,
+  checkoutProfileToForm,
   resolveCheckoutServicePct,
   validateCheckoutForm,
 } from '../src/app/checkout.js';
@@ -50,6 +51,16 @@ assert.equal(payload.event_slug, 'evento-1');
 assert.equal(payload.sale_item_id, 99);
 assert.equal(payload.buyer.email, 'auth@example.com');
 assert.equal(payload.buyer.phone, '2615550000');
+
+const rememberedForm = checkoutProfileToForm({
+  full_name: 'Jane Doe', dni: '12.345.678', phone: '+54 261 555-0000',
+  address: 'Calle 123', province: 'Mendoza', postal_code: '5500', birth_date: '1990-01-01T00:00:00',
+}, { fullName: '', phone: '2614440000', acceptTerms: false });
+assert.equal(rememberedForm.fullName, 'Jane Doe');
+assert.equal(rememberedForm.dni, '12345678');
+assert.equal(rememberedForm.phone, '2614440000');
+assert.equal(rememberedForm.birthDate, '1990-01-01');
+assert.equal(rememberedForm.acceptTerms, false);
 
 const reason = buildCheckoutBlockReason({
   selectedTicket: null,

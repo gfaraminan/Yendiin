@@ -76,6 +76,11 @@ def download_order_pdf(order_id: str):
                     "t.qr_token" if "qr_token" in tcols else
                     "t.id::text"
                 )
+                t_type = (
+                    "t.ticket_type" if "ticket_type" in tcols else
+                    "t.type" if "type" in tcols else
+                    "'General'::text"
+                )
                 e_title = "e.title" if "title" in ecols else "o.event_slug"
                 e_date = (
                     "e.event_date::text" if "event_date" in ecols else
@@ -102,6 +107,7 @@ def download_order_pdf(order_id: str):
                     SELECT
                         t.id AS ticket_id,
                         COALESCE({t_qr}, t.id::text) AS qr_payload,
+                        COALESCE({t_type}, 'General') AS ticket_type,
                         o.event_slug,
                         COALESCE({e_title}, o.event_slug, 'Evento') AS event_title,
                         COALESCE({e_date}, {o_date}, '-') AS event_date,
@@ -216,6 +222,7 @@ def download_order_pdf(order_id: str):
                                 {
                                     "ticket_id": f"virtual-{order_id}-{seq}",
                                     "qr_payload": f"ORD:{order_id}:{seq}",
+                                    "ticket_type": it.get("name") or it.get("ticket_type") or it.get("type") or "General",
                                     "event_slug": event_slug,
                                     "event_title": event_meta.get("event_title"),
                                     "event_date": event_meta.get("event_date") or o.get("order_date_text"),
@@ -233,30 +240,9 @@ def download_order_pdf(order_id: str):
                     cols = [d[0] for d in (cur.description or [])]
                     rows = [dict(zip(cols, r)) for r in rows]
 
-            buf = io.BytesIO()
-            c = canvas.Canvas(buf, pagesize=A4)
-            width, height = A4
-            for idx, r in enumerate(rows, start=1):
-                c.setFont("Helvetica-Bold", 16)
-                c.drawString(40, height - 60, "Yendiin · Ticket")
-                c.setFont("Helvetica-Bold", 13)
-                c.drawString(40, height - 95, str(r.get("event_title") or "Evento"))
-                c.setFont("Helvetica", 10)
-                c.drawString(40, height - 115, f"Ticket {idx}/{len(rows)} · ID: {r.get('ticket_id')}")
-                c.drawString(40, height - 140, f"Titular: {r.get('buyer_name') or '-'}")
-                c.drawString(40, height - 156, f"Email: {r.get('buyer_email') or '-'}")
-                c.drawString(40, height - 172, f"Fecha/Hora: {r.get('event_date') or '-'} {r.get('event_time') or '-'}")
-                c.drawString(40, height - 188, f"Lugar: {r.get('venue') or '-'} · {r.get('city') or '-'}")
-                c.drawString(40, height - 204, f"Dirección: {r.get('event_address') or '-'}")
+            from app.ticket_pdf import build_tickets_pdf
 
-                qr_img = qrcode.make(str(r.get("qr_payload") or r.get("ticket_id") or ""))
-                img_buf = io.BytesIO()
-                qr_img.save(img_buf, format="PNG")
-                img_buf.seek(0)
-                c.drawImage(ImageReader(img_buf), width - 220, height - 300, width=170, height=170, mask="auto")
-                c.showPage()
-            c.save()
-            pdf_bytes = buf.getvalue()
+            pdf_bytes = build_tickets_pdf(rows)
 
             # Persistimos para siguientes descargas.
             with open(pdf_path, "wb") as f:
